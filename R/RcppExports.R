@@ -33,12 +33,20 @@ logSumExp <- function(x) {
     .Call('_mitodrift_logSumExp', PACKAGE = 'mitodrift', x)
 }
 
-score_tree_bp <- function(E, logP, logA, report_beliefs = FALSE) {
-    .Call('_mitodrift_score_tree_bp', PACKAGE = 'mitodrift', E, logP, logA, report_beliefs)
+score_tree_bp <- function(E, logP, logA) {
+    .Call('_mitodrift_score_tree_bp', PACKAGE = 'mitodrift', E, logP, logA)
 }
 
 score_tree_bp_wrapper <- function(E, logP, logA) {
     .Call('_mitodrift_score_tree_bp_wrapper', PACKAGE = 'mitodrift', E, logP, logA)
+}
+
+logSumExpMat <- function(X, axis = 0L) {
+    .Call('_mitodrift_logSumExpMat', PACKAGE = 'mitodrift', X, axis)
+}
+
+score_tree_bp_multi <- function(E, logP, logA) {
+    .Call('_mitodrift_score_tree_bp_multi', PACKAGE = 'mitodrift', E, logP, logA)
 }
 
 nni_cpp_parallel <- function(tree, logP, logA) {
