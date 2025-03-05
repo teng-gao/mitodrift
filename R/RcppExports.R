@@ -5,39 +5,23 @@
 NULL
 
 allChildrenCPP <- function(E) {
-    .Call('_scistreer_allChildrenCPP', PACKAGE = 'scistreer', E)
+    .Call('_mitodrift_allChildrenCPP', PACKAGE = 'mitodrift', E)
 }
 
 reorder_rows <- function(x, y) {
-    .Call('_scistreer_reorder_rows', PACKAGE = 'scistreer', x, y)
+    .Call('_mitodrift_reorder_rows', PACKAGE = 'mitodrift', x, y)
 }
 
 reorderRcpp <- function(E) {
-    .Call('_scistreer_reorderRcpp', PACKAGE = 'scistreer', E)
+    .Call('_mitodrift_reorderRcpp', PACKAGE = 'mitodrift', E)
 }
 
 nnin_cpp <- function(E, n) {
-    .Call('_scistreer_nnin_cpp', PACKAGE = 'scistreer', E, n)
+    .Call('_mitodrift_nnin_cpp', PACKAGE = 'mitodrift', E, n)
 }
 
 node_depth <- function(ntip, e1, e2, nedge, xx, method) {
-    .Call('_scistreer_node_depth', PACKAGE = 'scistreer', ntip, e1, e2, nedge, xx, method)
-}
-
-nnin_score_max <- function(E, n, logQ, L_0) {
-    .Call('_scistreer_nnin_score_max', PACKAGE = 'scistreer', E, n, logQ, L_0)
-}
-
-CgetQ <- function(logQ, children_dict, node_order) {
-    .Call('_scistreer_CgetQ', PACKAGE = 'scistreer', logQ, children_dict, node_order)
-}
-
-get_logQ <- function(E, P) {
-    .Call('_scistreer_get_logQ', PACKAGE = 'scistreer', E, P)
-}
-
-score_tree_cpp <- function(E, P) {
-    .Call('_scistreer_score_tree_cpp', PACKAGE = 'scistreer', E, P)
+    .Call('_mitodrift_node_depth', PACKAGE = 'mitodrift', ntip, e1, e2, nedge, xx, method)
 }
 
 #' logSumExp function for a vector
@@ -46,18 +30,18 @@ score_tree_cpp <- function(E, P) {
 #' @return double logSumExp of x
 #' @export
 logSumExp <- function(x) {
-    .Call('_scistreer_logSumExp', PACKAGE = 'scistreer', x)
+    .Call('_mitodrift_logSumExp', PACKAGE = 'mitodrift', x)
 }
 
 score_tree_bp <- function(E, logP, logA, report_beliefs = FALSE) {
-    .Call('_scistreer_score_tree_bp', PACKAGE = 'scistreer', E, logP, logA, report_beliefs)
+    .Call('_mitodrift_score_tree_bp', PACKAGE = 'mitodrift', E, logP, logA, report_beliefs)
 }
 
 score_tree_bp_wrapper <- function(E, logP, logA) {
-    .Call('_scistreer_score_tree_bp_wrapper', PACKAGE = 'scistreer', E, logP, logA)
+    .Call('_mitodrift_score_tree_bp_wrapper', PACKAGE = 'mitodrift', E, logP, logA)
 }
 
 nni_cpp_parallel <- function(tree, logP, logA) {
-    .Call('_scistreer_nni_cpp_parallel', PACKAGE = 'scistreer', tree, logP, logA)
+    .Call('_mitodrift_nni_cpp_parallel', PACKAGE = 'mitodrift', tree, logP, logA)
 }
 

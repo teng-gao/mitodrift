@@ -1,11 +1,11 @@
-Package: scistreer
-Title: Maximum-Likelihood Perfect Phylogeny Inference at Scale
-URL: https://github.com/kharchenkolab/scistreer,
-    https://kharchenkolab.github.io/scistreer/
-Version: 1.2.0
-Authors@R: c(person("Teng","Gao", email="tgaoteng@gmail.com", role=c("cre", "aut")), person("Evan", "Biederstedt", email="evan.biederstedt@gmail.com", role="aut"), person("Peter", "Kharchenko", email = "peter_kharchenko@hms.harvard.edu", role = "aut"), person("Yufeng", "Wu", email = "yufeng.wu@uconn.edu", role = "aut"))
-Description: Fast maximum-likelihood phylogeny inference from noisy single-cell data using the 'ScisTree' algorithm by Yufeng Wu (2019) <doi:10.1093/bioinformatics/btz676>. 'scistreer' provides an 'R' interface and improves speed via 'Rcpp' and 'RcppParallel', making the method applicable to massive single-cell datasets (>10,000 cells).
-License: GPL-3
+Package: mitodrift
+Title: Resolving single-cell lineage history using mitochondrial mutation drift dynamics
+Version: 0.0.0.9000
+Authors@R: 
+    person("Teng", "Gao", , "tgao@broadinstitute.org", role = c("aut", "cre"),
+           comment = c(ORCID = "0000-0002-0196-689X"))
+Description: Resolving single cell lineage history using drift dynamics of mitochondrial mutations
+License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true
 Depends: 
@@ -13,25 +13,22 @@ Depends:
 biocViews:
 Imports:
     ape,
-    dplyr,
-    ggplot2,
-    ggtree,
+    CRF,
     igraph,
-    parallelDist,
+    ggplot2,
+    dplyr,
+    tidygraph,
+    parallel,
+    ggtree,
     patchwork,
-    phangorn,
-    Rcpp,
-    reshape2,
-    RcppParallel,
-    RhpcBLASctl,
-    stringr,
-    tidygraph
-Suggests: 
+    fmcmc,
+    glue,
+    stringr
+Suggests:
     testthat (>= 3.0.0)
-Config/testthat/edition: 3
 LinkingTo: Rcpp, RcppArmadillo, RcppParallel
 NeedsCompilation: yes
 SystemRequirements: GNU make
-Author: Teng Gao [cre, aut], Evan Biederstedt [aut], Peter Kharchenko [aut], Yufeng Wu [aut]
 Maintainer: Teng Gao <tgaoteng@gmail.com>
-RoxygenNote: 7.2.2
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.2

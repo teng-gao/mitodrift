@@ -13,7 +13,7 @@ Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 
 // allChildrenCPP
 std::vector<std::vector<int>> allChildrenCPP(const arma::Mat<int> E);
-RcppExport SEXP _scistreer_allChildrenCPP(SEXP ESEXP) {
+RcppExport SEXP _mitodrift_allChildrenCPP(SEXP ESEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -24,7 +24,7 @@ END_RCPP
 }
 // reorder_rows
 arma::Mat<int> reorder_rows(arma::Mat<int> x, arma::Col<int> y);
-RcppExport SEXP _scistreer_reorder_rows(SEXP xSEXP, SEXP ySEXP) {
+RcppExport SEXP _mitodrift_reorder_rows(SEXP xSEXP, SEXP ySEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -36,7 +36,7 @@ END_RCPP
 }
 // reorderRcpp
 arma::Mat<int> reorderRcpp(arma::Mat<int> E);
-RcppExport SEXP _scistreer_reorderRcpp(SEXP ESEXP) {
+RcppExport SEXP _mitodrift_reorderRcpp(SEXP ESEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -47,7 +47,7 @@ END_RCPP
 }
 // nnin_cpp
 std::vector<arma::Mat<int>> nnin_cpp(const arma::Mat<int> E, const int n);
-RcppExport SEXP _scistreer_nnin_cpp(SEXP ESEXP, SEXP nSEXP) {
+RcppExport SEXP _mitodrift_nnin_cpp(SEXP ESEXP, SEXP nSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -59,7 +59,7 @@ END_RCPP
 }
 // node_depth
 NumericVector node_depth(int ntip, NumericVector e1, NumericVector e2, int nedge, NumericVector xx, int method);
-RcppExport SEXP _scistreer_node_depth(SEXP ntipSEXP, SEXP e1SEXP, SEXP e2SEXP, SEXP nedgeSEXP, SEXP xxSEXP, SEXP methodSEXP) {
+RcppExport SEXP _mitodrift_node_depth(SEXP ntipSEXP, SEXP e1SEXP, SEXP e2SEXP, SEXP nedgeSEXP, SEXP xxSEXP, SEXP methodSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -73,60 +73,9 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
-// nnin_score_max
-arma::vec nnin_score_max(const arma::Mat<int> E, const int n, arma::mat logQ, double L_0);
-RcppExport SEXP _scistreer_nnin_score_max(SEXP ESEXP, SEXP nSEXP, SEXP logQSEXP, SEXP L_0SEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< const arma::Mat<int> >::type E(ESEXP);
-    Rcpp::traits::input_parameter< const int >::type n(nSEXP);
-    Rcpp::traits::input_parameter< arma::mat >::type logQ(logQSEXP);
-    Rcpp::traits::input_parameter< double >::type L_0(L_0SEXP);
-    rcpp_result_gen = Rcpp::wrap(nnin_score_max(E, n, logQ, L_0));
-    return rcpp_result_gen;
-END_RCPP
-}
-// CgetQ
-arma::mat CgetQ(arma::mat logQ, std::vector<std::vector<int>> children_dict, arma::Col<int> node_order);
-RcppExport SEXP _scistreer_CgetQ(SEXP logQSEXP, SEXP children_dictSEXP, SEXP node_orderSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< arma::mat >::type logQ(logQSEXP);
-    Rcpp::traits::input_parameter< std::vector<std::vector<int>> >::type children_dict(children_dictSEXP);
-    Rcpp::traits::input_parameter< arma::Col<int> >::type node_order(node_orderSEXP);
-    rcpp_result_gen = Rcpp::wrap(CgetQ(logQ, children_dict, node_order));
-    return rcpp_result_gen;
-END_RCPP
-}
-// get_logQ
-arma::mat get_logQ(const arma::Mat<int> E, const arma::mat P);
-RcppExport SEXP _scistreer_get_logQ(SEXP ESEXP, SEXP PSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< const arma::Mat<int> >::type E(ESEXP);
-    Rcpp::traits::input_parameter< const arma::mat >::type P(PSEXP);
-    rcpp_result_gen = Rcpp::wrap(get_logQ(E, P));
-    return rcpp_result_gen;
-END_RCPP
-}
-// score_tree_cpp
-double score_tree_cpp(const arma::Mat<int> E, const arma::mat P);
-RcppExport SEXP _scistreer_score_tree_cpp(SEXP ESEXP, SEXP PSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< const arma::Mat<int> >::type E(ESEXP);
-    Rcpp::traits::input_parameter< const arma::mat >::type P(PSEXP);
-    rcpp_result_gen = Rcpp::wrap(score_tree_cpp(E, P));
-    return rcpp_result_gen;
-END_RCPP
-}
 // logSumExp
 double logSumExp(const arma::vec& x);
-RcppExport SEXP _scistreer_logSumExp(SEXP xSEXP) {
+RcppExport SEXP _mitodrift_logSumExp(SEXP xSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -136,8 +85,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // score_tree_bp
-Rcpp::List score_tree_bp(arma::Mat<int> E, const arma::mat logP, const arma::mat logA, bool report_beliefs);
-RcppExport SEXP _scistreer_score_tree_bp(SEXP ESEXP, SEXP logPSEXP, SEXP logASEXP, SEXP report_beliefsSEXP) {
+double score_tree_bp(arma::Mat<int> E, const arma::mat logP, const arma::mat logA, bool report_beliefs);
+RcppExport SEXP _mitodrift_score_tree_bp(SEXP ESEXP, SEXP logPSEXP, SEXP logASEXP, SEXP report_beliefsSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -151,7 +100,7 @@ END_RCPP
 }
 // score_tree_bp_wrapper
 arma::vec score_tree_bp_wrapper(arma::Mat<int> E, const arma::cube logP, const arma::cube logA);
-RcppExport SEXP _scistreer_score_tree_bp_wrapper(SEXP ESEXP, SEXP logPSEXP, SEXP logASEXP) {
+RcppExport SEXP _mitodrift_score_tree_bp_wrapper(SEXP ESEXP, SEXP logPSEXP, SEXP logASEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -164,7 +113,7 @@ END_RCPP
 }
 // nni_cpp_parallel
 NumericVector nni_cpp_parallel(const List tree, const arma::cube logP, const arma::cube logA);
-RcppExport SEXP _scistreer_nni_cpp_parallel(SEXP treeSEXP, SEXP logPSEXP, SEXP logASEXP) {
+RcppExport SEXP _mitodrift_nni_cpp_parallel(SEXP treeSEXP, SEXP logPSEXP, SEXP logASEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -177,23 +126,19 @@ END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_scistreer_allChildrenCPP", (DL_FUNC) &_scistreer_allChildrenCPP, 1},
-    {"_scistreer_reorder_rows", (DL_FUNC) &_scistreer_reorder_rows, 2},
-    {"_scistreer_reorderRcpp", (DL_FUNC) &_scistreer_reorderRcpp, 1},
-    {"_scistreer_nnin_cpp", (DL_FUNC) &_scistreer_nnin_cpp, 2},
-    {"_scistreer_node_depth", (DL_FUNC) &_scistreer_node_depth, 6},
-    {"_scistreer_nnin_score_max", (DL_FUNC) &_scistreer_nnin_score_max, 4},
-    {"_scistreer_CgetQ", (DL_FUNC) &_scistreer_CgetQ, 3},
-    {"_scistreer_get_logQ", (DL_FUNC) &_scistreer_get_logQ, 2},
-    {"_scistreer_score_tree_cpp", (DL_FUNC) &_scistreer_score_tree_cpp, 2},
-    {"_scistreer_logSumExp", (DL_FUNC) &_scistreer_logSumExp, 1},
-    {"_scistreer_score_tree_bp", (DL_FUNC) &_scistreer_score_tree_bp, 4},
-    {"_scistreer_score_tree_bp_wrapper", (DL_FUNC) &_scistreer_score_tree_bp_wrapper, 3},
-    {"_scistreer_nni_cpp_parallel", (DL_FUNC) &_scistreer_nni_cpp_parallel, 3},
+    {"_mitodrift_allChildrenCPP", (DL_FUNC) &_mitodrift_allChildrenCPP, 1},
+    {"_mitodrift_reorder_rows", (DL_FUNC) &_mitodrift_reorder_rows, 2},
+    {"_mitodrift_reorderRcpp", (DL_FUNC) &_mitodrift_reorderRcpp, 1},
+    {"_mitodrift_nnin_cpp", (DL_FUNC) &_mitodrift_nnin_cpp, 2},
+    {"_mitodrift_node_depth", (DL_FUNC) &_mitodrift_node_depth, 6},
+    {"_mitodrift_logSumExp", (DL_FUNC) &_mitodrift_logSumExp, 1},
+    {"_mitodrift_score_tree_bp", (DL_FUNC) &_mitodrift_score_tree_bp, 4},
+    {"_mitodrift_score_tree_bp_wrapper", (DL_FUNC) &_mitodrift_score_tree_bp_wrapper, 3},
+    {"_mitodrift_nni_cpp_parallel", (DL_FUNC) &_mitodrift_nni_cpp_parallel, 3},
     {NULL, NULL, 0}
 };
 
-RcppExport void R_init_scistreer(DllInfo *dll) {
+RcppExport void R_init_mitodrift(DllInfo *dll) {
     R_registerRoutines(dll, NULL, CallEntries, NULL, NULL);
     R_useDynamicSymbols(dll, FALSE);
 }

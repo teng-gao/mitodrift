@@ -164,112 +164,7 @@ NumericVector node_depth(int ntip, NumericVector e1, NumericVector e2,
 }
 
 
-// Computing the logQ matrix for the rearranged tree
-// [[Rcpp::export]]
-arma::vec nnin_score_max(const arma::Mat<int> E, const int n, arma::mat logQ, double L_0) {
-
-    arma::Col<int> parent = E.col(0);
-    arma::Col<int> child = E.col(1);
-    int k = min(parent) - 1;
-    arma::uvec indvec = find(child > k);
-    int ind = indvec[n-1];
-    int p1 = parent[ind];
-    int p2 = child[ind];
-    arma::uvec ind1_vec = find(parent == p1);
-    ind1_vec = ind1_vec.elem(find(ind1_vec != ind));
-    int ind1 = ind1_vec[0];
-    arma::uvec ind2 = find(parent == p2);
-    
-    int e1 = child[ind1];
-    int e2 = child[ind2[0]];
-    int e3 = child[ind2[1]];
-
-    arma::vec scores(2);
-
-    arma::mat logQ_1 = logQ;
-    arma::mat logQ_2 = logQ;
-    
-    logQ_1.row(p2-1) = logQ.row(e1-1) + logQ.row(e3-1);
-    logQ_2.row(p2-1) = logQ.row(e1-1) + logQ.row(e2-1);
-
-    int m = logQ.n_cols;
-
-    scores[0] = L_0;
-    scores[1] = L_0;
-
-    for (int i = 0; i < m; ++i) {
-        scores[0] += max(logQ_1.col(i));
-        scores[1] += max(logQ_2.col(i));
-    }
-
-    return scores;
-}
-
-
-/////////////////////////////////////// Scistree ////////////////////////////////////////
-
-
-// [[Rcpp::export]]
-arma::mat CgetQ(arma::mat logQ, std::vector<std::vector<int>> children_dict, arma::Col<int> node_order){
-
-    int n = node_order.n_rows;
-    std::vector<int> children;
-
-    for (int i = 0; i < n; ++i) {
-        int node = node_order(i);
-        children = children_dict[node-1];
-        logQ.row(node-1) = logQ.row(children[0]-1) + logQ.row(children[1]-1);
-    }
-
-    return logQ;
-}
-
-// [[Rcpp::export]]
-arma::mat get_logQ(const arma::Mat<int> E, const arma::mat P) {
-
-    int n = P.n_rows;
-    int m = P.n_cols;
-
-    arma::mat logQ(n * 2 - 1, m);
-
-    arma::mat logP_0 = log(1-P);
-    arma::mat logP_1 = log(P);
-
-    logQ.rows(0, n-1) = logP_1 - logP_0;
-
-    arma::Col<int> node_order(E.n_rows + 1);
-    node_order.rows(0,E.n_rows-1) = E.col(1);
-    node_order(E.n_rows) = n+1;
-    arma::uvec ids = find(node_order > n);
-    node_order = node_order.elem(ids);
-
-    std::vector<std::vector<int>> children_dict = allChildrenCPP(E);
-
-    logQ = CgetQ(logQ, children_dict, node_order);
-
-    return logQ;
-}
-
-// Note that this function assumes the tree to be in post-order
-// [[Rcpp::export]]
-double score_tree_cpp(const arma::Mat<int> E, const arma::mat P) {
-
-    int m = P.n_cols;
-
-    double L_0 = accu(log(1-P));
-
-    arma::mat logQ = get_logQ(E, P);
-
-    double l = 0;
-
-    for (int i = 0; i < m; ++i) {
-        l += max(logQ.col(i));
-    }
-
-    l += L_0;
-
-    return l;
-}
+/////////////////////////////////////// MitoDrfit ////////////////////////////////////////
 
 //' definitions for logSumExp function
 #ifdef HAVE_LONG_DOUBLE
@@ -307,7 +202,7 @@ double logSumExp(const arma::vec& x) {
 // P is the likelihood matrix (character state x node); must be ordered according to node indices in E
 // output: total log likelihood for the tree graph (partition function) via the sum product algorithm
 // [[Rcpp::export]]
-Rcpp::List score_tree_bp(arma::Mat<int> E, const arma::mat logP, const arma::mat logA, bool report_beliefs = false) {
+double score_tree_bp(arma::Mat<int> E, const arma::mat logP, const arma::mat logA, bool report_beliefs = false) {
 
     E = E - 1;
 
@@ -328,16 +223,11 @@ Rcpp::List score_tree_bp(arma::Mat<int> E, const arma::mat logP, const arma::mat
     // Step 2: Find the root node (node that never appears in the second column)
     int root = E(E.n_rows - 1, 0);
 
-    // Rcpp::Rcout << "Root node: " << root+1 << std::endl;
-
     // Step 3: Process nodes in postorder as given by E
     for (size_t i = 0; i < E.n_rows; i++) {
 
         int node = E(i, 1);
         int par = parent[node];
-
-        // Rcpp::Rcout << "Visiting node: " << node+1 << std::endl;
-        // Rcpp::Rcout << "Parent: " << par+1 << std::endl;
 
         // Compute message from node → parent in log-space
         arma::vec log_sums(C, arma::fill::zeros);
@@ -360,28 +250,18 @@ Rcpp::List score_tree_bp(arma::Mat<int> E, const arma::mat logP, const arma::mat
     double log_partition = logSumExp(root_log_values);
 
     // Compute node beliefs if requested
-    arma::mat node_beliefs(C, n, arma::fill::zeros);
-    if (report_beliefs) {
-        for (int node = 0; node < n; node++) {
-            for (int c = 0; c < C; c++) {
-                node_beliefs(c, node) = logP(c, node) + log_messages(c, node);
-            }
-            // Normalize node_beliefs using logSumExp
-            node_beliefs.col(node) -= logSumExp(node_beliefs.col(node));
-        }
-    }
+    // arma::mat node_beliefs(C, n, arma::fill::zeros);
+    // if (report_beliefs) {
+    //     for (int node = 0; node < n; node++) {
+    //         for (int c = 0; c < C; c++) {
+    //             node_beliefs(c, node) = logP(c, node) + log_messages(c, node);
+    //         }
+    //         // Normalize node_beliefs using logSumExp
+    //         node_beliefs.col(node) -= logSumExp(node_beliefs.col(node));
+    //     }
+    // }
 
-    // Return log-partition function and (optionally) beliefs
-    if (report_beliefs) {
-        return Rcpp::List::create(
-            Rcpp::Named("logZ") = log_partition,
-            Rcpp::Named("node_beliefs") = node_beliefs
-        );
-    } else {
-        return Rcpp::List::create(
-            Rcpp::Named("logZ") = log_partition
-        );
-    }
+    return(log_partition);
 }
 
 // E is edge matrix of the tree; rows must be in postorder
@@ -395,19 +275,60 @@ arma::vec score_tree_bp_wrapper(arma::Mat<int> E, const arma::cube logP, const a
     
     // Loop over loci
     for (int l = 0; l < L; l++) {
+        
         // Extract logP and logA for the current locus
         arma::mat logP_locus = logP.slice(l);
         arma::mat logA_locus = logA.slice(l);
         
         // Compute the partition function for this locus
-        Rcpp::List result = score_tree_bp(E, logP_locus, logA_locus);
-        
-        // Store log-partition function for this locus
-        logZ(l) = Rcpp::as<double>(result["logZ"]);
+        logZ(l) = score_tree_bp(E, logP_locus, logA_locus);
         
     }
 
     return(logZ);
+
+}
+
+struct score_neighbours_max: public Worker {
+
+    // original tree
+    const arma::Mat<int> E;
+    const arma::cube logP;
+    const arma::cube logA;
+    RVector<double> scores;
+
+    // initialize with source and destination
+    score_neighbours_max(const arma::Mat<int> E, const arma::cube logP, const arma::cube logA, NumericVector scores): 
+        E(E), logP(logP), logA(logA), scores(scores) {}
+
+    void operator()(std::size_t begin, std::size_t end) {
+        for (std::size_t i = begin; i < end; i++) {
+            std::vector<arma::Mat<int>> Ep = nnin_cpp(E, i+1);
+            arma::vec res1 = score_tree_bp_wrapper(Ep[0], logP, logA);
+            arma::vec res2 = score_tree_bp_wrapper(Ep[1], logP, logA);
+            scores[2*i] = sum(res1);
+            scores[2*i+1] = sum(res2);
+        }
+    }
+};
+
+// Note that the tree has to be already in post-order
+// [[Rcpp::export]]
+NumericVector nni_cpp_parallel(const List tree, const arma::cube logP, const arma::cube logA) {
+    
+    arma::Mat<int> E = tree["edge"];
+
+    E = reorderRcpp(E);
+
+    int n = E.n_rows/2 - 1;
+
+    NumericVector scores(2*n);
+
+    score_neighbours_max score_neighbours_max(E, logP, logA, scores);
+
+    parallelFor(0, n, score_neighbours_max);
+
+    return scores;
 
 }
 
@@ -541,46 +462,3 @@ arma::vec score_tree_bp_wrapper(arma::Mat<int> E, const arma::cube logP, const a
 //     }
 // }
 
-
-struct score_neighbours_max: public Worker {
-
-    // original tree
-    const arma::Mat<int> E;
-    const arma::cube logP;
-    const arma::cube logA;
-    RVector<double> scores;
-
-    // initialize with source and destination
-    score_neighbours_max(const arma::Mat<int> E, const arma::cube logP, const arma::cube logA, NumericVector scores): 
-        E(E), logP(logP), logA(logA), scores(scores) {}
-
-    void operator()(std::size_t begin, std::size_t end) {
-        for (std::size_t i = begin; i < end; i++) {
-            std::vector<arma::Mat<int>> Ep = nnin_cpp(E, i+1);
-            arma::vec res1 = score_tree_bp_wrapper(Ep[0], logP, logA);
-            arma::vec res2 = score_tree_bp_wrapper(Ep[1], logP, logA);
-            scores[2*i] = sum(res1);
-            scores[2*i+1] = sum(res2);
-        }
-    }
-};
-
-// Note that the tree has to be already in post-order
-// [[Rcpp::export]]
-NumericVector nni_cpp_parallel(const List tree, const arma::cube logP, const arma::cube logA) {
-    
-    arma::Mat<int> E = tree["edge"];
-
-    E = reorderRcpp(E);
-
-    int n = E.n_rows/2 - 1;
-
-    NumericVector scores(2*n);
-
-    score_neighbours_max score_neighbours_max(E, logP, logA, scores);
-
-    parallelFor(0, n, score_neighbours_max);
-
-    return scores;
-
-}
