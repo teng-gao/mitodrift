@@ -85,27 +85,27 @@ BEGIN_RCPP
 END_RCPP
 }
 // score_tree_bp
-double score_tree_bp(arma::Mat<int> E, const arma::mat& logP, const arma::mat logA);
+double score_tree_bp(arma::Mat<int> E, const arma::mat& logP, const arma::mat& logA);
 RcppExport SEXP _mitodrift_score_tree_bp(SEXP ESEXP, SEXP logPSEXP, SEXP logASEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< arma::Mat<int> >::type E(ESEXP);
     Rcpp::traits::input_parameter< const arma::mat& >::type logP(logPSEXP);
-    Rcpp::traits::input_parameter< const arma::mat >::type logA(logASEXP);
+    Rcpp::traits::input_parameter< const arma::mat& >::type logA(logASEXP);
     rcpp_result_gen = Rcpp::wrap(score_tree_bp(E, logP, logA));
     return rcpp_result_gen;
 END_RCPP
 }
 // score_tree_bp_wrapper
-arma::vec score_tree_bp_wrapper(arma::Mat<int> E, const arma::cube& logP, const arma::cube& logA);
+arma::vec score_tree_bp_wrapper(arma::Mat<int> E, const arma::cube& logP, const arma::mat& logA);
 RcppExport SEXP _mitodrift_score_tree_bp_wrapper(SEXP ESEXP, SEXP logPSEXP, SEXP logASEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< arma::Mat<int> >::type E(ESEXP);
     Rcpp::traits::input_parameter< const arma::cube& >::type logP(logPSEXP);
-    Rcpp::traits::input_parameter< const arma::cube& >::type logA(logASEXP);
+    Rcpp::traits::input_parameter< const arma::mat& >::type logA(logASEXP);
     rcpp_result_gen = Rcpp::wrap(score_tree_bp_wrapper(E, logP, logA));
     return rcpp_result_gen;
 END_RCPP
@@ -136,14 +136,14 @@ BEGIN_RCPP
 END_RCPP
 }
 // nni_cpp_parallel
-NumericVector nni_cpp_parallel(const List tree, const arma::cube logP, const arma::cube logA);
+NumericVector nni_cpp_parallel(const List tree, const arma::cube& logP, const arma::mat& logA);
 RcppExport SEXP _mitodrift_nni_cpp_parallel(SEXP treeSEXP, SEXP logPSEXP, SEXP logASEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< const List >::type tree(treeSEXP);
-    Rcpp::traits::input_parameter< const arma::cube >::type logP(logPSEXP);
-    Rcpp::traits::input_parameter< const arma::cube >::type logA(logASEXP);
+    Rcpp::traits::input_parameter< const arma::cube& >::type logP(logPSEXP);
+    Rcpp::traits::input_parameter< const arma::mat& >::type logA(logASEXP);
     rcpp_result_gen = Rcpp::wrap(nni_cpp_parallel(tree, logP, logA));
     return rcpp_result_gen;
 END_RCPP

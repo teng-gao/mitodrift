@@ -202,16 +202,16 @@ double logSumExp(const arma::vec& x) {
 // P is the likelihood matrix (character state x node); must be ordered according to node indices in E
 // output: total log likelihood for the tree graph (partition function) via the sum product algorithm
 // [[Rcpp::export]]
-double score_tree_bp(arma::Mat<int> E, const arma::mat& logP, const arma::mat logA) {
+double score_tree_bp(arma::Mat<int> E, const arma::mat& logP, const arma::mat& logA) {
 
     E = E - 1;
-    arma::mat tlogA = logA.t();
 
     int n = logP.n_cols; // Number of nodes
     int C = logP.n_rows; // Number of character states
 
     // Initialize messages
     arma::mat log_messages(C, n, arma::fill::zeros);
+    arma::vec child_log_values(C);
 
     // Step 2: Find the root node (assuming postorder)
     int root = E(E.n_rows - 1, 0);
@@ -223,20 +223,15 @@ double score_tree_bp(arma::Mat<int> E, const arma::mat& logP, const arma::mat lo
         int par = E(i, 0);
 
         // Compute message from node → parent in log-space
-        arma::vec log_sums(C, arma::fill::zeros);
         for (int c = 0; c < C; c++) { // parent state
-            // arma::vec child_log_values(C);
-            // for (int c_child = 0; c_child < C; c_child++) { // child state
-            //     child_log_values(c_child) = logA(c, c_child) + logP(c_child, node) + log_messages(c_child, node);
-            // }
-            arma::vec child_log_values = tlogA.col(c) + logP.col(node) + log_messages.col(node);
-            log_sums(c) = logSumExp(child_log_values);
+            for (int c_child = 0; c_child < C; c_child++) { // child state
+                child_log_values(c_child) = logA(c, c_child) + logP(c_child, node) + log_messages(c_child, node);
+            }
+            log_messages(c, par) += logSumExp(child_log_values);
         }
-
-        log_messages.col(par) += log_sums; // Update parent message
     }
 
-    // // Step 4: Compute log-partition function at root
+    // Step 4: Compute log-partition function at root
     double log_partition = logSumExp(logP.col(root) + log_messages.col(root));
 
     return(log_partition);
@@ -246,14 +241,14 @@ double score_tree_bp(arma::Mat<int> E, const arma::mat& logP, const arma::mat lo
 // P is the likelihood matrix (character state x node); must be ordered according to node indices in E
 // output: total log likelihood for the tree graph (partition function) via the sum product algorithm
 // [[Rcpp::export]]
-arma::vec score_tree_bp_wrapper(arma::Mat<int> E, const arma::cube& logP, const arma::cube& logA) {
+arma::vec score_tree_bp_wrapper(arma::Mat<int> E, const arma::cube& logP, const arma::mat& logA) {
     
     int L = logP.n_slices; // Number of loci
     arma::vec logZ(L, arma::fill::zeros); // Store log-likelihood for each locus
     
     // Loop over loci
     for (int l = 0; l < L; l++) {
-        logZ(l) = score_tree_bp(E, logP.slice(l), logA.slice(l));
+        logZ(l) = score_tree_bp(E, logP.slice(l), logA);
     }
 
     return(logZ);
@@ -332,11 +327,11 @@ struct score_neighbours_max: public Worker {
     // original tree
     const arma::Mat<int> E;
     const arma::cube logP;
-    const arma::cube logA;
+    const arma::mat logA;
     RVector<double> scores;
 
     // initialize with source and destination
-    score_neighbours_max(const arma::Mat<int> E, const arma::cube logP, const arma::cube logA, NumericVector scores): 
+    score_neighbours_max(const arma::Mat<int> E, const arma::cube logP, const arma::mat logA, NumericVector scores): 
         E(E), logP(logP), logA(logA), scores(scores) {}
 
     void operator()(std::size_t begin, std::size_t end) {
@@ -352,7 +347,7 @@ struct score_neighbours_max: public Worker {
 
 // Note that the tree has to be already in post-order
 // [[Rcpp::export]]
-NumericVector nni_cpp_parallel(const List tree, const arma::cube logP, const arma::cube logA) {
+NumericVector nni_cpp_parallel(const List tree, const arma::cube& logP, const arma::mat& logA) {
     
     arma::Mat<int> E = tree["edge"];
 
