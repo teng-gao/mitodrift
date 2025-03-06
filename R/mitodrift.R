@@ -131,3 +131,32 @@ optimize_tree_rcpp = function(
         return(tree_current)
     }
 }
+
+convert_liks_to_logP_list <- function(liks, phy) {
+    
+    E <- reorderRcpp(phy$edge)
+    phy$node.label <- NULL
+    
+    P_all <- lapply(liks, function(liks_mut) {
+        n_tips <- length(phy$tip.label)
+        n_nodes <- phy$Nnode
+        root_node <- E[nrow(E), 1]
+        k <- nrow(liks_mut)
+        
+        P <- matrix(nrow = k, ncol = n_tips + n_nodes)
+        rownames(P) <- rownames(liks_mut)
+
+        # Tip likelihoods, internal node likelihoods, root node set up
+        P[, 1:n_tips] <- liks_mut[, phy$tip.label]
+        P[, (n_tips + 1):(n_tips + n_nodes)] <- 1/k
+        P[, root_node] <- c(1, rep(0, k - 1))
+        
+        return(P)
+    })
+
+    logP_list <- lapply(P_all, function(P) {
+        as.vector(log(t(P)))
+    })
+    
+    return(logP_list)
+}
