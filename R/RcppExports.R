@@ -4,20 +4,16 @@
 #' definitions for logSumExp function
 NULL
 
-allChildrenCPP <- function(E) {
-    .Call('_mitodrift_allChildrenCPP', PACKAGE = 'mitodrift', E)
-}
-
-reorder_rows <- function(x, y) {
-    .Call('_mitodrift_reorder_rows', PACKAGE = 'mitodrift', x, y)
-}
-
 reorderRcpp <- function(E) {
     .Call('_mitodrift_reorderRcpp', PACKAGE = 'mitodrift', E)
 }
 
 nnin_cpp <- function(E, n) {
     .Call('_mitodrift_nnin_cpp', PACKAGE = 'mitodrift', E, n)
+}
+
+nnin_cpp2 <- function(E, n) {
+    .Call('_mitodrift_nnin_cpp2', PACKAGE = 'mitodrift', E, n)
 }
 
 node_depth <- function(ntip, e1, e2, nedge, xx, method) {
@@ -33,24 +29,12 @@ logSumExp <- function(x) {
     .Call('_mitodrift_logSumExp', PACKAGE = 'mitodrift', x)
 }
 
-logSumExp2 <- function(x) {
-    .Call('_mitodrift_logSumExp2', PACKAGE = 'mitodrift', x)
-}
-
 score_tree_bp <- function(E, logP, logA, n, C, m, root) {
     .Call('_mitodrift_score_tree_bp', PACKAGE = 'mitodrift', E, logP, logA, n, C, m, root)
 }
 
 score_tree_bp_wrapper <- function(E, logP_list, logA) {
     .Call('_mitodrift_score_tree_bp_wrapper', PACKAGE = 'mitodrift', E, logP_list, logA)
-}
-
-score_tree_bp2 <- function(E, logP, logA, n, C, m, root) {
-    .Call('_mitodrift_score_tree_bp2', PACKAGE = 'mitodrift', E, logP, logA, n, C, m, root)
-}
-
-score_tree_bp_wrapper2 <- function(E, logP_list, logA) {
-    .Call('_mitodrift_score_tree_bp_wrapper2', PACKAGE = 'mitodrift', E, logP_list, logA)
 }
 
 nni_cpp_parallel <- function(E, logP, logA) {
