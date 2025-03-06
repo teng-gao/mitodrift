@@ -63,16 +63,6 @@ score_tree_bp_wrapper3 <- function(E, logP, logA) {
     .Call('_mitodrift_score_tree_bp_wrapper3', PACKAGE = 'mitodrift', E, logP, logA)
 }
 
-#' @export
-score_tree_bp4 <- function(E, logP, logA) {
-    .Call('_mitodrift_score_tree_bp4', PACKAGE = 'mitodrift', E, logP, logA)
-}
-
-#' @export
-score_tree_bp_wrapper4 <- function(E, logP, logA) {
-    .Call('_mitodrift_score_tree_bp_wrapper4', PACKAGE = 'mitodrift', E, logP, logA)
-}
-
 score_tree_bp_multi <- function(E, logP, logA) {
     .Call('_mitodrift_score_tree_bp_multi', PACKAGE = 'mitodrift', E, logP, logA)
 }
