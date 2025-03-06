@@ -136,6 +136,58 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// score_tree_bp3
+double score_tree_bp3(const arma::Mat<int> E, const std::vector<std::vector<double>> logP, const std::vector<std::vector<double>> logA);
+RcppExport SEXP _mitodrift_score_tree_bp3(SEXP ESEXP, SEXP logPSEXP, SEXP logASEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const arma::Mat<int> >::type E(ESEXP);
+    Rcpp::traits::input_parameter< const std::vector<std::vector<double>> >::type logP(logPSEXP);
+    Rcpp::traits::input_parameter< const std::vector<std::vector<double>> >::type logA(logASEXP);
+    rcpp_result_gen = Rcpp::wrap(score_tree_bp3(E, logP, logA));
+    return rcpp_result_gen;
+END_RCPP
+}
+// score_tree_bp_wrapper3
+double score_tree_bp_wrapper3(arma::Mat<int> E, const arma::cube logP, const arma::mat logA);
+RcppExport SEXP _mitodrift_score_tree_bp_wrapper3(SEXP ESEXP, SEXP logPSEXP, SEXP logASEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< arma::Mat<int> >::type E(ESEXP);
+    Rcpp::traits::input_parameter< const arma::cube >::type logP(logPSEXP);
+    Rcpp::traits::input_parameter< const arma::mat >::type logA(logASEXP);
+    rcpp_result_gen = Rcpp::wrap(score_tree_bp_wrapper3(E, logP, logA));
+    return rcpp_result_gen;
+END_RCPP
+}
+// score_tree_bp4
+double score_tree_bp4(const std::vector<std::vector<int>> E, const arma::mat logP, const std::vector<std::vector<double>> logA);
+RcppExport SEXP _mitodrift_score_tree_bp4(SEXP ESEXP, SEXP logPSEXP, SEXP logASEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const std::vector<std::vector<int>> >::type E(ESEXP);
+    Rcpp::traits::input_parameter< const arma::mat >::type logP(logPSEXP);
+    Rcpp::traits::input_parameter< const std::vector<std::vector<double>> >::type logA(logASEXP);
+    rcpp_result_gen = Rcpp::wrap(score_tree_bp4(E, logP, logA));
+    return rcpp_result_gen;
+END_RCPP
+}
+// score_tree_bp_wrapper4
+double score_tree_bp_wrapper4(arma::Mat<int> E, const arma::cube logP, const arma::mat logA);
+RcppExport SEXP _mitodrift_score_tree_bp_wrapper4(SEXP ESEXP, SEXP logPSEXP, SEXP logASEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< arma::Mat<int> >::type E(ESEXP);
+    Rcpp::traits::input_parameter< const arma::cube >::type logP(logPSEXP);
+    Rcpp::traits::input_parameter< const arma::mat >::type logA(logASEXP);
+    rcpp_result_gen = Rcpp::wrap(score_tree_bp_wrapper4(E, logP, logA));
+    return rcpp_result_gen;
+END_RCPP
+}
 // score_tree_bp_multi
 double score_tree_bp_multi(arma::Mat<int> E, const arma::cube logP, const arma::mat logA);
 RcppExport SEXP _mitodrift_score_tree_bp_multi(SEXP ESEXP, SEXP logPSEXP, SEXP logASEXP) {
@@ -174,6 +226,10 @@ static const R_CallMethodDef CallEntries[] = {
     {"_mitodrift_score_tree_bp_wrapper", (DL_FUNC) &_mitodrift_score_tree_bp_wrapper, 3},
     {"_mitodrift_score_tree_bp2", (DL_FUNC) &_mitodrift_score_tree_bp2, 3},
     {"_mitodrift_score_tree_bp_wrapper2", (DL_FUNC) &_mitodrift_score_tree_bp_wrapper2, 3},
+    {"_mitodrift_score_tree_bp3", (DL_FUNC) &_mitodrift_score_tree_bp3, 3},
+    {"_mitodrift_score_tree_bp_wrapper3", (DL_FUNC) &_mitodrift_score_tree_bp_wrapper3, 3},
+    {"_mitodrift_score_tree_bp4", (DL_FUNC) &_mitodrift_score_tree_bp4, 3},
+    {"_mitodrift_score_tree_bp_wrapper4", (DL_FUNC) &_mitodrift_score_tree_bp_wrapper4, 3},
     {"_mitodrift_score_tree_bp_multi", (DL_FUNC) &_mitodrift_score_tree_bp_multi, 3},
     {"_mitodrift_nni_cpp_parallel", (DL_FUNC) &_mitodrift_nni_cpp_parallel, 3},
     {NULL, NULL, 0}

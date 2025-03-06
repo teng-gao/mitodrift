@@ -248,6 +248,18 @@ std::vector<std::vector<double>> armaMatToStdVec(const arma::mat mat) {
     return vec;
 }
 
+std::vector<std::vector<int>> armaMatToStdVecInt(const arma::Mat<int> mat) {
+    std::vector<std::vector<int>> vec;
+    for (size_t i = 0; i < mat.n_rows; ++i) {
+        std::vector<int> row;
+        for (size_t j = 0; j < mat.n_cols; ++j) {
+            row.push_back(mat(i, j));
+        }
+        vec.push_back(row);
+    }
+    return vec;
+}
+
 // E is edge matrix of the tree; rows must be in postorder
 // P is the likelihood matrix (character state x node); must be ordered according to node indices in E
 // output: total log likelihood for the tree graph (partition function) via the sum product algorithm
@@ -266,7 +278,6 @@ double score_tree_bp_wrapper(arma::Mat<int> E, const arma::cube logP, const arma
 
     return(logZ);
 }
-
 
 // E is edge matrix of the tree; rows must be in postorder
 // P is the likelihood matrix (character state x node); must be ordered according to node indices in E
@@ -326,6 +337,131 @@ double score_tree_bp_wrapper2(arma::Mat<int> E, const arma::cube logP, const arm
 
     return(logZ);
 }
+
+
+
+// E is edge matrix of the tree; rows must be in postorder
+// P is the likelihood matrix (character state x node); must be ordered according to node indices in E
+// output: total log likelihood for the tree graph (partition function) via the sum product algorithm
+//' @export
+// [[Rcpp::export]]
+double score_tree_bp3(const arma::Mat<int> E, const std::vector<std::vector<double>> logP, const std::vector<std::vector<double>> logA) {
+
+    int n = logP[0].size(); // Number of nodes
+    int m = E.n_rows; // Number of edges
+    int C = logP.size(); // Number of character states
+
+    // Use a single contiguous memory block for log_messages
+    std::vector<double> log_messages(C * n, 0.0);
+    std::vector<double> state_log_values(C);
+
+    // Step 3: Process nodes in postorder as given by E
+    for (size_t i = 0; i < m; i++) {
+        int node = E(i, 1);
+        int par = E(i, 0);
+        // Compute message from node → parent in log-space
+        for (int c = 0; c < C; c++) { // Parent state
+            for (int c_child = 0; c_child < C; c_child++) { // Child state
+                state_log_values[c_child] = logA[c][c_child] + logP[c_child][node] + log_messages[c_child * n + node];
+            }
+            log_messages[c * n + par] += logSumExp(state_log_values);
+        }
+    }
+
+    // Step 4: Compute log-partition function at root
+    int root = E(m - 1, 0);
+    for (int c = 0; c < C; c++) {
+        state_log_values[c] = logP[c][root] + log_messages[c * n + root];
+    }
+
+    return logSumExp(state_log_values);
+}
+
+
+// E is edge matrix of the tree; rows must be in postorder
+// P is the likelihood matrix (character state x node); must be ordered according to node indices in E
+// output: total log likelihood for the tree graph (partition function) via the sum product algorithm
+//' @export
+// [[Rcpp::export]]
+double score_tree_bp_wrapper3(arma::Mat<int> E, const arma::cube logP, const arma::mat logA) {
+    
+    int L = logP.n_slices; // Number of loci
+    double logZ = 0;
+    E = E - 1;
+
+    std::vector<std::vector<double>> logAA = armaMatToStdVec(logA);
+    std::vector<std::vector<double>> logPP;
+    
+    // Loop over loci
+    for (int l = 0; l < L; l++) {
+        logPP = armaMatToStdVec(logP.slice(l));
+        logZ += score_tree_bp3(E, logPP, logAA);
+    }
+
+    return(logZ);
+}
+
+
+// E is edge matrix of the tree; rows must be in postorder
+// P is the likelihood matrix (character state x node); must be ordered according to node indices in E
+// output: total log likelihood for the tree graph (partition function) via the sum product algorithm
+//' @export
+// [[Rcpp::export]]
+double score_tree_bp4(const std::vector<std::vector<int>> E, const arma::mat logP, const std::vector<std::vector<double>> logA) {
+
+    int n = logP.n_cols; // Number of nodes
+    int m = E.size(); // Number of edges
+    int C = logP.n_rows; // Number of character states
+
+    // Use a single contiguous memory block for log_messages
+    std::vector<double> log_messages(C * n, 0.0);
+    std::vector<double> state_log_values(C);
+
+    // Step 3: Process nodes in postorder as given by E
+    for (size_t i = 0; i < m; i++) {
+        int node = E[i][1];
+        int par = E[i][0];
+        // Compute message from node → parent in log-space
+        for (int c = 0; c < C; c++) { // Parent state
+            for (int c_child = 0; c_child < C; c_child++) { // Child state
+                state_log_values[c_child] = logA[c][c_child] + logP(c_child, node) + log_messages[c_child * n + node];
+            }
+            log_messages[c * n + par] += logSumExp(state_log_values);
+        }
+    }
+
+    // Step 4: Compute log-partition function at root
+    int root = E[m - 1][0];
+    for (int c = 0; c < C; c++) {
+        state_log_values[c] = logP(c, root) + log_messages[c * n + root];
+    }
+
+    return logSumExp(state_log_values);
+}
+
+
+// E is edge matrix of the tree; rows must be in postorder
+// P is the likelihood matrix (character state x node); must be ordered according to node indices in E
+// output: total log likelihood for the tree graph (partition function) via the sum product algorithm
+//' @export
+// [[Rcpp::export]]
+double score_tree_bp_wrapper4(arma::Mat<int> E, const arma::cube logP, const arma::mat logA) {
+    
+    int L = logP.n_slices; // Number of loci
+    double logZ = 0;
+    E = E - 1;
+
+    std::vector<std::vector<double>> logAA = armaMatToStdVec(logA);
+    std::vector<std::vector<int>> EE = armaMatToStdVecInt(E);
+    
+    // Loop over loci
+    for (int l = 0; l < L; l++) {
+        logZ += score_tree_bp4(EE, logP.slice(l), logAA);
+    }
+
+    return(logZ);
+}
+
 
 
 // [[Rcpp::export]]
@@ -388,8 +524,8 @@ struct score_neighbours_max: public Worker {
     void operator()(std::size_t begin, std::size_t end) {
         for (std::size_t i = begin; i < end; i++) {
             std::vector<arma::Mat<int>> Ep = nnin_cpp(E, i+1);
-            scores[2*i] = score_tree_bp_wrapper(Ep[0], logP, logA);
-            scores[2*i+1] = score_tree_bp_wrapper(Ep[1], logP, logA);
+            scores[2*i] = score_tree_bp_wrapper2(Ep[0], logP, logA);
+            scores[2*i+1] = score_tree_bp_wrapper2(Ep[1], logP, logA);
         }
     }
 };
