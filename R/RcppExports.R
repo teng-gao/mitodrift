@@ -8,6 +8,10 @@ reorderRcpp <- function(E) {
     .Call('_mitodrift_reorderRcpp', PACKAGE = 'mitodrift', E)
 }
 
+reorderRcpp2 <- function(E) {
+    .Call('_mitodrift_reorderRcpp2', PACKAGE = 'mitodrift', E)
+}
+
 nnin_cpp <- function(E, n) {
     .Call('_mitodrift_nnin_cpp', PACKAGE = 'mitodrift', E, n)
 }

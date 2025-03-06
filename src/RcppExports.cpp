@@ -22,6 +22,17 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// reorderRcpp2
+arma::Mat<int> reorderRcpp2(arma::Mat<int> E);
+RcppExport SEXP _mitodrift_reorderRcpp2(SEXP ESEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< arma::Mat<int> >::type E(ESEXP);
+    rcpp_result_gen = Rcpp::wrap(reorderRcpp2(E));
+    return rcpp_result_gen;
+END_RCPP
+}
 // nnin_cpp
 std::vector<arma::Mat<int>> nnin_cpp(const arma::Mat<int> E, const int n);
 RcppExport SEXP _mitodrift_nnin_cpp(SEXP ESEXP, SEXP nSEXP) {
@@ -119,6 +130,7 @@ END_RCPP
 
 static const R_CallMethodDef CallEntries[] = {
     {"_mitodrift_reorderRcpp", (DL_FUNC) &_mitodrift_reorderRcpp, 1},
+    {"_mitodrift_reorderRcpp2", (DL_FUNC) &_mitodrift_reorderRcpp2, 1},
     {"_mitodrift_nnin_cpp", (DL_FUNC) &_mitodrift_nnin_cpp, 2},
     {"_mitodrift_nnin_cpp2", (DL_FUNC) &_mitodrift_nnin_cpp2, 2},
     {"_mitodrift_node_depth", (DL_FUNC) &_mitodrift_node_depth, 6},

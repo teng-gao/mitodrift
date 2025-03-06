@@ -78,6 +78,96 @@ arma::Mat<int> reorderRcpp(arma::Mat<int> E) {
     return E;
 }
 
+// An inline helper that performs the recursive postorder traversal.
+// Instead of using Armadillo’s element access repeatedly, we use raw pointers
+// to speed up the recursion.
+inline void bar_reorderRcpp_inline(int node, int nTips,
+    const int* e1_ptr, const int* e2_ptr,
+    std::vector<int>& neworder,
+    const int* L_ptr, const int* xi_ptr, const int* xj_ptr,
+    int &iii) {
+  
+  int i = node - nTips - 1;
+  // First, add the current block in reverse order.
+  for (int j = xj_ptr[i] - 1; j >= 0; j--) {
+    neworder[iii--] = L_ptr[xi_ptr[i] + j] + 1; // +1 for R's 1-indexing
+  }
+  // Then, recursively process each child.
+  for (int j = 0; j < xj_ptr[i]; j++) {
+    int k = e2_ptr[ L_ptr[xi_ptr[i] + j] ];
+    if (k > nTips)
+      bar_reorderRcpp_inline(k, nTips, e1_ptr, e2_ptr, neworder, L_ptr, xi_ptr, xj_ptr, iii);
+  }
+}
+
+// A vectorized version of reorder_rows using Armadillo’s built-in indexing.
+arma::Mat<int> reorder_rows2(const arma::Mat<int>& x, const std::vector<int>& order) {
+  // Convert the std::vector to an arma::uvec.
+  arma::uvec idx = arma::conv_to<arma::uvec>::from(order);
+  // Adjust for 0-indexing (order was stored 1-indexed).
+  idx -= 1;
+  return x.rows(idx);
+}
+
+// [[Rcpp::export]]
+arma::Mat<int> reorderRcpp2(arma::Mat<int> E) {
+  int n = E.n_rows;
+  int nTips = n / 2 + 1;
+  int root = nTips + 1;
+  
+  // Get copies of the parent and child columns.
+  arma::Col<int> e1 = E.col(0);
+  arma::Col<int> e2 = E.col(1);
+  
+  // The maximum parent label tells us the total number of nodes.
+  int m = e1.max(); 
+  int nnode = m - nTips;
+  
+  // Allocate working arrays.
+  std::vector<int> L(n);            // Will store indices corresponding to each internal node.
+  std::vector<int> neworder(n);       // The final reordering.
+  std::vector<int> pos(nnode, 0);     // Current fill position for each node.
+  std::vector<int> xi(nnode, 0);      // Starting index for each node in L.
+  std::vector<int> xj(nnode, 0);      // Count of children per internal node.
+  
+  // First pass: count children per node (using e1, which stores parent IDs).
+  for (int i = 0; i < n; i++) {
+    int idx = e1[i] - nTips - 1;
+    xj[idx]++;
+  }
+  
+  // Compute starting positions xi (cumulative sums).
+  for (int i = 1; i < nnode; i++) {
+    xi[i] = xi[i - 1] + xj[i - 1];
+  }
+  
+  // Fill L: For each edge, place its row index in the appropriate block.
+  for (int i = 0; i < n; i++) {
+    int k = e1[i] - nTips - 1;
+    int j = pos[k];
+    L[xi[k] + j] = i;
+    pos[k]++;
+  }
+  
+  // Reset the new order index.
+  int iii = n - 1;
+  
+  // Use raw pointers to speed up inner loops.
+  const int* e1_ptr = e1.memptr();
+  const int* e2_ptr = e2.memptr();
+  const int* L_ptr   = L.data();
+  const int* xi_ptr  = xi.data();
+  const int* xj_ptr  = xj.data();
+  
+  // Run the recursive postorder traversal.
+  bar_reorderRcpp_inline(root, nTips, e1_ptr, e2_ptr, neworder, L_ptr, xi_ptr, xj_ptr, iii);
+  
+  // Reorder the rows of E using the computed order.
+  E = reorder_rows2(E, neworder);
+  
+  return E;
+}
+
 // Modified from R-package `phangorn' by Klaus Schliep
 // n goes from 1 to total number of edges
 // [[Rcpp::export]]
