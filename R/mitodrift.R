@@ -9,7 +9,8 @@
 #' @useDynLib mitodrift
 NULL
 
-# to fix: apparently the init tree has to be rooted otherwise to_phylo_reoder won't work. 
+# to fix: apparently the init tree has to be rooted otherwise to_phylo_reoder won't work.
+#' @export 
 optimize_tree_cpp = function(
     tree_init, logP, logA, max_iter = 100, ncores = 1, trace = TRUE, outfile = NULL, trace_interval = 5
 ) {
@@ -61,6 +62,16 @@ optimize_tree_cpp = function(
     } else {
         return(tree_current)
     }
+}
+
+score_tree_bp_wrapper_r = function(E, logP, logA) {
+    n = dim(logP)[3]
+    logZ = sapply(
+        1:n,
+        function (i) {
+        score_tree_bp(E, logP[,,i], logA)
+    }) %>% sum
+    return(logZ)
 }
 
 # to fix: apparently the init tree has to be rooted otherwise to_phylo_reoder won't work. 

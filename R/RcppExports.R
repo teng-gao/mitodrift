@@ -33,12 +33,26 @@ logSumExp <- function(x) {
     .Call('_mitodrift_logSumExp', PACKAGE = 'mitodrift', x)
 }
 
+#' @export
 score_tree_bp <- function(E, logP, logA) {
     .Call('_mitodrift_score_tree_bp', PACKAGE = 'mitodrift', E, logP, logA)
 }
 
+score_tree_bp2 <- function(E, logP, logA) {
+    .Call('_mitodrift_score_tree_bp2', PACKAGE = 'mitodrift', E, logP, logA)
+}
+
+score_tree_bp3 <- function(E, logP, logA) {
+    .Call('_mitodrift_score_tree_bp3', PACKAGE = 'mitodrift', E, logP, logA)
+}
+
+#' @export
 score_tree_bp_wrapper <- function(E, logP, logA) {
     .Call('_mitodrift_score_tree_bp_wrapper', PACKAGE = 'mitodrift', E, logP, logA)
+}
+
+score_tree_bp_wrapper2 <- function(E, logP, logA) {
+    .Call('_mitodrift_score_tree_bp_wrapper2', PACKAGE = 'mitodrift', E, logP, logA)
 }
 
 logSumExpMat <- function(X, axis = 0L) {
