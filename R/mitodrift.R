@@ -22,7 +22,7 @@ optimize_tree_cpp = function(
     tree_init$edge = reorderRcpp(tree_init$edge)
 
     tree_current = tree_init
-    max_current = -Inf
+    max_current = sum(score_tree_bp_wrapper(tree_current$edge, logP, logA))
     tree_list = list()
     runtime = c(0,0,0)
 
@@ -41,7 +41,7 @@ optimize_tree_cpp = function(
 
         message(paste(i, round(max_current, 4), paste0('(', signif(unname(runtime[3]),2), 's', ')')))
 
-        scores = nni_cpp_parallel(tree_current, logP, logA)
+        scores = nni_cpp_parallel(tree_current$edge, logP, logA)
         
         if (max(scores) > max_current) {
             max_id = which.max(scores)
@@ -74,6 +74,8 @@ score_tree_bp_wrapper_r = function(E, logP, logA) {
     return(logZ)
 }
 
+
+
 # to fix: apparently the init tree has to be rooted otherwise to_phylo_reoder won't work. 
 optimize_tree_rcpp = function(
     tree_init, logP, logA, max_iter = 100, ncores = 1, trace = TRUE, outfile = NULL, trace_interval = 5
@@ -100,8 +102,6 @@ optimize_tree_rcpp = function(
         }
 
         message(paste(i, round(max_current, 4), paste0('(', signif(unname(runtime[3]),2), 's', ')')))
-
-        # scores = nni_cpp_parallel(tree_current, logP, logA)
 
         trees_nei = TreeSearch::NNI(tree_current, edgeToBreak = -1)
 
