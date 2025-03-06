@@ -7,77 +7,6 @@ using namespace RcppParallel;
 
 /////////////////////////////////////// NNI ////////////////////////////////////////
 
-// Below functions are modified from R-package `ape' by Emmanuel Paradis and Klaus Schliep
-// Functions are made thread-safe using RcppArmadillo. 
-
-void bar_reorderRcpp(int node, int nTips, const arma::Col<int> & e1,
-    const arma::Col<int> & e2, std::vector<int> & neworder, const arma::Col<int> & L,
-    const arma::Col<int> & xi, const arma::Col<int> & xj, int & iii)
-{
-    int i = node - nTips - 1, j, k;
-
-    for (j = xj[i] -1; j >= 0; j--)
-        neworder[iii--] = L[xi[i] + j ] + 1;
-
-    for (j = 0; j < xj[i]; j++) {
-        k = e2[L[xi[i] + j ]];
-        if (k > nTips)
-            bar_reorderRcpp(k, nTips, e1, e2, neworder, L, xi, xj, iii);
-    }
-}
-
-arma::Mat<int> reorder_rows(arma::Mat<int> x, arma::Col<int> y) {
-
-    // Create an output matrix
-    arma::Mat<int> out = x;
-
-    // Loop through each row and copy the data. 
-    for (int i = 0; i < y.n_elem; ++i) {
-        out.row(i) = x.row(y[i]-1);
-    }
-
-    return out;
-}
-
-// [[Rcpp::export]]
-arma::Mat<int> reorderRcpp(arma::Mat<int> E) {
-
-    int n = E.n_rows;
-    int nTips = n/2 + 1;
-    int root = nTips + 1;
-
-    arma::Col<int> e1 = E.col(0);
-    arma::Col<int> e2 = E.col(1);
-    int m = max(e1), k, j;
-    int nnode = m - nTips;
-    
-    arma::Col<int> L(n);
-    std::vector<int> neworder(n);
-    arma::Col<int> pos(nnode);
-    arma::Col<int> xi(nnode);
-    arma::Col<int> xj(nnode);
-    for (int i = 0; i < n; i++) {
-        xj[e1[i] - nTips - 1]++;
-    }
-    for (int i = 1; i < nnode; i++) {
-        xi[i] = xi[i-1] + xj[i - 1];
-    }
-    for (int i = 0; i < n; i++) {
-        k = e1[i] - nTips - 1;
-        j = pos[k]; /* the current 'column' position corresponding to k */
-        L[xi[k] + j] = i;
-        pos[k]++;
-    }
-
-    int iii = n - 1;
-
-    bar_reorderRcpp(root, nTips, e1, e2, neworder, L, xi, xj, iii);
-
-    E = reorder_rows(E, neworder);
-
-    return E;
-}
-
 // An inline helper that performs the recursive postorder traversal.
 // Instead of using Armadillo’s element access repeatedly, we use raw pointers
 // to speed up the recursion.
@@ -101,7 +30,7 @@ inline void bar_reorderRcpp_inline(int node, int nTips,
 }
 
 // A vectorized version of reorder_rows using Armadillo’s built-in indexing.
-arma::Mat<int> reorder_rows2(const arma::Mat<int>& x, const std::vector<int>& order) {
+arma::Mat<int> reorder_rows(const arma::Mat<int>& x, const std::vector<int>& order) {
   // Convert the std::vector to an arma::uvec.
   arma::uvec idx = arma::conv_to<arma::uvec>::from(order);
   // Adjust for 0-indexing (order was stored 1-indexed).
@@ -110,7 +39,7 @@ arma::Mat<int> reorder_rows2(const arma::Mat<int>& x, const std::vector<int>& or
 }
 
 // [[Rcpp::export]]
-arma::Mat<int> reorderRcpp2(arma::Mat<int> E) {
+arma::Mat<int> reorderRcpp(arma::Mat<int> E) {
   int n = E.n_rows;
   int nTips = n / 2 + 1;
   int root = nTips + 1;
@@ -163,49 +92,13 @@ arma::Mat<int> reorderRcpp2(arma::Mat<int> E) {
   bar_reorderRcpp_inline(root, nTips, e1_ptr, e2_ptr, neworder, L_ptr, xi_ptr, xj_ptr, iii);
   
   // Reorder the rows of E using the computed order.
-  E = reorder_rows2(E, neworder);
+  E = reorder_rows(E, neworder);
   
   return E;
 }
 
-// Modified from R-package `phangorn' by Klaus Schliep
-// n goes from 1 to total number of edges
 // [[Rcpp::export]]
 std::vector<arma::Mat<int>> nnin_cpp(const arma::Mat<int> E, const int n) {
-
-    arma::Mat<int> E1 = E;
-    arma::Mat<int> E2 = E;
-    arma::Col<int> parent = E.col(0);
-    arma::Col<int> child = E.col(1);
-    int k = min(parent) - 1;
-    arma::uvec indvec = find(child > k);
-    int ind = indvec[n-1];
-    int p1 = parent[ind];
-    int p2 = child[ind];
-    arma::uvec ind1_vec = find(parent == p1);
-    ind1_vec = ind1_vec.elem(find(ind1_vec != ind));
-    int ind1 = ind1_vec[0];
-    arma::uvec ind2 = find(parent == p2);
-    
-    int e1 = child[ind1];
-    int e2 = child[ind2[0]];
-    int e3 = child[ind2[1]];
-
-    E1(ind1, 1) = e2;
-    E1(ind2[0], 1) = e1;
-    E2(ind1, 1) = e3;
-    E2(ind2[1], 1) = e1;
-
-    std::vector<arma::Mat<int>> res(2);
-
-    res[0] = reorderRcpp(E1);
-    res[1] = reorderRcpp(E2);
-
-    return res;
-}
-
-// [[Rcpp::export]]
-std::vector<arma::Mat<int>> nnin_cpp2(const arma::Mat<int> E, const int n) {
     // Make copies for the two alternative topologies.
     arma::Mat<int> E1 = E;
     arma::Mat<int> E2 = E;
@@ -292,39 +185,6 @@ std::vector<arma::Mat<int>> nnin_cpp2(const arma::Mat<int> E, const int n) {
     
     return res;
 }
-
-// Based on https://github.com/cran/ape/blob/390386e67f9ff6cd8e6e523b7c43379a1551c565/src/plot_phylo.c
-// [[Rcpp::export]]
-NumericVector node_depth(int ntip, NumericVector e1, NumericVector e2,
-        int nedge, NumericVector xx, int method)
-/* method == 1: the node depths are proportional to the number of tips
-   method == 2: the node depths are evenly spaced */
-{
-
-    int i;
-
-    /* First set the coordinates for all tips */
-    for (i = 0; i < ntip; i++) xx[i] = 1;
-
-    /* Then compute recursively for the nodes; we assume `xx' has */
-    /* been initialized with 0's which is true if it has been */
-    /* created in R (the tree must be in pruningwise order) */
-    if (method == 1) {
-        for (i = 0; i < nedge; i++)
-            xx[e1[i] - 1] = xx[e1[i] - 1] + xx[e2[i] - 1];
-    } else { /* *method == 2 */
-        for (i = 0; i < nedge; i++) {
-            /* if a value > 0 has already been assigned to the ancestor
-               node of this edge, check that the descendant node is not
-               at the same level or more */
-            if (xx[e1[i] - 1])
-            if (xx[e1[i] - 1] >= xx[e2[i] - 1] + 1) continue;
-            xx[e1[i] - 1] = xx[e2[i] - 1] + 1;
-        }
-    }
-    return xx;
-}
-
 
 /////////////////////////////////////// MitoDrfit ////////////////////////////////////////
 
@@ -461,7 +321,7 @@ struct score_neighbours: public Worker {
 
     void operator()(std::size_t begin, std::size_t end) {
         for (std::size_t i = begin; i < end; i++) {
-            std::vector<arma::Mat<int>> Ep = nnin_cpp2(E, i+1);
+            std::vector<arma::Mat<int>> Ep = nnin_cpp(E, i+1);
             scores[2*i] = score_tree_bp_wrapper(Ep[0], logP, logA);
             scores[2*i+1] = score_tree_bp_wrapper(Ep[1], logP, logA);
         }

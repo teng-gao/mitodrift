@@ -22,17 +22,6 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
-// reorderRcpp2
-arma::Mat<int> reorderRcpp2(arma::Mat<int> E);
-RcppExport SEXP _mitodrift_reorderRcpp2(SEXP ESEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< arma::Mat<int> >::type E(ESEXP);
-    rcpp_result_gen = Rcpp::wrap(reorderRcpp2(E));
-    return rcpp_result_gen;
-END_RCPP
-}
 // nnin_cpp
 std::vector<arma::Mat<int>> nnin_cpp(const arma::Mat<int> E, const int n);
 RcppExport SEXP _mitodrift_nnin_cpp(SEXP ESEXP, SEXP nSEXP) {
@@ -42,34 +31,6 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const arma::Mat<int> >::type E(ESEXP);
     Rcpp::traits::input_parameter< const int >::type n(nSEXP);
     rcpp_result_gen = Rcpp::wrap(nnin_cpp(E, n));
-    return rcpp_result_gen;
-END_RCPP
-}
-// nnin_cpp2
-std::vector<arma::Mat<int>> nnin_cpp2(const arma::Mat<int> E, const int n);
-RcppExport SEXP _mitodrift_nnin_cpp2(SEXP ESEXP, SEXP nSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< const arma::Mat<int> >::type E(ESEXP);
-    Rcpp::traits::input_parameter< const int >::type n(nSEXP);
-    rcpp_result_gen = Rcpp::wrap(nnin_cpp2(E, n));
-    return rcpp_result_gen;
-END_RCPP
-}
-// node_depth
-NumericVector node_depth(int ntip, NumericVector e1, NumericVector e2, int nedge, NumericVector xx, int method);
-RcppExport SEXP _mitodrift_node_depth(SEXP ntipSEXP, SEXP e1SEXP, SEXP e2SEXP, SEXP nedgeSEXP, SEXP xxSEXP, SEXP methodSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< int >::type ntip(ntipSEXP);
-    Rcpp::traits::input_parameter< NumericVector >::type e1(e1SEXP);
-    Rcpp::traits::input_parameter< NumericVector >::type e2(e2SEXP);
-    Rcpp::traits::input_parameter< int >::type nedge(nedgeSEXP);
-    Rcpp::traits::input_parameter< NumericVector >::type xx(xxSEXP);
-    Rcpp::traits::input_parameter< int >::type method(methodSEXP);
-    rcpp_result_gen = Rcpp::wrap(node_depth(ntip, e1, e2, nedge, xx, method));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -130,10 +91,7 @@ END_RCPP
 
 static const R_CallMethodDef CallEntries[] = {
     {"_mitodrift_reorderRcpp", (DL_FUNC) &_mitodrift_reorderRcpp, 1},
-    {"_mitodrift_reorderRcpp2", (DL_FUNC) &_mitodrift_reorderRcpp2, 1},
     {"_mitodrift_nnin_cpp", (DL_FUNC) &_mitodrift_nnin_cpp, 2},
-    {"_mitodrift_nnin_cpp2", (DL_FUNC) &_mitodrift_nnin_cpp2, 2},
-    {"_mitodrift_node_depth", (DL_FUNC) &_mitodrift_node_depth, 6},
     {"_mitodrift_logSumExp", (DL_FUNC) &_mitodrift_logSumExp, 1},
     {"_mitodrift_score_tree_bp", (DL_FUNC) &_mitodrift_score_tree_bp, 7},
     {"_mitodrift_score_tree_bp_wrapper", (DL_FUNC) &_mitodrift_score_tree_bp_wrapper, 3},
