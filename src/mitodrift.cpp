@@ -182,7 +182,7 @@ std::vector<arma::Col<int>> nnin_cpp(const arma::Col<int>& E, const int n) {
 //' @return double logSumExp of x
 //' @export
 // [[Rcpp::export]]
-double logSumExp(const arma::vec x) {
+double logSumExp(const arma::vec& x) {
     unsigned int maxi = x.index_max();
     LDOUBLE maxv = x(maxi);
     if (!(maxv > -arma::datum::inf)) {
@@ -197,6 +197,7 @@ double logSumExp(const arma::vec x) {
     }
     return maxv + std::log(cumsum);
 }
+
 
 // bp: Belief-propagation function.
 // logP is a flattened likelihood matrix (row-major; dimensions: C x n)
@@ -310,5 +311,3 @@ NumericVector nni_cpp_parallel(arma::Col<int> E, const std::vector<std::vector<d
     return scores;
 
 }
-
-
