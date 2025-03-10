@@ -186,6 +186,96 @@ std::vector<arma::Mat<int>> nnin_cpp(const arma::Mat<int> E, const int n) {
     return res;
 }
 
+
+// [[Rcpp::export]]
+std::vector<arma::Mat<int>> nnin_cpp2(const arma::Mat<int> E, const int n) {
+    // Make copies for the two alternative topologies.
+    arma::Mat<int> E1 = E;
+    arma::Mat<int> E2 = E;
+    
+    // Get the parent and child columns.
+    arma::Col<int> parent = E.col(0);
+    arma::Col<int> child  = E.col(1);
+    
+    // Get raw pointers to data for speed.
+    const int* p_parent = parent.memptr();
+    const int* p_child  = child.memptr();
+    
+    int numEdges = child.n_elem;
+    int nTips = numEdges / 2 + 1;
+    
+    // Find the nth internal edge
+    int count = 0, ind = -1;
+    for (int i = 0; i < numEdges; i++) {
+        if (p_child[i] > nTips) {
+            count++;
+            if (count == n) {
+                ind = i;
+                break;
+            }
+        }
+    }
+
+    if (ind < 0) {
+        Rcpp::stop("n is larger than the number of valid edges.");
+    }
+    
+    int p1 = p_parent[ind];
+    int p2 = p_child[ind];
+    
+    // Find first index (other than ind) where parent equals p1.
+    int ind1 = -1;
+    for (int i = 0; i < numEdges; i++) {
+        if (i != ind && p_parent[i] == p1) {
+            ind1 = i;
+            break;
+        }
+    }
+
+    if (ind1 < 0) {
+        Rcpp::stop("No valid index found for p1 interchange.");
+    }
+    
+    // Find two indices where parent equals p2.
+    int ind2_0 = -1, ind2_1 = -1;
+    for (int i = 0; i < numEdges; i++) {
+        if (p_parent[i] == p2) {
+            if (ind2_0 < 0) {
+                ind2_0 = i;
+            } else if (ind2_1 < 0 && i != ind) {
+                ind2_1 = i;
+                break;
+            }
+        }
+    }
+
+    if (ind2_0 < 0 || ind2_1 < 0) {
+        Rcpp::stop("No valid indices found for p2 interchange.");
+    }
+    
+    // Retrieve children values for the swapping.
+    int e1 = p_child[ind1];
+    int e2 = p_child[ind2_0];
+    int e3 = p_child[ind2_1];
+    
+    // Perform the nearest neighbor interchanges:
+    // In the first topology, swap child at ind1 with that at ind2_0.
+    E1(ind1, 1)   = e2;
+    E1(ind2_0, 1) = e1;
+    
+    // In the second topology, swap child at ind1 with that at ind2_1.
+    E2(ind1, 1)   = e3;
+    E2(ind2_1, 1) = e1;
+    
+    std::vector<arma::Mat<int>> res(2);
+    // Assume reorderRcpp is a function that reorders the tree appropriately.
+    res[0] = reorderRcpp(E1);
+    res[1] = reorderRcpp(E2);
+    
+    return res;
+}
+
+
 /////////////////////////////////////// MitoDrfit ////////////////////////////////////////
 
 //' definitions for logSumExp function
