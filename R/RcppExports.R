@@ -12,10 +12,6 @@ nnin_cpp <- function(E, n) {
     .Call('_mitodrift_nnin_cpp', PACKAGE = 'mitodrift', E, n)
 }
 
-nnin_cpp2 <- function(E, n) {
-    .Call('_mitodrift_nnin_cpp2', PACKAGE = 'mitodrift', E, n)
-}
-
 #' logSumExp function for a vector
 #'
 #' @param x NumericVector
