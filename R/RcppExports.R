@@ -8,8 +8,20 @@ reorderRcpp <- function(E) {
     .Call('_mitodrift_reorderRcpp', PACKAGE = 'mitodrift', E)
 }
 
+reorderRcpp2 <- function(E) {
+    .Call('_mitodrift_reorderRcpp2', PACKAGE = 'mitodrift', E)
+}
+
 nnin_cpp <- function(E, n) {
     .Call('_mitodrift_nnin_cpp', PACKAGE = 'mitodrift', E, n)
+}
+
+nnin_cpp_vec <- function(E, n) {
+    .Call('_mitodrift_nnin_cpp_vec', PACKAGE = 'mitodrift', E, n)
+}
+
+nnin_cpp_vec2 <- function(E, n) {
+    .Call('_mitodrift_nnin_cpp_vec2', PACKAGE = 'mitodrift', E, n)
 }
 
 #' logSumExp function for a vector

@@ -30,7 +30,7 @@ inline void bar_reorderRcpp_inline(int node, int nTips,
 }
 
 // A vectorized version of reorder_rows using Armadillo’s built-in indexing.
-arma::Mat<int> reorder_rows(const arma::Mat<int>& x, const std::vector<int>& order) {
+arma::Mat<int> reorder_rows(const arma::Mat<int> x, const std::vector<int> order) {
     // Convert the std::vector to an arma::uvec.
     arma::uvec idx = arma::conv_to<arma::uvec>::from(order);
     // Adjust for 0-indexing (order was stored 1-indexed).
@@ -49,7 +49,7 @@ arma::Mat<int> reorderRcpp(arma::Mat<int> E) {
     arma::Col<int> e2 = E.col(1);
 
     // The maximum parent label tells us the total number of nodes.
-    int m = e1.max(); 
+    int m = e1.max();
     int nnode = m - nTips;
 
     // Allocate working arrays.
@@ -95,6 +95,114 @@ arma::Mat<int> reorderRcpp(arma::Mat<int> E) {
     E = reorder_rows(E, neworder);
 
     return E;
+}
+
+// Inline helper performing the recursive postorder traversal.
+// Parameters:
+//   node, nTips: as before.
+//   e1_ptr and e2_ptr: raw pointers to the parent's and child's arrays.
+//   neworder: vector (of length nEdges) that will be filled with the new row ordering (stored 1-indexed).
+//   L_ptr, xi_ptr, xj_ptr: auxiliary arrays computed for the internal nodes.
+//   iii: current index to fill in neworder (initialized to nEdges-1).
+inline void bar_reorderRcpp_inline2(int node, int nTips,
+    const int* e1_ptr, const int* e2_ptr,
+    std::vector<int>& neworder,
+    const int* L_ptr, const int* xi_ptr, const int* xj_ptr,
+    int &iii) {
+    
+    int i = node - nTips - 1;
+    // Output the current node's block (edges for this internal node) in reverse order.
+    for (int j = xj_ptr[i] - 1; j >= 0; j--) {
+        neworder[iii--] = L_ptr[xi_ptr[i] + j] + 1; // +1 converts to R's 1-indexing
+    }
+    // Recursively process each child.
+    for (int j = 0; j < xj_ptr[i]; j++) {
+        int k = e2_ptr[ L_ptr[xi_ptr[i] + j] ];
+        if (k > nTips)
+            bar_reorderRcpp_inline2(k, nTips, e1_ptr, e2_ptr, neworder, L_ptr, xi_ptr, xj_ptr, iii);
+    }
+}
+
+// Helper function to reorder the rows of a column-major edge matrix.
+// E is a one-dimensional arma::Col<int> where the first nEdges entries are the parent column
+// and the next nEdges entries are the child column.
+// 'order' is a vector of 1-indexed row numbers in the desired order.
+// The function returns a new arma::Col<int> with rows rearranged (still column-major).
+arma::Col<int> reorder_rows2(const arma::Col<int>& E, const std::vector<int>& order) {
+    int nEdges = E.n_elem / 2;
+    arma::Col<int> newE(E.n_elem);
+    for (int i = 0; i < nEdges; i++) {
+        int orig = order[i] - 1; // convert from 1-indexed to 0-indexed row number
+        newE[i] = E[orig];             // parent's value (first column)
+        newE[nEdges + i] = E[nEdges + orig];  // child's value (second column)
+    }
+    return newE;
+}
+
+// [[Rcpp::export]]
+arma::Col<int> reorderRcpp2(arma::Col<int> E) {
+    // E is a one-dimensional vector representing an edge matrix in column-major order.
+    // Let nEdges be the number of rows (edges) in the original edge matrix.
+    int nEdges = E.n_elem / 2;
+    // For a fully bifurcating (binary) tree, the standard relationship is:
+    // nTips = nEdges/2 + 1.
+    int nTips = nEdges / 2 + 1;
+    // The root is assumed to be nTips + 1.
+    int root = nTips + 1;
+    
+    // Extract the parent's and child's columns from E.
+    // In column-major storage, the first nEdges elements are the parent column.
+    arma::Col<int> parent = E.rows(0, nEdges - 1);
+    // The next nEdges elements form the child column.
+    arma::Col<int> child = E.rows(nEdges, E.n_elem - 1);
+    
+    // The maximum parent label tells us the total number of nodes.
+    int m_val = parent.max();
+    int nnode = m_val - nTips; // number of internal nodes
+
+    // Allocate working arrays.
+    std::vector<int> L(nEdges);            // Will store edge indices for each internal node.
+    std::vector<int> neworder(nEdges);       // The final reordering (stored as 1-indexed row numbers).
+    std::vector<int> pos(nnode, 0);          // Current fill position for each internal node.
+    std::vector<int> xi(nnode, 0);           // Starting index for each internal node in L.
+    std::vector<int> xj(nnode, 0);           // Count of children per internal node.
+
+    // First pass: count children per internal node using parent's values.
+    for (int i = 0; i < nEdges; i++) {
+        int idx = parent[i] - nTips - 1;
+        xj[idx]++;
+    }
+    
+    // Compute starting positions xi as cumulative sums.
+    for (int i = 1; i < nnode; i++) {
+        xi[i] = xi[i - 1] + xj[i - 1];
+    }
+    
+    // Fill L: For each edge, assign its row index to the appropriate block.
+    for (int i = 0; i < nEdges; i++) {
+        int k = parent[i] - nTips - 1;
+        int j = pos[k];
+        L[xi[k] + j] = i;
+        pos[k]++;
+    }
+    
+    // Reset the new order index.
+    int iii = nEdges - 1;
+    
+    // Get raw pointers for fast access.
+    const int* e1_ptr = parent.memptr();
+    const int* e2_ptr = child.memptr();
+    const int* L_ptr   = L.data();
+    const int* xi_ptr  = xi.data();
+    const int* xj_ptr  = xj.data();
+    
+    // Run the recursive postorder traversal.
+    bar_reorderRcpp_inline2(root, nTips, e1_ptr, e2_ptr, neworder, L_ptr, xi_ptr, xj_ptr, iii);
+    
+    // Use the computed new order to reorder the rows of E.
+    arma::Col<int> newE = reorder_rows2(E, neworder);
+    
+    return newE;
 }
 
 // [[Rcpp::export]]
@@ -184,6 +292,201 @@ std::vector<arma::Mat<int>> nnin_cpp(const arma::Mat<int> E, const int n) {
     
     return res;
 }
+
+
+// [[Rcpp::export]]
+std::vector<arma::Col<int>> nnin_cpp_vec(arma::Col<int> E, const int n) {
+    // E is assumed to be in column-major order.
+    // Let numEdges be the number of rows (edges) in the original edge matrix.
+    int numEdges = E.n_elem / 2;
+    // For a fully bifurcating binary tree, the standard relationship is:
+    // nTips = numEdges/2 + 1.
+    int nTips = numEdges / 2 + 1;
+    
+    // Extract parent's and child's columns using subvec (using parentheses for element access).
+    arma::Col<int> parent = E.subvec(0, numEdges - 1);
+    arma::Col<int> child  = E.subvec(numEdges, E.n_elem - 1);
+    
+    // Find internal edges (those with child > nTips) using vectorized operations.
+    arma::uvec internalEdges = arma::find(child > nTips);
+    if (internalEdges.n_elem < (unsigned int)n)
+        stop("n is larger than the number of valid internal edges.");
+    // Select the nth internal edge (0-indexed)
+    int ind = internalEdges(n - 1);
+    
+    // Retrieve parent's value (p1) and child's value (p2) for the chosen edge.
+    int p1 = parent(ind);
+    int p2 = child(ind);
+    
+    // Find indices where parent equals p1.
+    arma::uvec indices_p1 = arma::find(parent == p1);
+    // Since indices_p1 has at most 2 elements, choose the one that is not 'ind'.
+    int ind1 = (indices_p1(0) == (unsigned int) ind) ? indices_p1(1) : indices_p1(0);
+    
+    // Find indices where parent equals p2.
+    arma::uvec indices_p2 = arma::find(parent == p2);
+    int ind2_0 = indices_p2(0);
+    int ind2_1 = indices_p2(1);
+    
+    // Retrieve the child values for these edges.
+    int e1_val = child(ind1);      // child corresponding to p1 (other than the target edge)
+    int e2_val = child(ind2_0);      // one child of p2
+    int e3_val = child(ind2_1);      // the other child of p2
+    
+    // Create copies of E for the two alternative topologies.
+    arma::Col<int> E1 = E;
+    arma::Col<int> E2 = E;
+    
+    // In the first topology, swap the child at ind1 with that at ind2_0.
+    E1(numEdges + ind1)   = e2_val;
+    E1(numEdges + ind2_0) = e1_val;
+    
+    // In the second topology, swap the child at ind1 with that at ind2_1.
+    E2(numEdges + ind1)   = e3_val;
+    E2(numEdges + ind2_1) = e1_val;
+
+    // Return both alternative topologies as a vector of arma::Col<int>.
+    std::vector<arma::Col<int>> res(2);
+    res[0] = reorderRcpp2(E1);
+    res[1] = reorderRcpp2(E2);
+    return res;
+}
+
+
+// [[Rcpp::export]]
+std::vector<arma::Col<int>> nnin_cpp_vec2(arma::Col<int> E, const int n) {
+    
+    const int numEdges = E.n_elem / 2;
+    const int nTips = numEdges / 2 + 1;
+    
+    // Create subviews for parent's and child's columns without copying.
+    arma::subview_col<int> parent = E.subvec(0, numEdges - 1);
+    arma::subview_col<int> child  = E.subvec(numEdges, E.n_elem - 1);
+    
+    // Find internal edges (child > nTips) using vectorized operations.
+    arma::uvec internalEdges = arma::find(child > nTips);
+    if (internalEdges.n_elem < (unsigned int)n)
+        stop("n is larger than the number of valid internal edges.");
+    
+    // Select the nth internal edge (0-indexed)
+    const int ind = internalEdges(n - 1);
+    
+    // Retrieve parent's value (p1) and child's value (p2) for the chosen edge.
+    const int p1 = parent(ind);
+    const int p2 = child(ind);
+    
+    // Find indices where parent equals p1.
+    arma::uvec indices_p1 = arma::find(parent == p1);
+    // Choose the index that is not equal to 'ind'
+    const int ind1 = (indices_p1(0) == (unsigned int) ind) ? indices_p1(1) : indices_p1(0);
+    
+    // Find indices where parent equals p2.
+    arma::uvec indices_p2 = arma::find(parent == p2);
+    const int ind2_0 = indices_p2(0);
+    const int ind2_1 = indices_p2(1);
+    
+    // Retrieve the child values for these swap candidates.
+    const int e1_val = child(ind1);
+    const int e2_val = child(ind2_0);
+    const int e3_val = child(ind2_1);
+    
+    // Create copies for the two alternative topologies.
+    arma::Col<int> E1 = E;  // copy of E
+    arma::Col<int> E2 = E;  // another copy
+    
+    // Topology 1: swap child at ind1 with that at ind2_0.
+    E1(numEdges + ind1) = e2_val;
+    E1(numEdges + ind2_0) = e1_val;
+    
+    // Topology 2: swap child at ind1 with that at ind2_1.
+    E2(numEdges + ind1) = e3_val;
+    E2(numEdges + ind2_1) = e1_val;
+    
+    // Reorder each topology (e.g., into postorder) using the helper reorderRcpp2.    
+    std::vector<arma::Col<int>> res(2);
+    res[0] = reorderRcpp2(E1);
+    res[1] = reorderRcpp2(E2);
+    return res;
+}
+
+// // E is assumed to be a one-dimensional vector representing an edge matrix in row-major order
+// // [[Rcpp::export]]
+// std::vector<std::vector<int>> nnin_cpp_vec(std::vector<int> E, const int n) {
+    
+//     int numEdges = E.size() / 2;
+//     int nTips = numEdges / 2 + 1;
+    
+//     // Find the nth internal edge (an edge with child > nTips).
+//     int count = 0, ind = -1;
+//     for (int i = 0; i < numEdges; i++) {
+//         int childVal = E[2 * i + 1];
+//         if (childVal > nTips) {
+//             count++;
+//             if (count == n) {
+//                 ind = i;
+//                 break;
+//             }
+//         }
+//     }
+//     if (ind < 0) {
+//         Rcpp::stop("n is larger than the number of valid internal edges.");
+//     }
+    
+//     // Get the parent's value (p1) and child’s value (p2) for the chosen edge.
+//     int p1 = E[2 * ind];
+//     int p2 = E[2 * ind + 1];
+    
+//     // Find the first index (other than ind) where the parent equals p1.
+//     int ind1 = -1;
+//     for (int i = 0; i < numEdges; i++) {
+//         if (i != ind && E[2 * i] == p1) {
+//             ind1 = i;
+//             break;
+//         }
+//     }
+//     if (ind1 < 0) {
+//         Rcpp::stop("No valid index found for p1 interchange.");
+//     }
+    
+//     // Find two indices where the parent equals p2.
+//     int ind2_0 = -1, ind2_1 = -1;
+//     for (int i = 0; i < numEdges; i++) {
+//         if (E[2 * i] == p2) {
+//             if (ind2_0 < 0) {
+//                 ind2_0 = i;
+//             } else if (ind2_1 < 0 && i != ind) {
+//                 ind2_1 = i;
+//                 break;
+//             }
+//         }
+//     }
+//     if (ind2_0 < 0 || ind2_1 < 0) {
+//         Rcpp::stop("No valid indices found for p2 interchange.");
+//     }
+    
+//     // Retrieve the child values at these indices.
+//     int e1_val = E[2 * ind1 + 1];
+//     int e2_val = E[2 * ind2_0 + 1];
+//     int e3_val = E[2 * ind2_1 + 1];
+    
+//     // Make copies of E for the two alternative topologies.
+//     std::vector<int> E1 = E;
+//     std::vector<int> E2 = E;
+    
+//     // In the first topology, swap the child at ind1 with that at ind2_0.
+//     E1[2 * ind1 + 1]   = e2_val;
+//     E1[2 * ind2_0 + 1] = e1_val;
+    
+//     // In the second topology, swap the child at ind1 with that at ind2_1.
+//     E2[2 * ind1 + 1]   = e3_val;
+//     E2[2 * ind2_1 + 1] = e1_val;
+    
+//     // Return both alternative topologies.
+//     std::vector<std::vector<int>> res(2);
+//     res[0] = E1;
+//     res[1] = E2;
+//     return res;
+// }
 
 // Recursive helper that, given a node label, returns all edge indices (from L)
 // in the subtree rooted at that node.
