@@ -19,7 +19,7 @@ optimize_tree_cpp = function(
     RhpcBLASctl::omp_set_num_threads(1)
     RcppParallel::setThreadOptions(numThreads = ncores)
 
-    tree_init$edge = reorderRcpp(tree_init$edge)
+    tree_init = reorder_phy(tree_init)
 
     tree_current = tree_init
     max_current = sum(score_tree_bp_wrapper(tree_current$edge, logP, logA))
@@ -72,6 +72,13 @@ score_tree_bp_wrapper_r = function(E, logP, logA) {
         score_tree_bp(E, logP[,,i], logA)
     }) %>% sum
     return(logZ)
+}
+
+
+reorder_phy = function(phy) {
+    phy_new = rlang::duplicate(phy, shallow = FALSE)
+    phy_new$edge = reorderRcpp(phy$edge) %>% matrix(ncol = 2)
+    return(phy_new)
 }
 
 
@@ -134,7 +141,7 @@ optimize_tree_rcpp = function(
 
 convert_liks_to_logP_list <- function(liks, phy) {
     
-    E <- reorderRcpp(phy$edge)
+    E <- reorder_phy(phy)$edge
     phy$node.label <- NULL
     
     P_all <- lapply(liks, function(liks_mut) {
