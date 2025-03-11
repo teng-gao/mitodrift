@@ -19,7 +19,7 @@ optimize_tree_cpp = function(
     RhpcBLASctl::omp_set_num_threads(1)
     RcppParallel::setThreadOptions(numThreads = ncores)
 
-    tree_init = reorder_phy(tree_init)
+    tree_init = reorder_phylo(tree_init)
 
     tree_current = tree_init
     max_current = sum(score_tree_bp_wrapper(tree_current$edge, logP, logA))
@@ -64,84 +64,16 @@ optimize_tree_cpp = function(
     }
 }
 
-score_tree_bp_wrapper_r = function(E, logP, logA) {
-    n = dim(logP)[3]
-    logZ = sapply(
-        1:n,
-        function (i) {
-        score_tree_bp(E, logP[,,i], logA)
-    }) %>% sum
-    return(logZ)
-}
 
-
-reorder_phy = function(phy) {
+reorder_phylo = function(phy) {
     phy_new = rlang::duplicate(phy, shallow = FALSE)
     phy_new$edge = reorderRcpp(phy$edge) %>% matrix(ncol = 2)
     return(phy_new)
 }
 
-
-
-# to fix: apparently the init tree has to be rooted otherwise to_phylo_reoder won't work. 
-optimize_tree_rcpp = function(
-    tree_init, logP, logA, max_iter = 100, ncores = 1, trace = TRUE, outfile = NULL, trace_interval = 5
-) {
-
-    tree_init$edge = reorderRcpp(tree_init$edge)
-
-    tree_current = tree_init
-    max_current = -Inf
-    tree_list = list()
-    runtime = c(0,0,0)
-
-    for (i in 1:max_iter) {
-
-        ptm = proc.time()
-
-        if (trace) {
-            tree_list = c(tree_list, list(tree_current))
-            if (!is.null(outfile)) {
-                if (i == 1 | i %% trace_interval == 0) {
-                    saveRDS(tree_list, outfile)
-                }
-            }
-        }
-
-        message(paste(i, round(max_current, 4), paste0('(', signif(unname(runtime[3]),2), 's', ')')))
-
-        trees_nei = TreeSearch::NNI(tree_current, edgeToBreak = -1)
-
-        scores = mclapply(
-            trees_nei,
-            mc.cores = ncores,
-            function(tree) {
-                score_tree_bp_wrapper(reorderRcpp(tree$edge), logP, logA) %>% sum
-            }
-        ) %>% unlist()
-        
-        if (max(scores) > max_current) {
-            tree_current$edge = reorderRcpp(trees_nei[[which.max(scores)]]$edge)
-            tree_current$logZ = max_current = max(scores)
-        } else {
-            break()
-        }
-
-        runtime = proc.time() - ptm
-        
-    }
-
-    if (trace) {
-        class(tree_list) = 'multiPhylo'
-        return(tree_list)
-    } else {
-        return(tree_current)
-    }
-}
-
 convert_liks_to_logP_list <- function(liks, phy) {
     
-    E <- reorder_phy(phy)$edge
+    E <- reorder_phylo(phy)$edge
     phy$node.label <- NULL
     
     P_all <- lapply(liks, function(liks_mut) {
@@ -166,4 +98,31 @@ convert_liks_to_logP_list <- function(liks, phy) {
     })
     
     return(logP_list)
+}
+
+
+run_tree_mcmc_cpp = function(phy, logP_list, A, max_iter = 100, nchains = 1, ncores = 1) {
+
+    # edge_list = tree_mcmc_cpp(phy$edge, logP_list, t(log(A)), max_iter = max_iter)
+
+    RhpcBLASctl::blas_set_num_threads(1)
+    RhpcBLASctl::omp_set_num_threads(1)
+    RcppParallel::setThreadOptions(numThreads = ncores)
+
+    edge_lists = tree_mcmc_parallel(phy$edge, logP_list, t(log(A)), max_iter = max_iter, nchains = nchains)
+
+    res = edge_lists %>%
+        lapply(function(elist) {
+                lapply(
+                    elist,
+                    function(edges){
+                        phy_new = rlang::duplicate(phy, shallow = FALSE)
+                        E_new = matrix(edges, ncol = 2)
+                        phy_new$edge = E_new
+                    return(phy_new)
+                })
+            }
+        )
+    
+    return(res)
 }

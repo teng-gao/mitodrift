@@ -164,7 +164,7 @@ std::vector<arma::Col<int>> nnin_cpp(const arma::Col<int>& E, const int n) {
     return res;
 }
 
-/////////////////////////////////////// MitoDrfit ////////////////////////////////////////
+/////////////////////////////////////// ML Tree Search ////////////////////////////////////////
 
 //' definitions for logSumExp function
 // https://github.com/helske/seqHMM/blob/master/src/logSumExp.cpp
@@ -240,7 +240,6 @@ double score_tree_bp(const arma::Col<int>& E,
     return logSumExp(state_log_values);
 }
 
-// wrapper: Precomputes dimensions and passes them to score_tree_bp.
 // E: Edge matrix (each row is a (parent, child) pair, 1-indexed from R) provided as an arma::Col<int> in column-major order.
 // logP_list: List of flattened likelihood matrices (each in row-major order)
 // logA: Flattened transition matrix (row-major order)
@@ -254,25 +253,27 @@ double score_tree_bp(const arma::Col<int>& E,
 double score_tree_bp_wrapper(arma::Col<int> E,
                              const std::vector< std::vector<double> >& logP_list,
                              const std::vector<double>& logA) {
-  // Compute number of loci.
-  int L = logP_list.size();
-  // Infer number of states from the transition matrix.
-  int C = std::sqrt(logA.size());
-  // Infer number of nodes from the first likelihood matrix.
-  int n = logP_list[0].size() / C;
-  // Compute m: number of edges.
-  int m = E.n_elem / 2;
-  
-  // Adjust the edge matrix from 1-indexing (R) to 0-indexing (C++).
-  E = E - 1;
-  int root = E(m - 1);
-  
-  double logZ = 0.0;
-  for (int l = 0; l < L; l++) {
-    logZ += score_tree_bp(E, logP_list[l], logA, n, C, m, root);
-  }
-  return logZ;
+    // Compute number of loci.
+    int L = logP_list.size();
+    // Infer number of states from the transition matrix.
+    int C = std::sqrt(logA.size());
+    // Infer number of nodes from the first likelihood matrix.
+    int n = logP_list[0].size() / C;
+    // Compute m: number of edges.
+    int m = E.n_elem / 2;
+
+    // Adjust the edge matrix from 1-indexing (R) to 0-indexing (C++).
+    E = E - 1;
+    // Find the root
+    int root = E(m - 1);
+
+    double logZ = 0.0;
+    for (int l = 0; l < L; l++) {
+        logZ += score_tree_bp(E, logP_list[l], logA, n, C, m, root);
+    }
+    return logZ;
 }
+
 
 struct score_neighbours: public Worker {
 
@@ -310,4 +311,122 @@ NumericVector nni_cpp_parallel(arma::Col<int> E, const std::vector<std::vector<d
 
     return scores;
 
+}
+
+/////////////////////////////////////// MCMC ////////////////////////////////////////
+
+// [[Rcpp::export]]
+std::vector<arma::Col<int>> tree_mcmc_cpp(
+    arma::Col<int> E,
+    const std::vector< std::vector<double> >& logP,
+    const std::vector<double>& logA,
+    int max_iter) {
+
+    // Number of internal edges
+    int n = E.n_elem / 4 - 1;
+
+    E = reorderRcpp(E);
+
+    std::vector<arma::Col<int>> tree_list(max_iter + 1);
+    std::vector<double> score_list(max_iter + 1);
+
+    double l_0 = score_tree_bp_wrapper(E, logP, logA);
+    tree_list[0] = E;
+    score_list[0] = l_0;
+
+    // random number generators
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<> dis1(1, n);
+    std::uniform_int_distribution<> dis2(0, 1);
+    std::uniform_real_distribution<> dis3(0.0, 1.0);
+    
+    for (int i = 0; i < max_iter; i++) {
+
+        // propose new tree
+        int r1 = dis1(gen);
+        int r2 = dis2(gen);
+        std::vector<arma::Col<int>> Ep = nnin_cpp(E, r1);
+        arma::Col<int> E_new = std::move(Ep[r2]);
+        
+        double l_1 = score_tree_bp_wrapper(E_new, logP, logA);
+        
+        double probab = exp(l_1 - l_0);
+        double r3 = dis3(gen);
+
+        if (r3 < probab) {
+            l_0 = l_1;
+            E = std::move(E_new);
+        }
+
+        score_list[i+1] = l_0;
+        tree_list[i+1] = E;
+
+    }
+
+    return(tree_list);
+}
+
+// --------------------------------------------------------------------------
+// Worker struct that runs one complete MCMC chain.
+// The entire chain (a vector of trees) is written to chain_results at index i.
+struct TreeChainWorker : public Worker {
+    // Inputs are passed by const reference.
+    const arma::Col<int>& E;
+    const std::vector< std::vector<double> >& logP;
+    const std::vector<double>& logA;
+    const int max_iter;
+    
+    // Output: each chain is a vector of arma::Col<int> (all iterations for that chain)
+    std::vector< std::vector<arma::Col<int>> >& chain_results;
+    
+    // Constructor.
+    TreeChainWorker(const arma::Col<int>& E,
+                    const std::vector< std::vector<double> >& logP,
+                    const std::vector<double>& logA,
+                    int max_iter,
+                    std::vector< std::vector<arma::Col<int>> >& chain_results)
+      : E(E), logP(logP), logA(logA), max_iter(max_iter), chain_results(chain_results) {}
+    
+    // Operator() for processing chain indices [begin, end)
+    void operator()(std::size_t begin, std::size_t end) {
+        // Each iteration runs one full MCMC chain.
+        for (std::size_t i = begin; i < end; i++) {
+            // Run one chain.
+            std::vector<arma::Col<int>> chain = tree_mcmc_cpp(E, logP, logA, max_iter);
+            // Store the entire chain (all iterations) in the output vector.
+            chain_results[i] = std::move(chain);
+        }
+    }
+};
+
+// --------------------------------------------------------------------------
+// Parallel wrapper: runs multiple independent MCMC chains in parallel.
+// Parameters:
+//   E: Edge matrix (arma::Col<int>) in column-major order (no indexing adjustments).
+//   logP: list of flattened likelihood matrices (each in row-major order).
+//   logA: flattened transition matrix (row-major order).
+//   max_iter: number of MCMC iterations per chain.
+//   nchains: number of independent chains to run in parallel.
+// Returns a vector (length nchains) where each element is a vector (the chain of trees).
+// [[Rcpp::export]]
+std::vector< std::vector<arma::Col<int>> > tree_mcmc_parallel(arma::Col<int> E,
+                                                               const std::vector< std::vector<double> >& logP,
+                                                               const std::vector<double>& logA,
+                                                               int max_iter,
+                                                               int nchains) {
+    // Do not adjust the indexing of E.
+    // Optionally, you can reorder E if needed.
+    E = reorderRcpp(E);
+    
+    // Prepare the output vector to hold nchains chains.
+    std::vector< std::vector<arma::Col<int>> > chain_results(nchains);
+    
+    // Create the worker that will run chains in parallel.
+    TreeChainWorker worker(E, logP, logA, max_iter, chain_results);
+    
+    // Launch parallelFor over chain indices [0, nchains).
+    parallelFor(0, nchains, worker);
+    
+    return chain_results;
 }

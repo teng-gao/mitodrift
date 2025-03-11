@@ -88,6 +88,35 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// tree_mcmc_cpp
+std::vector<arma::Col<int>> tree_mcmc_cpp(arma::Col<int> E, const std::vector< std::vector<double> >& logP, const std::vector<double>& logA, int max_iter);
+RcppExport SEXP _mitodrift_tree_mcmc_cpp(SEXP ESEXP, SEXP logPSEXP, SEXP logASEXP, SEXP max_iterSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< arma::Col<int> >::type E(ESEXP);
+    Rcpp::traits::input_parameter< const std::vector< std::vector<double> >& >::type logP(logPSEXP);
+    Rcpp::traits::input_parameter< const std::vector<double>& >::type logA(logASEXP);
+    Rcpp::traits::input_parameter< int >::type max_iter(max_iterSEXP);
+    rcpp_result_gen = Rcpp::wrap(tree_mcmc_cpp(E, logP, logA, max_iter));
+    return rcpp_result_gen;
+END_RCPP
+}
+// tree_mcmc_parallel
+std::vector< std::vector<arma::Col<int>> > tree_mcmc_parallel(arma::Col<int> E, const std::vector< std::vector<double> >& logP, const std::vector<double>& logA, int max_iter, int nchains);
+RcppExport SEXP _mitodrift_tree_mcmc_parallel(SEXP ESEXP, SEXP logPSEXP, SEXP logASEXP, SEXP max_iterSEXP, SEXP nchainsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< arma::Col<int> >::type E(ESEXP);
+    Rcpp::traits::input_parameter< const std::vector< std::vector<double> >& >::type logP(logPSEXP);
+    Rcpp::traits::input_parameter< const std::vector<double>& >::type logA(logASEXP);
+    Rcpp::traits::input_parameter< int >::type max_iter(max_iterSEXP);
+    Rcpp::traits::input_parameter< int >::type nchains(nchainsSEXP);
+    rcpp_result_gen = Rcpp::wrap(tree_mcmc_parallel(E, logP, logA, max_iter, nchains));
+    return rcpp_result_gen;
+END_RCPP
+}
 
 static const R_CallMethodDef CallEntries[] = {
     {"_mitodrift_reorderRcpp", (DL_FUNC) &_mitodrift_reorderRcpp, 1},
@@ -96,6 +125,8 @@ static const R_CallMethodDef CallEntries[] = {
     {"_mitodrift_score_tree_bp", (DL_FUNC) &_mitodrift_score_tree_bp, 7},
     {"_mitodrift_score_tree_bp_wrapper", (DL_FUNC) &_mitodrift_score_tree_bp_wrapper, 3},
     {"_mitodrift_nni_cpp_parallel", (DL_FUNC) &_mitodrift_nni_cpp_parallel, 3},
+    {"_mitodrift_tree_mcmc_cpp", (DL_FUNC) &_mitodrift_tree_mcmc_cpp, 4},
+    {"_mitodrift_tree_mcmc_parallel", (DL_FUNC) &_mitodrift_tree_mcmc_parallel, 5},
     {NULL, NULL, 0}
 };
 
