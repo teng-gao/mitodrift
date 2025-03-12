@@ -64,14 +64,14 @@ optimize_tree_cpp = function(
     }
 }
 
-
+#' @export
 reorder_phylo = function(phy) {
     phy_new = rlang::duplicate(phy, shallow = FALSE)
     phy_new$edge = reorderRcpp(phy$edge) %>% matrix(ncol = 2)
     return(phy_new)
 }
 
-
+#' @export
 get_leaf_liks = function(mut_dat, vafs, ncores = 1) {
 
     variants = unique(mut_dat$variant)
@@ -104,7 +104,7 @@ get_leaf_liks = function(mut_dat, vafs, ncores = 1) {
     return(liks)
 }
 
-
+#' @export 
 convert_liks_to_logP_list <- function(liks, phy) {
     
     E <- reorder_phylo(phy)$edge
@@ -134,7 +134,7 @@ convert_liks_to_logP_list <- function(liks, phy) {
     return(logP_list)
 }
 
-
+#' @export 
 run_tree_mcmc_cpp = function(phy, logP_list, A, max_iter = 100, nchains = 1, ncores = 1) {
 
     # edge_list = tree_mcmc_cpp(phy$edge, logP_list, t(log(A)), max_iter = max_iter)
