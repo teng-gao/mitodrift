@@ -71,25 +71,31 @@ reorder_phylo = function(phy) {
     return(phy_new)
 }
 
-#' @export
-get_leaf_liks = function(mut_dat, vafs, ncores = 1, eps = 0) {
+get_leaf_liks = function(mut_dat, vafs, eps = 0, ncores = 1) {
 
     variants = unique(mut_dat$variant)
 
     liks = mut_dat %>% 
         mutate(variant = factor(variant, variants)) %>%
         tidyr::complete(variant, cell, fill = list(vaf = 0, d = 0, a = 0)) %>%
-        group_by(cell, variant) %>%
-        group_modify(
-            function(x, key) {
-                l = sapply(vafs,
-                    function(v) {
-                        dbinom(x = x$a, size = x$d, prob = pmin(v + eps, 1))
-                })
-                tibble(l, vaf = vafs)
+        split(.$variant) %>%
+        mclapply(
+            mc.cores = ncores,
+            function(mut_dat_var) {
+                mut_dat_var %>%
+                group_by(cell, variant) %>%
+                group_modify(
+                    function(x, key) {
+                        l = sapply(vafs,
+                            function(v) {
+                                dbinom(x = x$a, size = x$d, prob = pmin(v + eps, 1))
+                        })
+                        tibble(l, vaf = vafs)
+                }) %>%
+                ungroup()
         }) %>%
-        ungroup()
-
+        bind_rows()
+        
     liks = liks %>%
         split(.$variant) %>%
         mclapply(
@@ -214,4 +220,60 @@ get_transition_mat_wf = function(k, eps = 0.01, N = 100, n_rep = 1e4, n_gen = 10
 
     return(A)
 
+}
+
+#' @export 
+run_mitodrift = function(
+    mut_dat, n_gen = 100, eps = 0.001, n_pop = 600, k = 20, seq_err = 0, max_iter = 100,
+    init_method = 'nj', ncores = 1, outfile = NULL
+) {
+
+    set.seed(0)
+    A = get_transition_mat_wf(k = k, eps = eps, N = n_pop, n_gen = n_gen)
+    liks = get_leaf_liks(mut_dat, get_vaf_bins(k = k), eps = seq_err, ncores = ncores)
+
+    message('Initial clustering')
+
+    # initial clustering
+    vmat = mut_dat %>% 
+        reshape2::dcast(variant ~ cell, fill = 0, value.var = 'vaf') %>% 
+        tibble::column_to_rownames('variant')
+
+    vmat[,'outgroup'] = 0
+
+    dist_mat = vmat %>% as.matrix %>% t %>% dist(method = 'manhattan')
+
+    if (init_method == 'hc') {
+        
+        phy_init = hclust(dist_mat, method = 'ward.D2') %>%
+            as.phylo %>% root(outgroup = 'outgroup') %>% drop.tip('outgroup')
+
+    } else if (init_method == 'nj') {
+
+        phy_init = ape::nj(dist_mat) %>%
+            as.phylo %>% root(outgroup = 'outgroup') %>% drop.tip('outgroup')
+
+    } else if (init_method == 'random') {
+
+        phy_init = hclust(dist_mat, method = 'ward.D2') %>%
+            as.phylo %>% root(outgroup = 'outgroup') %>% drop.tip('outgroup')
+
+        set.seed(0)
+        phyr = rtree(phy_init$Nnode+1)
+        phyr$tip.label = sample(phy_init$tip.label)
+        phyr$node.label = phy_init$node.label
+        phy_init = phyr
+
+    }
+
+    message('Searching tree')
+    logA_vec = as.vector(t(log(A)))
+    logP_list = convert_liks_to_logP_list(liks, phy_init)
+
+    tree_list = optimize_tree_cpp(
+        phy_init, logP_list, logA_vec, ncores = ncores,
+        max_iter = max_iter, 
+        outfile = outfile)
+
+    return(tree_list)
 }
