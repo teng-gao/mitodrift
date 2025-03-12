@@ -72,7 +72,7 @@ reorder_phylo = function(phy) {
 }
 
 #' @export
-get_leaf_liks = function(mut_dat, vafs, ncores = 1) {
+get_leaf_liks = function(mut_dat, vafs, ncores = 1, eps = 0) {
 
     variants = unique(mut_dat$variant)
 
@@ -84,7 +84,7 @@ get_leaf_liks = function(mut_dat, vafs, ncores = 1) {
             function(x, key) {
                 l = sapply(vafs,
                     function(v) {
-                        dbinom(x = x$a, size = x$d, prob = v)
+                        dbinom(x = x$a, size = x$d, prob = pmin(v + eps, 1))
                 })
                 tibble(l, vaf = vafs)
         }) %>%
