@@ -71,6 +71,40 @@ reorder_phylo = function(phy) {
     return(phy_new)
 }
 
+
+get_leaf_liks = function(mut_dat, vafs, ncores = 1) {
+
+    variants = unique(mut_dat$variant)
+
+    liks = mut_dat %>% 
+        mutate(variant = factor(variant, variants)) %>%
+        tidyr::complete(variant, cell, fill = list(vaf = 0, d = 0, a = 0)) %>%
+        group_by(cell, variant) %>%
+        group_modify(
+            function(x, key) {
+                l = sapply(vafs,
+                    function(v) {
+                        dbinom(x = x$a, size = x$d, prob = v)
+                })
+                tibble(l, vaf = vafs)
+        }) %>%
+        ungroup()
+
+    liks = liks %>%
+        split(.$variant) %>%
+        mclapply(
+            mc.cores = ncores,
+            function(V) {
+                V %>% reshape2::dcast(vaf ~ cell, value.var = 'l', fill = 1) %>%
+                tibble::column_to_rownames('vaf') %>%
+                as.matrix
+            }
+        )
+
+    return(liks)
+}
+
+
 convert_liks_to_logP_list <- function(liks, phy) {
     
     E <- reorder_phylo(phy)$edge
