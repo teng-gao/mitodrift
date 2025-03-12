@@ -2,6 +2,8 @@
 
 export(convert_liks_to_logP_list)
 export(get_leaf_liks)
+export(get_transition_mat_wf)
+export(get_vaf_bins)
 export(logSumExp)
 export(optimize_tree_cpp)
 export(reorder_phylo)

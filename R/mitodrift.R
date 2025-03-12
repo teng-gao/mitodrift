@@ -160,3 +160,58 @@ run_tree_mcmc_cpp = function(phy, logP_list, A, max_iter = 100, nchains = 1, nco
     
     return(res)
 }
+
+#' @export 
+get_vaf_bins = function(k) {
+    bins = seq(0, 1, 1/k)
+    bins = c(0,bins,1)
+    vafs = sapply(1:(length(bins)-1), function(i){(bins[i] + bins[i+1])/2})
+    return(vafs)
+}
+
+#' @export 
+get_transition_mat_wf = function(k, eps = 0.01, N = 100, n_rep = 1e4, n_gen = 100) {
+
+    A = matrix(NA, ncol = k + 2, k + 2)
+    bins = seq(0, 1, 1/k)
+    bins = c(0,bins,1)
+
+    for(i in 1:(length(bins)-1)) {
+
+        p = mean(c(bins[i], bins[i+1]))
+
+        p_gen = p
+        for (gen in 1:n_gen) {
+            x = rbinom(n_rep, N, p_gen)
+            p_gen = x/N   
+        }
+        
+        for(j in 1:(length(bins)-1)) {
+            
+            xstart = as.integer(N*bins[j]) + 1
+            xend = as.integer(N*bins[j+1])
+            xstart = min(xend, xstart)
+
+            if (j == (length(bins)-2)) {
+                xend = xend - 1
+            }
+
+            A[i, j] = length(x[x >= xstart & x <= xend])/n_rep
+
+        }
+    }
+    
+    A[1,] = c(1-eps, rep(eps/(ncol(A)-1), ncol(A)-1))
+    A[nrow(A),] = rev(A[1,])
+
+    if (n_gen == 0) {
+        A = diag(k+2)
+    }
+
+    vs = sapply(1:(length(bins)-1), function(i){(bins[i] + bins[i+1])/2})
+    colnames(A) = vs
+    rownames(A) = vs
+
+    return(A)
+
+}
