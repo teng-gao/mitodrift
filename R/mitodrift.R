@@ -71,6 +71,7 @@ reorder_phylo = function(phy) {
     return(phy_new)
 }
 
+#' @export
 get_leaf_liks = function(mut_dat, vafs, eps = 0, ncores = 1) {
 
     variants = unique(mut_dat$variant)
@@ -138,33 +139,6 @@ convert_liks_to_logP_list <- function(liks, phy) {
     })
     
     return(logP_list)
-}
-
-#' @export 
-run_tree_mcmc_cpp = function(phy, logP_list, A, max_iter = 100, nchains = 1, ncores = 1) {
-
-    # edge_list = tree_mcmc_cpp(phy$edge, logP_list, t(log(A)), max_iter = max_iter)
-
-    RhpcBLASctl::blas_set_num_threads(1)
-    RhpcBLASctl::omp_set_num_threads(1)
-    RcppParallel::setThreadOptions(numThreads = ncores)
-
-    edge_lists = tree_mcmc_parallel(phy$edge, logP_list, t(log(A)), max_iter = max_iter, nchains = nchains)
-
-    res = edge_lists %>%
-        lapply(function(elist) {
-                lapply(
-                    elist,
-                    function(edges){
-                        phy_new = rlang::duplicate(phy, shallow = FALSE)
-                        E_new = matrix(edges, ncol = 2)
-                        phy_new$edge = E_new
-                    return(phy_new)
-                })
-            }
-        )
-    
-    return(res)
 }
 
 #' @export 
@@ -277,3 +251,147 @@ run_mitodrift = function(
 
     return(tree_list)
 }
+
+################################### MCMC ######################################
+
+
+#' @export 
+run_tree_mcmc_cpp = function(phy, logP_list, logA_vec, max_iter = 100, nchains = 1, ncores = 1) {
+
+    RhpcBLASctl::blas_set_num_threads(1)
+    RhpcBLASctl::omp_set_num_threads(1)
+    RcppParallel::setThreadOptions(numThreads = ncores)
+    
+    edge_lists = tree_mcmc_parallel(phy$edge, logP_list, logA_vec, max_iter = max_iter, nchains = nchains)
+
+    res = edge_lists %>%
+        lapply(function(elist) {
+                lapply(
+                    elist,
+                    function(edges){
+                    phy_new = attach_edges(phy, edges)
+                    return(phy_new)
+                })
+            }
+        )
+    
+    return(res)
+}
+
+attach_edges = function(phy, edges) {
+
+    phy_new = rlang::duplicate(phy, shallow = FALSE)
+    E_new = matrix(edges, ncol = 2)
+    phy_new$edge = E_new
+
+    return(phy_new)
+}
+
+# to fix: apparently the init tree has to be rooted otherwise to_phylo_reoder won't work. 
+#' @export 
+run_tree_mcmc_r = function(
+    gtree_init, A, liks, max_iter = 100, nchains = 1, ncores = 1, trace = TRUE, outfile = NULL,
+    move_type = 'NNI'
+) {
+
+    # Rearrangements have to be unrooted
+    if (move_type == 'NNI') {
+        propose_tree = TreeSearch::NNI
+    } else {
+        stop('Invalid move type')
+    }
+
+    res = mclapply(
+        1:nchains,
+        mc.cores = ncores,
+        function(s) {
+
+            set.seed(s)
+
+            # need to change this to pre-allocation
+            tree_list = vector("list", max_iter + 1)
+            phy_list = vector("list", max_iter + 1)
+            tree_list[[1]] = gtree_init
+            phy_list[[1]] = as.phylo(gtree_init)
+
+            for (i in 1:max_iter) {
+                
+                phy_new = propose_tree(phy_list[[i]])
+                gtree_new = decode_tree(phy_new, A, liks, score_only = TRUE)
+                
+                l_0 = sum(tree_list[[i]]$logZ)
+                l_1 = sum(gtree_new$logZ)
+                probab = exp(l_1 - l_0)
+
+                if (runif(1) < probab) {
+                    tree_list[[i+1]] = gtree_new
+                    phy_list[[i+1]] = phy_new
+                } else {
+                    tree_list[[i+1]] = tree_list[[i]]
+                    phy_list[[i+1]] = phy_list[[i]]
+                }
+            }
+
+            if (trace &!is.null(outfile)) {
+                outdir = dirname(outfile)
+                fname = basename(outfile)
+                saveRDS(phy_list, glue('{outdir}/chain{s}_{fname}'))
+            }
+
+            return(list('tree_list' = tree_list, 'phy_list' = phy_list))
+        }
+    )
+
+    return(res)
+}
+
+# to fix: apparently the init tree has to be rooted otherwise to_phylo_reoder won't work. 
+#' @export
+run_tree_mcmc = function(
+    phy_init, logP_list, logA_vec, max_iter = 100, nchains = 1, ncores = 1, trace = TRUE, outfile = NULL
+) {
+
+    res = mclapply(
+        1:nchains,
+        mc.cores = ncores,
+        function(s) {
+
+            elist = tree_mcmc_cpp(phy_init$edge, logP_list, logA_vec, max_iter = max_iter, seed = s)
+
+            tree_list = lapply(
+                elist,
+                function(edges){
+                    attach_edges(phy_init, edges)
+            })
+
+            if (trace &!is.null(outfile)) {
+                outdir = dirname(outfile)
+                fname = basename(outfile)
+                saveRDS(tree_list, glue('{outdir}/chain{s}_{fname}'))
+            }
+
+            return(tree_list)
+        }
+    )
+
+    return(res)
+}
+
+#' @export
+collect_chains = function(res, burnin = 0) {
+
+    mcmc_trees = res %>% lapply(function(trees){
+            trees = trees[(burnin+1):length(trees)]
+            lapply(trees, function(tree){
+                tree$edge.length = NULL
+                tree$node.label = NULL
+                tree$nodes = NULL
+                tree$edge = TreeTools::RenumberTree(tree$edge[,1], tree$edge[,2])
+                return(tree)
+            })
+        }) %>% unlist(recursive = F)
+
+        return(mcmc_trees)
+    
+}
+

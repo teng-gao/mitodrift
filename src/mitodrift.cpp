@@ -320,7 +320,7 @@ std::vector<arma::Col<int>> tree_mcmc_cpp(
     arma::Col<int> E,
     const std::vector< std::vector<double> >& logP,
     const std::vector<double>& logA,
-    int max_iter) {
+    int max_iter = 100, int seed = -1) {
 
     // Number of internal edges
     int n = E.n_elem / 4 - 1;
@@ -335,8 +335,14 @@ std::vector<arma::Col<int>> tree_mcmc_cpp(
     score_list[0] = l_0;
 
     // random number generators
-    std::random_device rd;
-    std::mt19937 gen(rd());
+    std::mt19937 gen;
+    if (seed == -1) {
+        std::random_device rd;
+        gen.seed(rd());
+    } else {
+        gen.seed(seed);
+    }
+
     std::uniform_int_distribution<> dis1(1, n);
     std::uniform_int_distribution<> dis2(0, 1);
     std::uniform_real_distribution<> dis3(0.0, 1.0);
@@ -393,7 +399,7 @@ struct TreeChainWorker : public Worker {
         // Each iteration runs one full MCMC chain.
         for (std::size_t i = begin; i < end; i++) {
             // Run one chain.
-            std::vector<arma::Col<int>> chain = tree_mcmc_cpp(E, logP, logA, max_iter);
+            std::vector<arma::Col<int>> chain = tree_mcmc_cpp(E, logP, logA, max_iter, i);
             // Store the entire chain (all iterations) in the output vector.
             chain_results[i] = std::move(chain);
         }

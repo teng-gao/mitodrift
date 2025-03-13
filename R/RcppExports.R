@@ -33,8 +33,8 @@ nni_cpp_parallel <- function(E, logP, logA) {
     .Call('_mitodrift_nni_cpp_parallel', PACKAGE = 'mitodrift', E, logP, logA)
 }
 
-tree_mcmc_cpp <- function(E, logP, logA, max_iter) {
-    .Call('_mitodrift_tree_mcmc_cpp', PACKAGE = 'mitodrift', E, logP, logA, max_iter)
+tree_mcmc_cpp <- function(E, logP, logA, max_iter = 100L, seed = -1L) {
+    .Call('_mitodrift_tree_mcmc_cpp', PACKAGE = 'mitodrift', E, logP, logA, max_iter, seed)
 }
 
 tree_mcmc_parallel <- function(E, logP, logA, max_iter, nchains) {
