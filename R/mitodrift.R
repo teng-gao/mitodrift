@@ -64,6 +64,70 @@ optimize_tree_cpp = function(
     }
 }
 
+
+# R version of the function
+# to fix: apparently the init tree has to be rooted otherwise to_phylo_reoder won't work. 
+#' @export
+optimize_tree = function(
+    gtree_init, A, liks, max_iter = 100, ncores = 1, trace = TRUE, outfile = NULL, trace_interval = 5
+) {
+
+    gtree = gtree_init
+    tree_list = list()
+    runtime = c(0,0,0)
+
+    for (i in 1:max_iter) {
+
+        ptm = proc.time()
+
+        if (trace) {
+            tree_list = c(tree_list, list(gtree))
+            if (!is.null(outfile)) {
+                if (i == 1 | i %% trace_interval == 0) {
+                    saveRDS(tree_list, outfile)
+                }
+            }
+        }
+
+        score = sum(gtree$logZ)
+
+        message(paste(i, round(score, 4), paste0('(', signif(unname(runtime[3]),2), 's', ')')))
+
+        nei = TreeSearch::NNI(as.phylo(gtree), edgeToBreak = -1)
+        
+        gtrees_nei = mclapply(
+            nei,
+            mc.cores = ncores,
+            function(tn) {
+                decode_tree(tn, A, liks, score_only = TRUE)
+            }
+        )
+
+        scores_nei = sapply(
+            gtrees_nei,
+            function(gtree) {
+                sum(gtree$logZ)
+            }
+        )
+
+        if (max(scores_nei) > score) {
+            gtree = gtrees_nei[[which.max(scores_nei)]]
+        } else {
+            break()
+        }
+
+        runtime = proc.time() - ptm
+        
+    }
+
+    if (trace) {
+        return(tree_list)
+    } else {
+        return(gtree)
+    }
+}
+
+
 #' @export
 reorder_phylo = function(phy) {
     phy_new = rlang::duplicate(phy, shallow = FALSE)
@@ -252,6 +316,438 @@ run_mitodrift = function(
     return(tree_list)
 }
 
+
+copy_crf = function(crf) {
+    crf_copy <- rlang::env_clone(crf)
+    attributes(crf_copy) <- attributes(crf)
+    return(crf_copy)
+}
+
+#' @export 
+decode_tree = function(
+    tn, A, liks, post_max = FALSE, store_bels = FALSE, store_crfs = FALSE, debug = FALSE,
+    score_only = FALSE
+) {
+    
+    k = ncol(A)
+    vafs = as.numeric(colnames(A))
+    # convert tree to CRF
+    Gn = as.igraph(tn)
+    
+    gtree = as_tbl_graph(Gn)
+    root_node = gtree %>% filter(node_is_root()) %>% pull(name) %>% as.character
+
+    adj_n = as_adjacency_matrix(Gn)
+    crf = make.crf(adj_n, k)
+
+    # add edge potentials
+    flip_dict = Gn %>% 
+        as_edgelist(names = F) %>% 
+        apply(1, function(x){
+            setNames(is.unsorted(x), paste0(sort(x), collapse = ','))
+        }, simplify = F) %>%
+        unlist
+
+    for (i in 1:crf$n.edges) {
+        
+        epair = paste0(sort(crf$edges[i,]), collapse = ',')
+        flip = flip_dict[[epair]]
+        
+        if (flip) {
+            crf$edge.pot[[i]] = t(A)
+        } else {
+            crf$edge.pot[[i]] = A
+        }
+        
+    }
+
+    # add note potentials
+    vnames = names(V(Gn))
+    crf$node.labels = vnames
+    rownames(crf$node.pot) = vnames
+
+    logZ = c()
+    ebels = list()
+    nbels = list()
+    crfs = list()
+
+    for (mut in names(liks)) {
+
+        crf$node.pot[colnames(liks[[mut]]),] = t(liks[[mut]])
+        crf$node.pot[!vnames %in% colnames(liks[[mut]]),] = 1/k
+        crf$node.pot[root_node,] = c(1, rep(0, k-1))
+        
+        # decoding
+        res_mar = infer.tree(crf)
+        
+        if (!score_only) {
+            # append posterior mean to graph tree
+            p_dat = res_mar$node.bel %*% diag(vafs) %>% rowSums
+            p_dat = p_dat %>% data.frame(vnames, .) %>%
+                setNames(c('name', paste0('p_', mut)))
+            
+            gtree = gtree %>% activate(nodes) %>%
+                select(-any_of(c(paste0('p_', mut)))) %>% 
+                left_join(p_dat, by = join_by(name))
+
+            if (post_max) {
+                res_max = decode.tree(crf)
+                z_dat = data.frame(vnames, vafs[res_max]) %>% setNames(c('name', paste0('z_', mut))) 
+
+                gtree = gtree %>% activate(nodes) %>%
+                    select(-any_of(c(paste0('z_', mut)))) %>% 
+                    left_join(z_dat, by = join_by(name))
+            } else {
+                res_max = NULL
+            }
+        }
+
+        logZ = c(logZ, res_mar$logZ)
+
+        if (store_bels) {
+            ebels[[mut]] = res_mar$edge.bel
+            nbels[[mut]] = res_mar$node.bel
+        }
+
+        if (store_crfs) {
+            crf_copy <- rlang::env_clone(crf)
+            attributes(crf_copy) <- attributes(crf)
+            crfs[[mut]] = crf_copy
+        }
+    }
+
+    logZ = setNames(logZ, names(liks))
+    gtree$logZ = logZ
+
+    if (debug) {
+        return(list('gtree' = gtree, 'crfs' = crfs, 'Gn' = Gn, 
+        'res_mar' = res_mar, 'res_max' = res_max, 'ebels' = ebels, 'nbels' = nbels))
+    }
+
+    return(gtree)
+}
+
+# allow A to vary across mutations
+#' @export 
+decode_tree_brl = function(
+    tn, As, liks, root_eps = 1e-2, post_max = FALSE, store_bels = FALSE, store_crfs = FALSE, debug = FALSE,
+    score_only = FALSE
+) {
+
+    if (!inherits(tn, "igraph")) {
+        Gn = as.igraph(tn)
+        E(Gn)$length = tn$edge.length
+    } else {
+        Gn = tn
+        if (is.null(E(Gn)$length)) {
+            stop('No edge length in tree')
+        }
+    }
+    
+    k = ncol(As[[1]])
+    vafs = as.numeric(colnames(As[[1]]))
+    
+    gtree = as_tbl_graph(Gn)
+    root_node = gtree %>% filter(node_is_root()) %>% pull(name) %>% as.character
+
+    adj_n = as_adjacency_matrix(Gn)
+    crf = make.crf(adj_n, k)
+
+    # add edge potentials
+    elist = Gn %>% as_edgelist(names = F)
+
+    flip_df = data.frame(
+            from = pmin(elist[,1], elist[,2]),
+            to = pmax(elist[,1], elist[,2]),
+            flip = elist[,1] > elist[,2],
+            length = E(Gn)$length
+        ) %>%
+        arrange(from, to)
+
+    crf$edge.pot = lapply(
+        1:nrow(flip_df),
+        function(i){
+
+            flip = flip_df[i,]$flip
+            n_gen = flip_df[i,]$length
+
+            A = interpolate_matrices(As, n_gen, min_index = 1e-5)
+
+            if (flip) {
+                t(A)
+            } else {
+                A
+            }
+
+    })
+
+    # add note potentials
+    vnames = names(V(Gn))
+    crf$node.labels = vnames
+    rownames(crf$node.pot) = vnames
+
+    logZ = c()
+    ebels = list()
+    nbels = list()
+    crfs = list()
+
+    for (mut in names(liks)) {
+
+        crf$node.pot[colnames(liks[[mut]]),] = t(liks[[mut]])
+        crf$node.pot[!vnames %in% colnames(liks[[mut]]),] = 1/k
+        # root node doesn't have to clean
+        crf$node.pot[root_node,] = c(1-root_eps, rep(root_eps/(k-1), k-1))
+        
+        # decoding
+        res_mar = infer.tree(crf)
+        
+        if (!score_only) {
+            # append posterior mean to graph tree
+            p_dat = res_mar$node.bel %*% diag(vafs) %>% rowSums
+            p_dat = p_dat %>% data.frame(vnames, .) %>%
+                setNames(c('name', paste0('p_', mut)))
+            
+            gtree = gtree %>% activate(nodes) %>%
+                select(-any_of(c(paste0('p_', mut)))) %>% 
+                left_join(p_dat, by = join_by(name))
+
+            if (post_max) {
+                res_max = decode.tree(crf)
+                z_dat = data.frame(vnames, vafs[res_max]) %>% setNames(c('name', paste0('z_', mut))) 
+
+                gtree = gtree %>% activate(nodes) %>%
+                    select(-any_of(c(paste0('z_', mut)))) %>% 
+                    left_join(z_dat, by = join_by(name))
+            } else {
+                res_max = NULL
+            }
+        }
+
+        logZ = c(logZ, res_mar$logZ)
+
+        if (store_bels) {
+            ebels[[mut]] = res_mar$edge.bel
+            nbels[[mut]] = res_mar$node.bel
+        }
+
+        if (store_crfs) {
+            crf_copy <- rlang::env_clone(crf)
+            attributes(crf_copy) <- attributes(crf)
+            crfs[[mut]] = crf_copy
+        }
+    }
+
+    logZ = setNames(logZ, names(liks))
+    gtree$logZ = logZ
+
+    if (debug) {
+        return(list('gtree' = gtree, 'crfs' = crfs, 'Gn' = Gn, 
+        'res_mar' = res_mar))
+    }
+
+    return(gtree)
+}
+
+interpolate_matrices <- function(As, index, min_index = 1e-5) {
+
+    index = max(min_index, index)
+
+    # Get the list of provided indices
+    provided_indices <- as.numeric(names(As))
+    min_index <- min(provided_indices)
+    max_index <- max(provided_indices)
+
+    # If index is below the minimum, return the matrix at the minimum index
+    if (index <= min_index) {
+        return(As[[as.character(min_index)]])
+    }
+
+    # If index is above the maximum, return the matrix at the maximum index
+    if (index >= max_index) {
+        return(As[[as.character(max_index)]])
+    }
+
+
+    # If the index exactly matches one of the provided indices, return the corresponding matrix directly
+    if (index %in% provided_indices) return(As[[as.character(index)]])
+
+    # Find the closest lower and upper indices for interpolation
+    lower_index <- max(provided_indices[provided_indices < index])
+    upper_index <- min(provided_indices[provided_indices > index])
+
+    # Calculate the weight for interpolation
+    weight <- (index - lower_index) / (upper_index - lower_index)
+
+    # Retrieve matrices for interpolation
+    A_lower <- As[[as.character(lower_index)]]
+    A_upper <- As[[as.character(upper_index)]]
+
+    # Ensure the matrices are the same dimensions
+    if (!all(dim(A_lower) == dim(A_upper))) stop("Matrices must have the same dimensions.")
+
+    # Perform linear interpolation
+    interpolated_matrix <- (1 - weight) * A_lower + weight * A_upper
+
+    # Normalize each row to sum to 1
+    interpolated_matrix <- interpolated_matrix / rowSums(interpolated_matrix)
+
+    return(interpolated_matrix)
+}
+
+estimate_brl = function(phy, liks, As, height = NULL, init = 1) {
+
+    if (length(init) == 1) {
+        init = rep(init, length(phy$edge.length))
+    }
+
+    G = igraph::as.igraph(phy)
+    
+    fit = optim(
+        fn = function(x) {
+
+            phy$edge.length = x
+            
+            gtree = decode_tree_brl(
+                tn = phy,
+                As,
+                liks, score_only = T)
+            
+            E(G)$weight = x
+            dists = distances_to_root_tips(G)
+
+            if (is.null(height)) {
+                height = mean(dists)
+            }
+
+            mse = mean((dists - height)^2)
+            
+            -sum(gtree$logZ) + mse
+            
+        },
+        method = 'L-BFGS-B',
+        par = init,
+        lower = 1,
+        upper = 100
+    )
+
+    phy$edge.length = fit$par
+
+    return(phy)
+}
+
+# Use internal branch representation for ultrametric tree
+# see https://github.com/NickWilliamsSanger/rtreefit
+estimate_brl_recode = function(phy, As, liks, htotal, init = 0.1) {
+
+    if (length(init) == 1) {
+        init = rep(init, phy$Nnode)
+    }
+
+    phy = reorder(phy)
+
+    G = igraph::as.igraph(phy)
+    
+    fit = optim(
+        fn = function(x) {
+
+            G = x_to_length(G, x, htotal = htotal)
+            
+            gtree = decode_tree_brl(
+                tn = G,
+                As,
+                liks, score_only = T)
+        
+            -sum(gtree$logZ)
+            
+        },
+        method = 'L-BFGS-B',
+        par = init,
+        lower = 0,
+        upper = 1
+    )
+
+    G = x_to_length(G, fit$par, htotal = htotal)
+
+    phy$edge.length = E(G)$length
+
+    return(phy)
+}
+
+
+# Use internal branch representation for ultrametric tree
+# see https://github.com/NickWilliamsSanger/rtreefit
+#' @export 
+estimate_brl_par = function(tree, As, liks, htotal, x_init = 0.1, change_h = FALSE) {
+
+    if (!'tbl_graph' %in% class(tree)) {
+        tree = reorder(tree)
+        G = igraph::as.igraph(tree)
+    } else {
+        G = tree
+    }
+
+    n_nodes = sum(degree(G, mode = "all") > 1)
+    
+    if (length(x_init) == 1) {
+        x_init = rep(x_init, n_nodes)
+    }
+
+    if (change_h) {
+
+        fn = function(x) {
+            
+            G = x_to_length(G, x[-1], htotal = x[1])
+            
+            gtree = decode_tree_brl(
+                tn = G,
+                As,
+                liks, score_only = TRUE)
+        
+            -sum(gtree$logZ)
+            
+        }
+
+        fit = optimParallel(
+            fn = fn,
+            method = 'L-BFGS-B',
+            par = c(htotal, x_init),
+            lower = c(1, rep(0, n_nodes)),
+            upper = c(2000, rep(1, n_nodes))
+        )
+
+        G = x_to_length(G, fit$par[-1], htotal = fit$par[1])
+        
+    } else {
+
+        fn = function(x) {
+
+            G = x_to_length(G, x, htotal = htotal)
+            
+            gtree = decode_tree_brl(
+                tn = G,
+                As,
+                liks, score_only = TRUE)
+        
+            -sum(gtree$logZ)
+            
+        }
+
+        fit = optimParallel(
+                fn = fn,
+                method = 'L-BFGS-B',
+                par = x_init,
+                lower = 0,
+                upper = 1
+            )
+
+        G = x_to_length(G, fit$par, htotal = htotal)
+
+    }
+
+    return(G)
+}
+
+
 ################################### MCMC ######################################
 
 
@@ -266,12 +762,16 @@ run_tree_mcmc_cpp = function(phy, logP_list, logA_vec, max_iter = 100, nchains =
 
     res = edge_lists %>%
         lapply(function(elist) {
-                lapply(
+                phylist = lapply(
                     elist,
                     function(edges){
                     phy_new = attach_edges(phy, edges)
                     return(phy_new)
                 })
+
+                class(phylist) = 'multiPhylo'
+
+                return(phylist)
             }
         )
     
@@ -364,6 +864,8 @@ run_tree_mcmc = function(
                     attach_edges(phy_init, edges)
             })
 
+            class(tree_list) = 'multiPhylo'
+
             if (trace &!is.null(outfile)) {
                 outdir = dirname(outfile)
                 fname = basename(outfile)
@@ -391,7 +893,61 @@ collect_chains = function(res, burnin = 0) {
             })
         }) %>% unlist(recursive = F)
 
-        return(mcmc_trees)
+    class(mcmc_trees) = 'multiPhylo'
+
+    return(mcmc_trees)
     
+}
+
+#' @export
+add_conf = function(gtree, phylist) {
+
+    if (!'multiPhylo' %in% class(phylist) & is.list(phylist)) {
+        class(phylist) = 'multiPhylo'
+    }
+
+    if (!'tbl_graph' %in% class(gtree)) {
+        gtree$node.label = NULL
+        gtree = as_tbl_graph(gtree)
+    }
+    
+    conf_dict = to_phylo_reorder(gtree) %>%
+        add_clade_freq(phylist) %>%
+        parse_conf()
+
+    gtree = gtree %>% activate(nodes) %>% mutate(conf = conf_dict[name])
+
+    return(gtree)
+    
+}
+
+add_clade_freq = function(phy, phys) {
+    freqs = prop.clades(phy, phys, rooted = TRUE)/length(phys)
+    phy$node.label = freqs
+    return(phy)
+}
+
+parse_conf = function(phy) {
+    nodes = unname(unlist(phy$nodes))
+    nodes = nodes[!nodes %in% phy$tip.label]
+    conf_dict = setNames(phy$node.label, nodes)
+    return(conf_dict)
+}
+
+
+#' @export
+get_consensus = function(phylist, p = 0.5) {
+
+    if (!'multiPhylo' %in% class(phylist) & is.list(phylist)) {
+        class(phylist) = 'multiPhylo'
+    }
+
+    phy_cons = consensus(phylist, p = p, rooted = TRUE)
+
+    phy_cons$node.label = NULL
+    gtree = as_tbl_graph(phy_cons, directed = TRUE)
+    gtree = add_conf(gtree, phylist)
+
+    return(gtree)
 }
 
