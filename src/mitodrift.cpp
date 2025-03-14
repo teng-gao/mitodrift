@@ -274,6 +274,40 @@ double score_tree_bp_wrapper(arma::Col<int> E,
     return logZ;
 }
 
+// E: Edge matrix (each row is a (parent, child) pair, 1-indexed from R) provided as an arma::Col<int> in column-major order.
+// logP_list: List of flattened likelihood matrices (each in row-major order)
+// logA: Flattened transition matrix (row-major order)
+// Computes:
+//   - L: number of loci (length of logP_list),
+//   - C: number of states (inferred from logA),
+//   - n: number of nodes (inferred from the first likelihood matrix),
+//   - m: number of edges (number of rows in the original edge matrix),
+//   - root: parent's value from the last edge.
+// [[Rcpp::export]]
+double score_tree_bp_wrapper_multi(arma::Col<int> E,
+                             const std::vector< std::vector<double> >& logP_list,
+                             const std::vector< std::vector<double> >& logA_list) {
+    // Compute number of loci.
+    int L = logP_list.size();
+    // Infer number of states from the transition matrix.
+    int C = std::sqrt(logA_list[0].size());
+    // Infer number of nodes from the first likelihood matrix.
+    int n = logP_list[0].size() / C;
+    // Compute m: number of edges.
+    int m = E.n_elem / 2;
+
+    // Adjust the edge matrix from 1-indexing (R) to 0-indexing (C++).
+    E = E - 1;
+    // Find the root
+    int root = E(m - 1);
+
+    double logZ = 0.0;
+    for (int l = 0; l < L; l++) {
+        logZ += score_tree_bp(E, logP_list[l], logA_list[l], n, C, m, root);
+    }
+    return logZ;
+}
+
 
 struct score_neighbours: public Worker {
 
@@ -308,6 +342,44 @@ NumericVector nni_cpp_parallel(arma::Col<int> E, const std::vector<std::vector<d
     score_neighbours score_neighbours(E, logP, logA, scores);
 
     parallelFor(0, n, score_neighbours);
+
+    return scores;
+
+}
+
+struct score_neighbours_multi: public Worker {
+
+    // original tree
+    const arma::Col<int> E;
+    const std::vector<std::vector<double>> logP;
+    const std::vector<std::vector<double>> logA;
+    RVector<double> scores;
+
+    // initialize with source and destination
+    score_neighbours_multi(const arma::Col<int> E, const std::vector<std::vector<double>> logP, const std::vector<std::vector<double>> logA, NumericVector scores): 
+        E(E), logP(logP), logA(logA), scores(scores) {}
+
+    void operator()(std::size_t begin, std::size_t end) {
+        for (std::size_t i = begin; i < end; i++) {
+            std::vector<arma::Col<int>> Ep = nnin_cpp(E, i+1);
+            scores[2*i] = score_tree_bp_wrapper_multi(Ep[0], logP, logA);
+            scores[2*i+1] = score_tree_bp_wrapper_multi(Ep[1], logP, logA);
+        }
+    }
+};
+
+// [[Rcpp::export]]
+NumericVector nni_cpp_parallel_multi(arma::Col<int> E, const std::vector<std::vector<double>> logP, const std::vector<std::vector<double>> logA) {
+
+    E = reorderRcpp(E);
+
+    int n = E.n_elem / 4 - 1;
+
+    NumericVector scores(2*n);
+
+    score_neighbours_multi score_neighbours_multi(E, logP, logA, scores);
+
+    parallelFor(0, n, score_neighbours_multi);
 
     return scores;
 

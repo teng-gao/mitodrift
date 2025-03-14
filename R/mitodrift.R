@@ -19,10 +19,18 @@ optimize_tree_cpp = function(
     RhpcBLASctl::omp_set_num_threads(1)
     RcppParallel::setThreadOptions(numThreads = ncores)
 
+    if (is.list(logA)) {
+        score_tree_func = score_tree_bp_wrapper_multi
+        nni_func = nni_cpp_parallel_multi
+    } else {
+        score_tree_func = score_tree_bp_wrapper
+        nni_func = nni_cpp_parallel
+    }
+
     tree_init = reorder_phylo(tree_init)
 
     tree_current = tree_init
-    max_current = sum(score_tree_bp_wrapper(tree_current$edge, logP, logA))
+    max_current = sum(score_tree_func(tree_current$edge, logP, logA))
     tree_list = list()
     runtime = c(0,0,0)
 
@@ -41,7 +49,7 @@ optimize_tree_cpp = function(
 
         message(paste(i, round(max_current, 4), paste0('(', signif(unname(runtime[3]),2), 's', ')')))
 
-        scores = nni_cpp_parallel(tree_current$edge, logP, logA)
+        scores = nni_func(tree_current$edge, logP, logA)
         
         if (max(scores) > max_current) {
             max_id = which.max(scores)
@@ -63,7 +71,6 @@ optimize_tree_cpp = function(
         return(tree_current)
     }
 }
-
 
 # R version of the function
 # to fix: apparently the init tree has to be rooted otherwise to_phylo_reoder won't work. 
@@ -258,6 +265,18 @@ get_transition_mat_wf = function(k, eps = 0.01, N = 100, n_rep = 1e4, n_gen = 10
 
     return(A)
 
+}
+
+modify_A = function(A, eps) {
+    A[1,] = c(1-eps, rep(eps/(ncol(A)-1), ncol(A)-1))
+    A[nrow(A),] = rev(A[1,])
+    return(A)
+}
+
+scale_eps <- function(eps, f, mu = 1) {
+  logit <- function(p) log(p / (1 - p))
+  logistic <- function(x) 1 / (1 + exp(-x))
+  logistic(logit(eps) + mu * f)
 }
 
 #' @export 
@@ -882,6 +901,8 @@ run_tree_mcmc = function(
 #' @export
 collect_chains = function(res, burnin = 0) {
 
+    res = res[res %>% sapply(length) > 0]
+
     mcmc_trees = res %>% lapply(function(trees){
             trees = trees[(burnin+1):length(trees)]
             lapply(trees, function(tree){
@@ -936,13 +957,13 @@ parse_conf = function(phy) {
 
 
 #' @export
-get_consensus = function(phylist, p = 0.5) {
+get_consensus = function(phylist, p = 0.5, check.labels = FALSE) {
 
     if (!'multiPhylo' %in% class(phylist) & is.list(phylist)) {
         class(phylist) = 'multiPhylo'
     }
 
-    phy_cons = consensus(phylist, p = p, rooted = TRUE)
+    phy_cons = consensus(phylist, p = p, rooted = TRUE, check.labels = check.labels)
 
     phy_cons$node.label = NULL
     gtree = as_tbl_graph(phy_cons, directed = TRUE)

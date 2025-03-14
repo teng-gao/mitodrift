@@ -29,8 +29,16 @@ score_tree_bp_wrapper <- function(E, logP_list, logA) {
     .Call('_mitodrift_score_tree_bp_wrapper', PACKAGE = 'mitodrift', E, logP_list, logA)
 }
 
+score_tree_bp_wrapper_multi <- function(E, logP_list, logA_list) {
+    .Call('_mitodrift_score_tree_bp_wrapper_multi', PACKAGE = 'mitodrift', E, logP_list, logA_list)
+}
+
 nni_cpp_parallel <- function(E, logP, logA) {
     .Call('_mitodrift_nni_cpp_parallel', PACKAGE = 'mitodrift', E, logP, logA)
+}
+
+nni_cpp_parallel_multi <- function(E, logP, logA) {
+    .Call('_mitodrift_nni_cpp_parallel_multi', PACKAGE = 'mitodrift', E, logP, logA)
 }
 
 tree_mcmc_cpp <- function(E, logP, logA, max_iter = 100L, seed = -1L) {

@@ -75,6 +75,19 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// score_tree_bp_wrapper_multi
+double score_tree_bp_wrapper_multi(arma::Col<int> E, const std::vector< std::vector<double> >& logP_list, const std::vector< std::vector<double> >& logA_list);
+RcppExport SEXP _mitodrift_score_tree_bp_wrapper_multi(SEXP ESEXP, SEXP logP_listSEXP, SEXP logA_listSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< arma::Col<int> >::type E(ESEXP);
+    Rcpp::traits::input_parameter< const std::vector< std::vector<double> >& >::type logP_list(logP_listSEXP);
+    Rcpp::traits::input_parameter< const std::vector< std::vector<double> >& >::type logA_list(logA_listSEXP);
+    rcpp_result_gen = Rcpp::wrap(score_tree_bp_wrapper_multi(E, logP_list, logA_list));
+    return rcpp_result_gen;
+END_RCPP
+}
 // nni_cpp_parallel
 NumericVector nni_cpp_parallel(arma::Col<int> E, const std::vector<std::vector<double>> logP, const std::vector<double> logA);
 RcppExport SEXP _mitodrift_nni_cpp_parallel(SEXP ESEXP, SEXP logPSEXP, SEXP logASEXP) {
@@ -85,6 +98,19 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const std::vector<std::vector<double>> >::type logP(logPSEXP);
     Rcpp::traits::input_parameter< const std::vector<double> >::type logA(logASEXP);
     rcpp_result_gen = Rcpp::wrap(nni_cpp_parallel(E, logP, logA));
+    return rcpp_result_gen;
+END_RCPP
+}
+// nni_cpp_parallel_multi
+NumericVector nni_cpp_parallel_multi(arma::Col<int> E, const std::vector<std::vector<double>> logP, const std::vector<std::vector<double>> logA);
+RcppExport SEXP _mitodrift_nni_cpp_parallel_multi(SEXP ESEXP, SEXP logPSEXP, SEXP logASEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< arma::Col<int> >::type E(ESEXP);
+    Rcpp::traits::input_parameter< const std::vector<std::vector<double>> >::type logP(logPSEXP);
+    Rcpp::traits::input_parameter< const std::vector<std::vector<double>> >::type logA(logASEXP);
+    rcpp_result_gen = Rcpp::wrap(nni_cpp_parallel_multi(E, logP, logA));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -125,7 +151,9 @@ static const R_CallMethodDef CallEntries[] = {
     {"_mitodrift_logSumExp", (DL_FUNC) &_mitodrift_logSumExp, 1},
     {"_mitodrift_score_tree_bp", (DL_FUNC) &_mitodrift_score_tree_bp, 7},
     {"_mitodrift_score_tree_bp_wrapper", (DL_FUNC) &_mitodrift_score_tree_bp_wrapper, 3},
+    {"_mitodrift_score_tree_bp_wrapper_multi", (DL_FUNC) &_mitodrift_score_tree_bp_wrapper_multi, 3},
     {"_mitodrift_nni_cpp_parallel", (DL_FUNC) &_mitodrift_nni_cpp_parallel, 3},
+    {"_mitodrift_nni_cpp_parallel_multi", (DL_FUNC) &_mitodrift_nni_cpp_parallel_multi, 3},
     {"_mitodrift_tree_mcmc_cpp", (DL_FUNC) &_mitodrift_tree_mcmc_cpp, 5},
     {"_mitodrift_tree_mcmc_parallel", (DL_FUNC) &_mitodrift_tree_mcmc_parallel, 5},
     {NULL, NULL, 0}

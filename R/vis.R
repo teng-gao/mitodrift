@@ -172,3 +172,44 @@ plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = T
         (p_tree / p_heatmap) + plot_layout(heights = c(1, 2))
     }
 }
+
+
+plot_phylo_circ = function(gtree, node_conf = FALSE, conf_label = FALSE, title = '', branch_width = 0.3, dot_size = 1, conf_min = 0.5, cell_annot = NULL) {
+
+    p_tree = ggtree(gtree, layout = 'circular', branch.length = "none", linewidth = branch_width) +
+            ggtitle(title)
+
+    if (node_conf) {
+
+        dat = gtree %>% activate(nodes) %>%
+            mutate(isRoot = node_is_root()) %>%
+            as.data.frame() %>% 
+            select(any_of(c('name', 'isRoot', 'conf')))
+
+        if ('conf' %in% colnames(dat)) {
+            p_tree = p_tree %<+% 
+                dat +
+                geom_nodepoint(aes(color = conf, subset = !isTip & !isRoot, x = branch), size = dot_size, pch = 16, stroke = 1) +
+                scale_color_gradient(low = 'white', high = 'firebrick', limits = c(conf_min,1), oob = scales::oob_squish)
+    
+            if (conf_label) {
+                p_tree = p_tree + 
+                    geom_text2(
+                        aes(label = round(conf, 2), x = branch, subset = !isTip & !isRoot),
+                        size = text_size, hjust = 0, vjust = 0.25
+                    )
+            }
+        }
+    }
+
+    if (!is.null(cell_annot)) {
+        p_tree = p_tree + geom_fruit(
+                data = cell_annot,
+                geom = geom_col,
+                mapping = aes(y = cell, fill = annot, x = 1),
+                show.legend = F
+            )
+    }
+
+    return(p_tree)
+}
