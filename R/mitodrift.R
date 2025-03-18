@@ -12,12 +12,26 @@ NULL
 # to fix: apparently the init tree has to be rooted otherwise to_phylo_reoder won't work.
 #' @export 
 optimize_tree_cpp = function(
-    tree_init, logP, logA, max_iter = 100, ncores = 1, trace = TRUE, outfile = NULL, trace_interval = 5
+    tree_init = NULL, logP = NULL, logA = NULL, max_iter = 100, 
+    outfile = NULL, resume = FALSE,
+    ncores = 1, trace_interval = 5
 ) {
 
     RhpcBLASctl::blas_set_num_threads(1)
     RhpcBLASctl::omp_set_num_threads(1)
     RcppParallel::setThreadOptions(numThreads = ncores)
+
+    if (resume) {
+        if (is.null(outfile)) {
+            stop('Outfile must be provided if resume = FALSE')
+        }
+        message('Resuming from saved outfile')
+        res = readRDS(outfile)
+        tree_current = res$tree_list %>% .[[length(.)]]
+        max_current = tree_current$logZ
+        logP = res$params$logP
+        logA = res$params$logA
+    }
 
     if (is.list(logA)) {
         score_tree_func = score_tree_bp_wrapper_multi
@@ -27,25 +41,25 @@ optimize_tree_cpp = function(
         nni_func = nni_cpp_parallel
     }
 
-    tree_init = reorder_phylo(tree_init)
+    if (!resume) {
+        if (is.null(tree_init) || is.null(logP) || is.null(logA)) {
+            stop("tree_init, logP, and logA must be provided when resume is FALSE")
+        }
+        tree_init = reorder_phylo(tree_init)
+        tree_current = tree_init
+        max_current = sum(score_tree_func(tree_current$edge, logP, logA))
+        tree_current$logZ = max_current
+        res = list(
+            'params' = list('logP' = logP, 'logA' = logA),
+            'tree_list' = phytools::as.multiPhylo(tree_current)
+        )
+    }
 
-    tree_current = tree_init
-    max_current = sum(score_tree_func(tree_current$edge, logP, logA))
-    tree_list = list()
     runtime = c(0,0,0)
 
     for (i in 1:max_iter) {
 
         ptm = proc.time()
-
-        if (trace) {
-            tree_list = c(tree_list, list(tree_current))
-            if (!is.null(outfile)) {
-                if (i == 1 | i %% trace_interval == 0) {
-                    saveRDS(tree_list, outfile)
-                }
-            }
-        }
 
         message(paste(i, round(max_current, 4), paste0('(', signif(unname(runtime[3]),2), 's', ')')))
 
@@ -60,16 +74,21 @@ optimize_tree_cpp = function(
             break()
         }
 
+        res$tree_list = res$tree_list %>% c(phytools::as.multiPhylo(tree_current))
+
+        if (!is.null(outfile)) {
+            if (i == 1 | i %% trace_interval == 0) {
+                saveRDS(res, outfile)
+            }
+        }
+
         runtime = proc.time() - ptm
         
     }
 
-    if (trace) {
-        class(tree_list) = 'multiPhylo'
-        return(tree_list)
-    } else {
-        return(tree_current)
-    }
+    saveRDS(res, outfile)
+
+    return(res)
 }
 
 # R version of the function
