@@ -103,7 +103,8 @@ for (arg in names(opts)) {
   message(paste0(arg, ": ", opts[[arg]]))
 }
 
-mut_dat = fread(opts$mut_dat) %>% select(variant, cell, d, a, vaf)
+mut_dat = fread(opts$mut_dat) %>% select(variant, cell, d, a) %>%
+    mutate(vaf = a/d)
 
 # Filter singletons
 mut_dat = mut_dat %>% group_by(variant) %>% filter(sum(a>0)>1) %>% ungroup()

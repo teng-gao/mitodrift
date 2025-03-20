@@ -96,6 +96,10 @@ plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = T
     df_var = df_var %>% filter(cell %in% cell_order) %>%
         mutate(cell = factor(as.integer(factor(cell, cell_order)), 1:length(cell_order)))
 
+    if (!'vaf' %in% colnames(df_var)) {
+        df_var = df_var %>% mutate(vaf = a/d)
+    }
+
     p_heatmap = df_var %>% 
         filter(vaf > 0) %>%
         ggplot(

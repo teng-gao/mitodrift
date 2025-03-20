@@ -17,6 +17,7 @@ Imports:
     ggplot2,
     dplyr,
     tidygraph,
+    tidyr,
     parallel,
     ggtree,
     patchwork,

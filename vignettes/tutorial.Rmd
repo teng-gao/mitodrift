@@ -1,0 +1,52 @@
+---
+title: "MitoDrift tutorial"
+description: "Visualizing and interpreting MitoDrift outputs"
+documentclass: book
+output:
+  bookdown::gitbook:
+    split_by: rmd
+---
+
+```{r, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
+```
+
+```{r}
+library(mitodrift)
+library(ggtree)
+library(ggplot2)
+library(dplyr)
+library(patchwork)
+library(stringr)
+```
+
+# ML tree
+```{r}
+tree_list = KX003_1_tree_list$tree_list
+tree_ml = tree_list %>% .[[length(.)]]
+plot_phylo_heatmap2(
+    tree_ml, 
+    KX003_1_mut_dat,
+    dot_size = 0.1,
+    branch_width = 0.3,
+    branch_length = F,
+    het_max = 1,
+    title = 'ML'
+)
+```
+
+# Consensus tree with clade confidence
+```{r}
+mcmc_trees = collect_chains(KX003_1_mcmc, burnin = 100)
+gtree_cons = get_consensus(mcmc_trees, p = 0.5)
+plot_phylo_heatmap2(
+    gtree_cons, 
+    KX003_1_mut_dat,
+    dot_size = 1,
+    branch_width = 0.3,
+    branch_length = F,
+    node_conf = T, 
+    het_max = 1,
+    title = 'ML'
+)
+```

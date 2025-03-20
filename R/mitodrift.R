@@ -167,6 +167,7 @@ get_leaf_liks = function(mut_dat, vafs, eps = 0, ncores = 1) {
     variants = unique(mut_dat$variant)
 
     liks = mut_dat %>% 
+        mutate(vaf = a/d) %>%
         mutate(variant = factor(variant, variants)) %>%
         tidyr::complete(variant, cell, fill = list(vaf = 0, d = 0, a = 0)) %>%
         split(.$variant) %>%
@@ -953,7 +954,7 @@ add_conf = function(gtree, phylist) {
         gtree = as_tbl_graph(gtree)
     }
     
-    conf_dict = to_phylo_reorder(gtree) %>%
+    conf_dict = to_phylo_reoder(gtree) %>%
         add_clade_freq(phylist) %>%
         parse_conf()
 
@@ -961,6 +962,38 @@ add_conf = function(gtree, phylist) {
 
     return(gtree)
     
+}
+
+# reorder and preserves node labels
+#' @export
+to_phylo_reorder = function(graph) {
+    df <- igraph::as_data_frame(graph)
+    node_counts <- table(c(df$to, df$from))
+    tips <- names(node_counts)[node_counts == 1]
+    nodes <- names(node_counts)[node_counts > 1]
+    attr <- igraph::vertex_attr(graph)
+    tipn <- 1:length(tips)
+    names(tipn) <- tips
+    noden <- (length(tips) + 1):(length(tips) + length(nodes))
+    names(noden) <- nodes
+    renumber <- c(tipn, noden)
+    df$from <- as.numeric(renumber[df$from])
+    df$to <- as.numeric(renumber[df$to])
+    phylo <- list()
+    phylo$edge <- matrix(cbind(df$from, df$to), ncol = 2)
+    phylo$edge.length <- as.numeric(df$length)
+    phylo$tip.label <- tips
+    phylo$node.label <- nodes
+    phylo$Nnode <- length(nodes)
+    class(phylo) <- "phylo"
+    nnodes <- length(renumber)
+    phylo$nodes <- lapply(1:nnodes, function(x) {
+        n <- list()
+        n$id <- names(renumber[renumber == x])
+        n
+    })
+    phylo = reorder(phylo)
+    return(phylo)
 }
 
 add_clade_freq = function(phy, phys) {
@@ -976,20 +1009,33 @@ parse_conf = function(phy) {
     return(conf_dict)
 }
 
-
 #' @export
-get_consensus = function(phylist, p = 0.5, check.labels = FALSE) {
+phylo_to_gtree = function(phy) {
+        
+    tip_nodes <- data.frame(
+        name = phy$tip.label
+    )
+    
+    internal_nodes <- data.frame(
+        name = paste0("Node", seq_len(phy$Nnode))
+    )
 
-    if (!'multiPhylo' %in% class(phylist) & is.list(phylist)) {
-        class(phylist) = 'multiPhylo'
+    if (!is.null(phy$node.label)) {
+        internal_nodes$label = phy$node.label
     }
-
-    phy_cons = consensus(phylist, p = p, rooted = TRUE, check.labels = check.labels)
-
-    phy_cons$node.label = NULL
-    gtree = as_tbl_graph(phy_cons, directed = TRUE)
-    gtree = add_conf(gtree, phylist)
-
+    
+    nodes <- bind_rows(tip_nodes, internal_nodes)
+    edges <- data.frame(phy$edge)
+    colnames(edges) <- c("from", "to")
+    
+    gtree <- tbl_graph(nodes = nodes, edges = edges, directed = TRUE)
+    
     return(gtree)
 }
 
+#' @export
+get_consensus = function(phylist, p = 0.5, check_labels = FALSE, rooted = TRUE, conf = FALSE) {
+    phy_cons = ape::consensus(phylist, p = p, rooted = rooted, check.labels = check_labels)
+    gtree_cons = phylo_to_gtree(phy_cons) %>% rename(conf = label)
+    return(gtree_cons)
+}
