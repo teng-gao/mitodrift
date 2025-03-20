@@ -105,3 +105,6 @@ Rscript $home/mitodrift/mitodrift/inst/bin/run_mcmc.r \
     -c 50 \
     -p $ncores
 ```
+
+# Tutorial
+Checkout doscs/articles/tutorial.html
