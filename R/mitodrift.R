@@ -914,6 +914,8 @@ run_tree_mcmc = function(
         }
     )
 
+    saveRDS(res, outfile)
+
     return(res)
 }
 
