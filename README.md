@@ -105,3 +105,44 @@ Rscript $home/mitodrift/mitodrift/inst/bin/run_mcmc.r \
     -c 50 \
     -p $ncores
 ```
+
+# Visualizing results
+## ML tree
+```
+# KX003_1_tree_list is an example output of ML tree estimation module
+tree_list = KX003_1_tree_list$tree_list
+tree_ml = tree_list %>% .[[length(.)]]
+
+plot_phylo_heatmap2(
+    tree_ml, 
+    KX003_1_mut_dat,
+    dot_size = 0.1,
+    branch_width = 0.3,
+    branch_length = F,
+    het_max = 1,
+    title = 'ML'
+)
+```
+Result:
+![image](https://github.com/user-attachments/assets/c06daeeb-2dd4-4f35-bb8a-6e14c295f80a)
+
+## Consensus tree with clade confidence
+```
+# KX003_1_tree_list is an example output of MCMC module
+mcmc_trees = collect_chains(KX003_1_mcmc, burnin = 100)
+gtree_cons = get_consensus(mcmc_trees, p = 0.5)
+
+plot_phylo_heatmap2(
+    gtree_cons, 
+    KX003_1_mut_dat,
+    dot_size = 1,
+    branch_width = 0.3,
+    branch_length = F,
+    node_conf = T, 
+    het_max = 1,
+    title = 'ML'
+)
+```
+Result:
+![image](https://github.com/user-attachments/assets/62834948-2227-41f1-9826-b0080bad7b0d)
+
