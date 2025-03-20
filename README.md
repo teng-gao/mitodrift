@@ -107,4 +107,4 @@ Rscript $home/mitodrift/mitodrift/inst/bin/run_mcmc.r \
 ```
 
 # Tutorial
-Checkout doscs/articles/tutorial.html
+Checkout `docs/articles/tutorial.html`
