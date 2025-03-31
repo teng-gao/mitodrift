@@ -18,14 +18,14 @@ library(ggraph)
 library(optparse)
 library(mitodrift)
 
-# repo_dir = '/broad/sankaranlab/tgao/mitodrift/mitodrift'
-# devtools::load_all(repo_dir)
+repo_dir = '/broad/sankaranlab/tgao/mitodrift/mitodrift'
+R.utils::sourceDirectory(glue('{repo_dir}/R'))
 
 option_list <- list(
     make_option(
-        c("-t", "--tree_file"),
+        c("-i", "--input"),
         type = "character",
-        help = "Tree list file from mitodrift ML module",
+        help = "MCMC result RDS file",
         metavar = "CHARACTER"
     ),
     make_option(
@@ -35,17 +35,10 @@ option_list <- list(
         metavar = "CHARACTER"
     ),
     make_option(
-        c("-i", "--max_iter"),
+        c("-b", "--burnin"),
         type = "integer",
-        default = 10000,
-        help = "Maximum number of iteration",
-        metavar = "INTEGER"
-    ),
-    make_option(
-        c("-c", "--nchains"),
-        type = "integer",
-        default = 1000,
-        help = "Maximum number of iteration",
+        default = 0,
+        help = "Output file .RDS",
         metavar = "INTEGER"
     ),
     make_option(
@@ -60,21 +53,21 @@ option_list <- list(
 opt_parser <- OptionParser(option_list = option_list)
 opts <- parse_args(opt_parser)
 
+
 for (arg in names(opts)) {
   message(paste0(arg, ": ", opts[[arg]]))
 }
 
-res_ml = readRDS(opts$tree_file)
-phy_init = res_ml$tree_list %>% .[[length(.)]]
-logA_vec = res_ml$params$logA
-logP_list = res_ml$params$logP
+res_mcmc = readRDS(opts$input)
+trees_mcmc = collect_chains(res_mcmc, burnin = opts$burnin)
 
-message('Running MCMC')
+ps = c(0.5, 0.6, 0.7, 0.8, 0.85, 0.9, 0.95, 0.975, 0.99)
 
-res_mcmc = mitodrift::run_tree_mcmc(
-    phy_init, logP_list, logA_vec,
-    max_iter = opts$max_iter, nchains = opts$nchains, ncores = opts$ncores, outfile = opts$outfile)
+gtrees = mclapply(
+        ps,
+        mc.cores = opts$ncores,
+        function(p) {
+            mitodrift::get_consensus(trees_mcmc, p = p)
+    }) %>% setNames(ps)
 
-message('Saving results')
-
-saveRDS(res_mcmc, opts$outfile)
+saveRDS(gtrees, opts$outfile)

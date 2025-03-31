@@ -18,8 +18,8 @@ library(ggraph)
 library(mitodrift)
 library(optparse)
 
-# repo_dir = '/broad/sankaranlab/tgao/mitodrift/mitodrift'
-# devtools::load_all(repo_dir)
+repo_dir = '/broad/sankaranlab/tgao/mitodrift/mitodrift'
+R.utils::sourceDirectory(glue('{repo_dir}/R'))
 
 option_list <- list(
     make_option(
@@ -81,7 +81,7 @@ option_list <- list(
     make_option(
         c("-f", "--freq_dat"),
         type = "character",
-        default = NULL,
+        default = '',
         help = "Mutation frequency table",
         metavar = "CHARACTER"
     ),
@@ -124,7 +124,7 @@ if (!opts$resume) {
     k = 20
     set.seed(0)
     A = mitodrift::get_transition_mat_wf(k = k, eps = opts$eps, N = opts$n_pop, n_gen = opts$n_gen)
-    liks = mitodrift::get_leaf_liks(mut_dat, mitodrift::get_vaf_bins(k = k), eps = opts$seq_err)
+    liks = get_leaf_liks(mut_dat, mitodrift::get_vaf_bins(k = k), eps = opts$seq_err, log = TRUE)
 
     message('Initial clustering')
 
@@ -183,7 +183,8 @@ if (!opts$resume) {
         )
     }
 
-    logP_list = convert_liks_to_logP_list(liks, phy_init)
+    # logP_list = convert_liks_to_logP_list(liks, phy_init)
+    logP_list = convert_logliks_to_logP_list(liks, phy_init)
 
     res = optimize_tree_cpp(
         phy_init, logP_list, logA_vec, ncores = opts$ncores,

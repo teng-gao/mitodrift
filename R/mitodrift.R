@@ -162,7 +162,7 @@ reorder_phylo = function(phy) {
 }
 
 #' @export
-get_leaf_liks = function(mut_dat, vafs, eps = 0, ncores = 1) {
+get_leaf_liks = function(mut_dat, vafs, eps = 0, ncores = 1, log = FALSE) {
 
     variants = unique(mut_dat$variant)
 
@@ -180,20 +180,26 @@ get_leaf_liks = function(mut_dat, vafs, eps = 0, ncores = 1) {
                     function(x, key) {
                         l = sapply(vafs,
                             function(v) {
-                                dbinom(x = x$a, size = x$d, prob = pmin(v + eps, 1))
+                                dbinom(x = x$a, size = x$d, prob = pmin(v + eps, 1), log = log)
                         })
                         tibble(l, vaf = vafs)
                 }) %>%
                 ungroup()
         }) %>%
         bind_rows()
+
+    if (log) {
+        na_fill = 0
+    } else {
+        na_fill = 1
+    }
         
     liks = liks %>%
         split(.$variant) %>%
         mclapply(
             mc.cores = ncores,
             function(V) {
-                V %>% reshape2::dcast(vaf ~ cell, value.var = 'l', fill = 1) %>%
+                V %>% reshape2::dcast(vaf ~ cell, value.var = 'l', fill = na_fill) %>%
                 tibble::column_to_rownames('vaf') %>%
                 as.matrix
             }
@@ -226,11 +232,41 @@ convert_liks_to_logP_list <- function(liks, phy) {
     })
 
     logP_list <- lapply(P_all, function(P) {
-        as.vector(log(t(P)))
+        as.vector(t(log(P)))
     })
     
     return(logP_list)
 }
+
+convert_logliks_to_logP_list <- function(logliks, phy) {
+    
+    E <- reorder_phylo(phy)$edge
+    phy$node.label <- NULL
+    
+    P_all <- lapply(logliks, function(liks_mut) {
+        n_tips <- length(phy$tip.label)
+        n_nodes <- phy$Nnode
+        root_node <- E[nrow(E), 1]
+        k <- nrow(liks_mut)
+        
+        P <- matrix(nrow = k, ncol = n_tips + n_nodes)
+        rownames(P) <- rownames(liks_mut)
+
+        # Tip likelihoods, internal node likelihoods, root node set up
+        P[, 1:n_tips] <- liks_mut[, phy$tip.label]
+        P[, (n_tips + 1):(n_tips + n_nodes)] <- log(1/k)
+        P[, root_node] <- log(c(1, rep(0, k - 1)))
+        
+        return(P)
+    })
+
+    logP_list <- lapply(P_all, function(P) {
+        as.vector(t(P))
+    })
+    
+    return(logP_list)
+}
+
 
 #' @export 
 get_vaf_bins = function(k) {
@@ -993,6 +1029,9 @@ to_phylo_reorder = function(graph) {
         n
     })
     phylo = reorder(phylo)
+    if (length(phylo$edge.length) == 0) {
+        phylo$edge.length = NULL
+    }
     return(phylo)
 }
 
@@ -1031,6 +1070,12 @@ phylo_to_gtree = function(phy) {
     gtree <- tbl_graph(nodes = nodes, edges = edges, directed = TRUE)
     
     return(gtree)
+}
+
+#' @export
+trim_tree = function(tree, conf) {
+    tree = TreeTools::CollapseNode(tree, which(tree$node.label < conf) + length(tree$tip.label))
+    return(tree)
 }
 
 #' @export
