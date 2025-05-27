@@ -44,7 +44,14 @@ option_list <- list(
         c("-b", "--burnin"),
         type = "integer",
         default = 0,
-        help = "Output file .RDS",
+        help = "Burnin",
+        metavar = "INTEGER"
+    ),
+    make_option(
+        c("-m", "--max_iter"),
+        type = "integer",
+        default = Inf,
+        help = "Maximum iteration",
         metavar = "INTEGER"
     )
 )
@@ -61,7 +68,7 @@ res_ml = readRDS(opts$tree_file)
 tree_ml = res_ml$tree_list %>% .[[length(.)]]
 
 res_mcmc = readRDS(opts$mcmc_file)
-trees_mcmc = collect_chains(res_mcmc, burnin = opts$burnin)
+trees_mcmc = collect_chains(res_mcmc, burnin = opts$burnin, max_iter = opts$max_iter)
 
 tree_ml = add_clade_freq(tree_ml, trees_mcmc)
 
@@ -74,6 +81,6 @@ trees_trim = lapply(
         tree$conf = conf
         return(tree)
     }
-)
+) %>% setNames(as.character(confs))
 
 saveRDS(trees_trim, opts$outfile)

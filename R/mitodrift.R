@@ -46,6 +46,7 @@ optimize_tree_cpp = function(
             stop("tree_init, logP, and logA must be provided when resume is FALSE")
         }
         tree_init = reorder_phylo(tree_init)
+        tree_init$edge.length = NULL
         tree_current = tree_init
         max_current = sum(score_tree_func(tree_current$edge, logP, logA))
         tree_current$logZ = max_current
@@ -957,12 +958,16 @@ run_tree_mcmc = function(
 }
 
 #' @export
-collect_chains = function(res, burnin = 0) {
+collect_chains = function(res, burnin = 0, max_iter = Inf) {
+
+    if (max_iter < burnin) {
+        stop('Max iter needs to be greater than burnin')
+    }
 
     res = res[res %>% sapply(length) > 0]
 
     mcmc_trees = res %>% lapply(function(trees){
-            trees = trees[(burnin+1):length(trees)]
+            trees = trees[(burnin+1):min(length(trees), max_iter)]
             lapply(trees, function(tree){
                 tree$edge.length = NULL
                 tree$node.label = NULL
@@ -990,7 +995,7 @@ add_conf = function(gtree, phylist) {
         gtree = as_tbl_graph(gtree)
     }
     
-    conf_dict = to_phylo_reoder(gtree) %>%
+    conf_dict = to_phylo_reorder(gtree) %>%
         add_clade_freq(phylist) %>%
         parse_conf()
 
@@ -1074,7 +1079,9 @@ phylo_to_gtree = function(phy) {
 
 #' @export
 trim_tree = function(tree, conf) {
+    tree$node.label[is.na(tree$node.label)] = 0
     tree = TreeTools::CollapseNode(tree, which(tree$node.label < conf) + length(tree$tip.label))
+    tree = TreeTools::Renumber(tree)
     return(tree)
 }
 
