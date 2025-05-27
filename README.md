@@ -21,7 +21,7 @@ devtools::install_local('.')
 
 Note that depth information should be provided even if there is no alternate allele detected at the variant position (a=0), so that there is a row for each cell x variant combination.
 
-## ML tree search
+## Step 1: ML tree search
 First, run `inst/bin/build_tree.r` to perform ML tree search.
 
 ```
@@ -70,7 +70,7 @@ Rscript $home/mitodrift/mitodrift/inst/bin/build_tree.r \
     -p $ncores -i 1000 -e 0.005 -n 600 -g 100
 ```
 
-## MCMC
+## Step2: MCMC
 Once ML tree search finishes, use `inst/bin/run_mcmc.r` to perform MCMC in order to estimate clade confidence.
 
 ```
@@ -106,6 +106,40 @@ Rscript $home/mitodrift/mitodrift/inst/bin/run_mcmc.r \
     -p $ncores
 ```
 
+## Step3: Trim ML tree by clade confidence
+
+```
+Options:
+	-t CHARACTER, --tree_file=CHARACTER
+		ML result RDS file
+
+	-c CHARACTER, --mcmc_file=CHARACTER
+		MCMC result RDS file
+
+	-o CHARACTER, --outfile=CHARACTER
+		Output file .RDS
+
+	-b INTEGER, --burnin=INTEGER
+		Burnin
+
+	-m INTEGER, --max_iter=INTEGER
+		Maximum iteration
+
+	-h, --help
+		Show this help message and exit
+```
+
+Example command:
+```
+Rscript trim_ml_tree.r \
+    -t $ml_out \
+    -c $mcmc_out \
+    -o $outfile \
+    -b 100 \
+    -m 1000
+```
+This produces an RDS file containing a list of trimmed phylogenies with different branch confidence cutoffs. 
+
 # Visualizing results
 ## ML tree
 ```
@@ -126,21 +160,21 @@ plot_phylo_heatmap2(
 Result:
 ![image](https://github.com/user-attachments/assets/c06daeeb-2dd4-4f35-bb8a-6e14c295f80a)
 
-## Consensus tree with clade confidence
+## Trimmed (consensus) ML tree with clade confidence
 ```
-# KX003_1_tree_list is an example output of MCMC module
-mcmc_trees = collect_chains(KX003_1_mcmc, burnin = 100)
-gtree_cons = get_consensus(mcmc_trees, p = 0.5)
+# {sample}_ml_trim.rds is an example output of trim ML R script
+
+phyML_trim_all = readRDS(glue('~/broad/sankaranlab/tgao/mitodrift/results/{sample}_ml_trim.rds'))
 
 plot_phylo_heatmap2(
-    gtree_cons, 
-    KX003_1_mut_dat,
+    phyML_trim_all[['0.5']], # choose tree with branch confidence cutoff = 0.5
+    mut_dat, # input mutation dataframe for the ML module
     dot_size = 1,
     branch_width = 0.3,
     branch_length = F,
     node_conf = T, 
     het_max = 1,
-    title = 'ML'
+    title = 'Trimmed ML'
 )
 ```
 Result:
