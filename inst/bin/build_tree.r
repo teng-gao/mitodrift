@@ -202,4 +202,6 @@ if (!opts$resume) {
 
 }
 
+message('All done!')
+
 saveRDS(res, opts$outfile)

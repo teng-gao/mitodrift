@@ -1,7 +1,7 @@
 #' @export 
 plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = TRUE, dot_size = 1, ylim = NULL,
     clade_annot = NULL, tip_annot = NULL,
-    title = NULL, auc = FALSE, clone_bar = FALSE, label_site = FALSE, cell_annot = NULL, tip_lab = FALSE, node_lab = FALSE,
+    title = NULL, auc = FALSE, clone_bar = FALSE, label_site = FALSE, cell_annot = NULL, tip_lab = FALSE, node_lab = FALSE, layered = FALSE,
     het_max = 0.1, conf_min = 0.5, conf_label = FALSE, branch_length = TRUE, node_conf = FALSE, annot_scale = NULL, annot_legend = FALSE, label_group = FALSE,
     annot_legend_title = '', text_size = 3, label_size = 1, mut = NULL, post_max = FALSE, mark_low_cov = FALSE, facet_by_group = FALSE, flip = FALSE) {
 
@@ -20,19 +20,21 @@ plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = T
         ggtree(ladderize = TRUE, linewidth = branch_width) + 
         theme_bw() +
         theme(
-            plot.margin = margin(0, 0.1, 0, 0, unit = "mm"), 
+            plot.margin = margin(0, 0, 0, 0, unit = "mm"), 
             axis.title.x = element_blank(), 
+            axis.line.x = element_blank(), 
             axis.ticks.x = element_blank(), 
             axis.text.x = element_blank(),
             axis.text.y = element_text(), 
             axis.line.y = element_line(),
             axis.ticks.y = element_line(), 
+            axis.ticks.length.x = unit(0, "pt"),
             panel.background = element_rect(fill = "transparent", colour = NA), 
             plot.background = element_rect(fill = "transparent", color = NA),
             panel.grid = element_blank()
         ) + 
         coord_flip() +
-        scale_x_reverse() +
+        scale_x_reverse(expand = expansion(mult = 0.05)) +
         scale_y_continuous(expand = expansion(add = 1)) +
         ggtitle(title)
 
@@ -99,15 +101,18 @@ plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = T
             )
     }
 
-    cell_order = p_tree$data %>% filter(isTip) %>% arrange(y) %>% 
-        pull(label)
-    
-    df_var = df_var %>% filter(cell %in% cell_order) %>%
-        mutate(cell = factor(as.integer(factor(cell, cell_order)), 1:length(cell_order)))
-
     if (!'vaf' %in% colnames(df_var)) {
         df_var = df_var %>% mutate(vaf = a/d)
     }
+
+    cell_order = p_tree$data %>% filter(isTip) %>% arrange(y) %>% 
+        pull(label)
+
+    mut_order = order_muts(cell_order, df_var)
+    
+    df_var = df_var %>% filter(cell %in% cell_order) %>%
+        mutate(variant = factor(variant, rev(mut_order))) %>%
+        mutate(cell = factor(as.integer(factor(cell, cell_order)), 1:length(cell_order)))
 
     p_heatmap = df_var %>% 
         # filter(vaf > 0) %>%
@@ -176,7 +181,7 @@ plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = T
             mutate(cell = factor(cell, cell_order)) %>%  
             annot_bar(legend = annot_legend, label_group = label_group, 
                 label_size = text_size/2,
-                annot_scale = annot_scale, legend_title = annot_legend_title)
+                annot_scale = annot_scale, legend_title = annot_legend_title, layered = layered)
 
         if (!is.null(clade_annot)) {
             (p_tree / p_bar / p_clade / p_heatmap) + plot_layout(heights = c(1, 0.1, 1, 2))
@@ -188,6 +193,125 @@ plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = T
     }
 }
 
+# expect columns cell and annot
+#' @keywords internal
+annot_bar = function(
+    D, transpose = FALSE, legend = TRUE, legend_title = '', size = 0.05, label_group = FALSE, label_size = 5,
+    pal_annot = NULL, annot_scale = NULL, raster = FALSE, layered = FALSE
+) {
+
+    if (layered) {
+        p = ggplot(D, aes(x = cell, y = annot, fill = annot)) +
+            scale_y_discrete(expand = expansion(add = 1.5))
+    } else {
+        p = ggplot(D, aes(x = cell, y = legend_title, fill = annot)) +
+            scale_y_discrete(expand = expansion(mult = 0.01))
+    }
+
+    p = p +
+        geom_tile(width=0.8, height=0.8, size = 0) +
+        theme_void() +
+        scale_x_discrete(expand = expansion(add = 1), drop = F) +
+        theme(
+            panel.spacing = unit(0.1, 'mm'),
+            panel.border = element_rect(size = 0, color = 'black', fill = NA),
+            panel.background = element_rect(fill = 'white'),
+            strip.background = element_blank(),
+            strip.text = element_blank(),
+            # axis.text = element_text(size = 8),
+            axis.text.y = element_blank(),
+            axis.text.x = element_blank(),
+            plot.margin = margin(0.1,0,0.1,0, unit = 'mm')
+        )
+
+    if (label_group) {
+        p = p + geom_text(aes(label = annot), size = label_size, angle = 90)
+    }
+
+    # if (!is.null(annot_scale)) {
+    #     p = p + annot_scale
+    # } else {
+    #     if (is.null(pal_annot)) {
+    #         pal = c("#E41A1C", "#377EB8", "#4DAF4A", "#984EA3", "#FF7F00", "#FFFF33", "#A65628", "#F781BF")
+    #         getPalette = colorRampPalette(pal)
+    #         pal_annot = getPalette(length(unique(D$annot)))
+    #     }
+    #     p = p + scale_fill_manual(values = pal_annot, na.value = 'gray90', limits = force)
+    # }
+
+    p = p + scale_fill_discrete(na.value = 'gray90', limits = force)
+
+    if (transpose) {
+        p = p + coord_flip() +
+            theme(plot.margin = margin(0,0.5,0,0.5, unit = 'mm'))
+    }
+
+    if (legend) {
+        p = p + guides(fill = guide_legend(keywidth = unit(3, 'mm'), keyheight = unit(1, 'mm'), title = legend_title))
+    } else {
+        p = p + guides(fill = 'none')
+    }
+
+    if (raster) {
+        p = ggrastr::rasterize(p, layers = 'Tile', dpi = 300)
+    }
+
+    return(p)
+}
+
+
+order_muts_binary = function(cell_order, mut_dat) {
+    
+    vaf_mat = mut_dat %>% reshape2::dcast(variant ~ cell, value.var = 'vaf') %>%
+        tibble::column_to_rownames('variant')
+    
+    pres <- vaf_mat > 0
+    tip_idx   <- seq_along(cell_order)
+    names(tip_idx) <- cell_order
+    
+    # weighted-average tip for each variant
+    avg_tip_pos <- sapply(rownames(vaf_mat), function(v) {
+      cells <- which(pres[v,])
+      mean(tip_idx[ colnames(vaf_mat)[cells] ])
+    })
+    
+    mut_order <- names(sort(avg_tip_pos))
+
+    return(mut_order)
+}
+
+order_muts <- function(cell_order, mut_dat) {
+  
+  # 1) cast to a variant × cell matrix of continuous VAFs
+  vaf_mat <- mut_dat %>% 
+    reshape2::dcast(variant ~ cell, value.var = 'vaf') %>%
+    tibble::column_to_rownames('variant')
+  
+  # 2) make sure columns follow the tree’s tip order
+  vaf_mat <- vaf_mat[, cell_order, drop = FALSE]
+  
+  # 3) create an index for each tip
+  tip_idx <- seq_along(cell_order)
+  names(tip_idx) <- cell_order
+  
+  # 4) compute weighted-median tip for each variant
+  med_tip_pos <- apply(vaf_mat, 1, function(vafs) {
+    # treat missing as zero
+    vafs[is.na(vafs)] <- 0
+    tot <- sum(vafs)
+    if (tot == 0) {
+      return(NA_real_)    # no signal → put at end
+    }
+    # cumulative weight
+    cs <- cumsum(vafs)
+    # first tip where cum-weight ≥ half total
+    k  <- which(cs >= tot/2)[1]
+    tip_idx[k]
+  })
+  
+  # 5) sort variants by that median tip
+  names(sort(med_tip_pos, na.last = TRUE))
+}
 
 plot_phylo_circ = function(gtree, node_conf = FALSE, conf_label = FALSE, title = '', pwidth = 0.25,
     branch_width = 0.3, dot_size = 1, conf_min = 0.5, cell_annot = NULL, tip_annot = NULL, legend = FALSE, layered = FALSE) {
