@@ -37,7 +37,7 @@ option_list <- list(
     make_option(
         c("-o", "--outfile"),
         type = "character",
-        help = "Output file .RDS",
+        help = "Output tree file .newick",
         metavar = "CHARACTER"
     ),
     make_option(
@@ -53,34 +53,33 @@ option_list <- list(
         default = Inf,
         help = "Maximum iteration",
         metavar = "INTEGER"
+    ),
+    make_option(
+        c("-u", "--use_nj"),
+        type = "logical",
+        default = FALSE,
+        help = "Whether to use the NJ tree as the initial tree",
+        metavar = "LOGICAL"
     )
 )
 
 opt_parser <- OptionParser(option_list = option_list)
 opts <- parse_args(opt_parser)
 
-
 for (arg in names(opts)) {
     message(paste0(arg, ": ", opts[[arg]]))
 }
 
 res_ml = readRDS(opts$tree_file)
-tree_ml = res_ml$tree_list %>% .[[length(.)]]
+
+if (opts$use_nj) {
+    tree = res_ml$tree_list[[1]]
+} else {
+    tree = res_ml$tree_list %>% .[[length(.)]]
+}
 
 res_mcmc = readRDS(opts$mcmc_file)
 trees_mcmc = collect_chains(res_mcmc, burnin = opts$burnin, max_iter = opts$max_iter)
+tree = add_clade_freq(tree, trees_mcmc)
 
-tree_ml = add_clade_freq(tree_ml, trees_mcmc)
-
-confs = seq(0, 1, by = 0.05)
-
-trees_trim = lapply(
-    confs,
-    function(conf) {
-        tree = trim_tree(tree_ml, conf = conf)
-        tree$conf = conf
-        return(tree)
-    }
-) %>% setNames(as.character(confs))
-
-saveRDS(trees_trim, opts$outfile)
+write.tree(tree, opts$outfile)

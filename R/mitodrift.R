@@ -96,11 +96,25 @@ optimize_tree_cpp = function(
 # to fix: apparently the init tree has to be rooted otherwise to_phylo_reoder won't work. 
 #' @export
 optimize_tree = function(
-    gtree_init, A, liks, max_iter = 100, ncores = 1, trace = TRUE, outfile = NULL, trace_interval = 5
+    gtree_init, A, liks, max_iter = 100, ncores = 1, trace = TRUE, outfile = NULL,
+    trace_interval = 5, polytomy = FALSE, d = Inf, method = 'nni_multi', resume = FALSE
 ) {
 
-    gtree = gtree_init
-    tree_list = list()
+    if (resume) {
+        if (is.null(outfile)) {
+            stop('Outfile must be provided if resume = FALSE')
+        }
+        message('Resuming from saved outfile')
+        tree_list = readRDS(outfile)
+        gtree = tree_list %>% .[[length(.)]]
+        score = sum(gtree$logZ)
+        # liks = res$params$A
+        # A = res$params$liks
+    } else {
+        gtree = gtree_init
+        tree_list = list()
+    }
+
     runtime = c(0,0,0)
 
     for (i in 1:max_iter) {
@@ -120,8 +134,15 @@ optimize_tree = function(
 
         message(paste(i, round(score, 4), paste0('(', signif(unname(runtime[3]),2), 's', ')')))
 
-        # nei = TreeSearch::NNI(as.phylo(gtree), edgeToBreak = -1)
-        nei = nni_multi_d(as.phylo(gtree), d = 2)
+        if (polytomy) {
+            if (method == 'nni_multi') {
+                nei = nni_multi(as.phylo(gtree), d = d)
+            } else {
+                nei = nnt(as.phylo(gtree))
+            }
+        } else {
+            nei = TreeSearch::NNI(as.phylo(gtree), edgeToBreak = -1)
+        }
         
         gtrees_nei = mclapply(
             nei,
@@ -409,6 +430,7 @@ decode_tree = function(
     k = ncol(A)
     vafs = as.numeric(colnames(A))
     # convert tree to CRF
+    tn$node.label = NULL
     Gn = as.igraph(tn)
     
     gtree = as_tbl_graph(Gn)
@@ -876,6 +898,8 @@ run_tree_mcmc_r = function(
         propose_tree = TreeSearch::NNI
     } else if (move_type == 'NNI_multi') {
         propose_tree = rNNI_multi
+    } else if (move_type == 'NNT') {
+        propose_tree = rNNT
     } else {
         stop('Invalid move type')
     }
@@ -924,11 +948,24 @@ run_tree_mcmc_r = function(
 # to fix: apparently the init tree has to be rooted otherwise to_phylo_reoder won't work. 
 #' @export
 run_tree_mcmc = function(
-    phy_init, logP_list, logA_vec, max_iter = 100, nchains = 1, ncores = 1, trace = TRUE, outfile = NULL
+    phy_init, logP_list, logA_vec, max_iter = 100, nchains = 1, ncores = 1, outfile = NULL, resume = FALSE
 ) {
 
+    chains = 1:nchains
+
+    if (!is.null(outfile)) {
+        outdir = dirname(outfile)
+        fname = basename(outfile)
+        if (resume) {
+            done = sapply(chains, function(s) {file.exists(glue('{outdir}/chain{s}_{fname}'))})
+            chains = chains[!done]
+        }
+    }
+
+    message('Running MCMC with ', length(chains), ' chains')
+
     res = mclapply(
-        1:nchains,
+        chains,
         mc.cores = ncores,
         function(s) {
 
@@ -942,15 +979,28 @@ run_tree_mcmc = function(
 
             class(tree_list) = 'multiPhylo'
 
-            if (trace &!is.null(outfile)) {
-                outdir = dirname(outfile)
-                fname = basename(outfile)
+            if (!is.null(outfile)) {
                 saveRDS(tree_list, glue('{outdir}/chain{s}_{fname}'))
             }
 
             return(tree_list)
         }
     )
+
+    if (resume & !is.null(outfile)) {
+
+        chains_prev = setdiff(1:nchains, chains)
+
+        res_prev = mclapply(
+            chains_prev,
+            mc.cores = ncores,
+            function(s) {
+                readRDS(glue('{outdir}/chain{s}_{fname}'))
+            }
+        )
+        res = c(res_prev, res)
+
+    }
 
     saveRDS(res, outfile)
 
@@ -1092,70 +1142,7 @@ get_consensus = function(phylist, p = 0.5, check_labels = FALSE, rooted = TRUE, 
     return(gtree_cons)
 }
 
-nnin_multi <- function(tree, n) {
-  # Remove any existing "order" attribute so reorder() works cleanly
-  attr(tree, "order") <- NULL
-  
-  # Prepare variables
-  edge   <- matrix(tree$edge, ncol = 2)
-  parent <- edge[, 1]
-  child  <- edge[, 2]
-  k      <- min(parent) - 1
-  
-  # Find the n-th internal edge (child > k means "child is an internal node")
-  ind <- which(child > k)[n]
-  if (is.na(ind)) return(NULL)
-  
-  # p1 → p2 is the selected internal edge
-  p1 <- parent[ind]
-  p2 <- child[ind]
-  
-  # All children of p1 (including p2); we will pick siblings x ≠ p2
-  c1_inds  <- which(parent == p1)
-  siblings <- child[c1_inds]
-  x_list   <- siblings[siblings != p2]
-  
-  # All children of p2; we will pick y from these
-  c2_inds <- which(parent == p2)
-  y_list  <- child[c2_inds]
-  
-  # Container for all resulting trees
-  result <- list()
-  
-  # For each pair (x, y), swap x under p2 and y under p1
-  for (x in x_list) {
-    for (y in y_list) {
-      tr_new <- tree
-      
-      # Locate the edge‐rows where child == x and child == y
-      idx_x <- which(tr_new$edge[, 2] == x)
-      idx_y <- which(tr_new$edge[, 2] == y)
-      
-      # Swap parents: detach x from p1 and attach to p2; detach y from p2 and attach to p1
-      tr_new$edge[idx_x, 1] <- p2
-      tr_new$edge[idx_y, 1] <- p1
-      
-      # If there are edge lengths, swap those too so lengths stay consistent
-      if (!is.null(tree$edge.length)) {
-        tmp <- tr_new$edge.length[idx_x]
-        tr_new$edge.length[idx_x] <- tr_new$edge.length[idx_y]
-        tr_new$edge.length[idx_y] <- tmp
-      }
-      
-      # Re‐order the tree in postorder so ape will maintain a valid phylo object
-      tr_new <- reorder(tr_new, "postorder")
-      
-      # Add to result list
-      result[[length(result) + 1]] <- tr_new
-    }
-  }
-
-  class(result) = 'multiPhylo'
-  
-  return(result)
-}
-
-nnin_multi_d <- function(tree, n, d = 1) {
+nnin_multi <- function(tree, n, d = Inf) {
   # Remove any existing "order" attribute so reorder() works cleanly
   attr(tree, "order") <- NULL
   
@@ -1226,7 +1213,7 @@ nnin_multi_d <- function(tree, n, d = 1) {
   return(result)
 }
 
-nni_multi <- function(tree) {
+nni_multi <- function(tree, d = Inf) {
   # 1) Identify internal edges by finding rows where 'child > k'
   edge   <- matrix(tree$edge, ncol = 2)
   parent <- edge[, 1]
@@ -1244,7 +1231,7 @@ nni_multi <- function(tree) {
   results <- list()
   for (i in seq_along(internal_edges)) {
     # i is the rank of this internal edge among all internal edges
-    candidate_trees <- nnin_multi(tree, i)
+    candidate_trees <- nnin_multi(tree, i, d)
     if (!is.null(candidate_trees) && length(candidate_trees) > 0) {
       # Append all returned trees to our master list
       for (tr in candidate_trees) {
@@ -1258,40 +1245,7 @@ nni_multi <- function(tree) {
   return(results)
 }
 
-
-nni_multi_d <- function(tree, d = 1) {
-  # 1) Identify internal edges by finding rows where 'child > k'
-  edge   <- matrix(tree$edge, ncol = 2)
-  parent <- edge[, 1]
-  child  <- edge[, 2]
-  k      <- min(parent) - 1
-  
-  # internal_edges is the vector of row‐indices for edges whose 'child' is an internal node
-  internal_edges <- which(child > k)
-  if (length(internal_edges) == 0) {
-    return(list())  # no internal edges → no NNI moves possible
-  }
-  
-  # 2) For each internal edge (indexed by its position in the 'child>k' list),
-  #    call nnin_multi(tree, n) where n = rank among internal edges
-  results <- list()
-  for (i in seq_along(internal_edges)) {
-    # i is the rank of this internal edge among all internal edges
-    candidate_trees <- nnin_multi_d(tree, i, d)
-    if (!is.null(candidate_trees) && length(candidate_trees) > 0) {
-      # Append all returned trees to our master list
-      for (tr in candidate_trees) {
-        results[[ length(results) + 1 ]] <- tr
-      }
-    }
-  }
-
-  class(results) = 'multiPhylo'
-  
-  return(results)
-}
-
-rNNI_multi <- function(tree) {
+rNNI_multi <- function(tree, d = Inf) {
   # Identify “k” so that any child > k is an internal node
   edge   <- matrix(tree$edge, ncol = 2)
   parent <- edge[,1]
@@ -1309,7 +1263,7 @@ rNNI_multi <- function(tree) {
   n <- sample(seq_along(internal_edges), 1)
   
   # Get the list of possible swaps for that edge
-  moves <- nnin_multi(tree, n)
+  moves <- nnin_multi(tree, n, d)
   if (is.null(moves) || length(moves) == 0) {
     return(NULL)  # edge had no valid multifurcation‐NNI moves
   }
@@ -1317,4 +1271,112 @@ rNNI_multi <- function(tree) {
   # Randomly choose one of the returned trees
   selected <- moves[[ sample(seq_along(moves), 1) ]]
   return(selected)
+}
+
+
+nntn <- function(tree, n) {
+  # ——— remove any existing “order” attribute, so reorder() won’t choke ———
+  attr(tree, "order") <- NULL
+
+  # Extract parent/child arrays:
+  edges       <- matrix(tree$edge, ncol = 2)
+  parent      <- edges[,1]
+  child       <- edges[,2]
+  leaf_cutoff <- min(parent) - 1    # nodes 1:leaf_cutoff are tips
+
+  # All “internal edges” are those where child > leaf_cutoff
+  internal_edges <- which(child > leaf_cutoff)
+  if (n < 1 || n > length(internal_edges)) {
+    return(list())  # invalid index → no neighbors
+  }
+  ind <- internal_edges[n]
+
+  # Let p1 -> p2 be the chosen internal edge
+  p1 <- parent[ind]
+  p2 <- child[ind]
+
+  # Gather p1’s children (including p2) and p2’s children
+  c1_inds   <- which(parent == p1)
+  children1 <- child[c1_inds]      # all nodes directly under p1
+  x_list    <- setdiff(children1, p2)  # all siblings of p2 under p1
+
+#   print(x_list)
+
+  c2_inds   <- which(parent == p2)
+  children2 <- child[c2_inds]      # all nodes directly under p2
+  y_list    <- children2           # all children under p2
+
+#   print(y_list)
+
+  result <- list()
+
+  # 1) Move “x” from p1 → p2 (downwards), but only if p1 has ≥ 3 children
+  #    (so that after removing x, p1 still has ≥2 children)
+  if (length(children1) >= 3) {
+    for (x in x_list) {
+      tr_new <- tree
+
+      # re‐attach x under p2
+      idx_x <- which(tr_new$edge[,2] == x)
+      tr_new$edge[idx_x, 1] <- p2
+
+      # reorder to get a valid “phylo” object again
+      tr_new <- reorder(tr_new, "postorder")
+      result[[ length(result) + 1 ]] <- tr_new
+    }
+  }
+
+  # 2) Move “y” from p2 → p1 (upwards), but only if p2 has ≥ 3 children
+  #    (so that after removing y, p2 still has ≥2 children)
+  if (length(children2) >= 3) {
+    for (y in y_list) {
+      tr_new <- tree
+
+      # re‐attach y under p1
+      idx_y <- which(tr_new$edge[,2] == y)
+      tr_new$edge[idx_y, 1] <- p1
+
+      tr_new <- reorder(tr_new, "postorder")
+      result[[ length(result) + 1 ]] <- tr_new
+    }
+  }
+
+  class(result) <- "multiPhylo"
+  return(result)
+}
+
+
+nnt <- function(tree) {
+  # Remove any existing “order” attribute
+  attr(tree, "order") <- NULL
+
+  # Identify all internal edges
+  edges       <- matrix(tree$edge, ncol = 2)
+  parent      <- edges[,1]
+  child       <- edges[,2]
+  leaf_cutoff <- min(parent) - 1
+  internal_edges <- which(child > leaf_cutoff)
+
+  if (length(internal_edges) == 0) {
+    return(list())  # no internal edges → no moves
+  }
+
+  all_neighbors <- list()
+  for (i in seq_along(internal_edges)) {
+    nb_i <- nntn(tree, i)
+    if (length(nb_i) > 0) {
+      for (tr in nb_i) {
+        all_neighbors[[ length(all_neighbors) + 1 ]] <- tr
+      }
+    }
+  }
+
+  class(all_neighbors) <- "multiPhylo"
+  return(all_neighbors)
+}
+
+rNNT <- function(tree) {
+  all_nb <- nnt(tree)  
+  choice <- sample(seq_along(all_nb), 1)
+  return(all_nb[[choice]])
 }
