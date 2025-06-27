@@ -1090,8 +1090,8 @@ to_phylo_reorder = function(graph) {
     return(phylo)
 }
 
-add_clade_freq = function(phy, phys) {
-    freqs = prop.clades(phy, phys, rooted = TRUE)/length(phys)
+add_clade_freq = function(phy, phys, rooted = TRUE) {
+    freqs = prop.clades(phy, phys, rooted = rooted)/length(phys)
     phy$node.label = freqs
     return(phy)
 }
@@ -1380,3 +1380,268 @@ rNNT <- function(tree) {
   choice <- sample(seq_along(all_nb), 1)
   return(all_nb[[choice]])
 }
+
+getConfidentClades <- function(pp, p = 0.9, max_size = Inf, labels = TRUE, singletons = TRUE) {
+    # extract clade sizes and confidences
+    tip_labels   <- attr(pp, "labels")
+    sizes <- vapply(pp, length, integer(1))
+    nums  <- attr(pp, "number")
+    nt    <- nums[1]
+    if (is.null(nums)) {
+        stop("prop.part object must have 'number' attribute")
+    }
+    confs <- nums / nt
+
+    # exclude the trivial partition (all cells) and too‐large clades
+    trivial_idx   <- which(sizes == max(sizes))
+    candidate_idx <- setdiff(seq_along(pp), trivial_idx)
+    candidate_idx <- candidate_idx[sizes[candidate_idx] <= max_size]
+
+    # 1) iterative selection of confident, disjoint clades
+    selected_idx <- list()
+    remaining   <- candidate_idx
+    repeat {
+        # rank remaining by descending size
+        ord  <- remaining[order(sizes[remaining], decreasing = TRUE)]
+        # pick first with conf > p
+        keep <- ord[confs[ord] > p]
+        if (length(keep) == 0) break
+        pick <- keep[1]
+        selected_idx[[length(selected_idx) + 1]] <- pp[[pick]]
+        # remove any clades overlapping this pick
+        pick_cells <- pp[[pick]]
+        remaining  <- remaining[
+            vapply(remaining, function(i) {
+                length(intersect(pp[[i]], pick_cells)) == 0
+            }, logical(1))
+        ]
+    }
+
+    # 2) identify all tips and add singletons for any unassigned tips
+    if (singletons) {
+        all_tips_idx <- seq_along(tip_labels)
+        assigned     <- unique(unlist(selected_idx))
+        unassigned   <- setdiff(all_tips_idx, assigned)
+        # add each unassigned tip as a singleton clade
+        selected_idx <- c(
+            selected_idx,
+            lapply(unassigned, function(i) i)
+        )
+    }
+
+    # 3) optionally map indices to labels
+    if (labels) {
+        selected <- lapply(selected_idx, function(cl) tip_labels[cl])
+    } else {
+        selected <- selected_idx
+    }
+
+    return(selected)
+}
+
+find_far_nodes = function(phy) {
+    # assume phy is a rooted ape::phylo
+    root <- Ntip(phy) + 1
+    
+    # 1) immediate internal children of the root
+    imm_int <- phy$edge[phy$edge[,1] == root, 2]
+    imm_int <- imm_int[imm_int > Ntip(phy)]
+    
+    # 2) all internal nodes excluding the root
+    all_int <- (Ntip(phy)+1):(Ntip(phy) + phy$Nnode)
+    all_int = all_int[all_int != root]
+    
+    # 3) those at distance > 1 from root
+    far_int <- setdiff(all_int, imm_int)
+
+    return(far_int)
+
+}
+
+merge_trees = function(subtrees, collapse = FALSE) {
+    phy_merge = subtrees %>%
+        lapply(function(tr){TreeTools::AddTip(tr, label = 'out', where = 0)}) %>%
+        Reduce(bind.tree, .) %>%
+        drop.tip('out')
+    if (collapse) {
+        phy_merge = phy_merge %>% TreeTools::CollapseNode(find_far_nodes(.))
+    }
+    return(phy_merge)
+}
+
+one_node_depth2 <- function(tree, exclude_root = FALSE) {
+    bifur  <- castor::is_bifurcating(tree)
+    Ntips  <- length(tree$tip.label)
+    root   <- Ntips + 1L
+
+    # find all edges that end in a tip
+    tipnodes <- which(tree$edge[,2] %in% seq_len(Ntips))
+    edges    <- tree$edge[tipnodes, , drop=FALSE]
+
+    df <- data.frame(
+        node   = edges[,1],
+        tip    = edges[,2],
+        pat    = tree$edge.length[tipnodes]
+    )
+
+    if (exclude_root) {
+        df <- df %>% dplyr::filter(node != root)
+    }
+
+    # now group by internal node and keep only those with ≥2 tips
+    df2 <- df %>%
+        dplyr::group_by(node) %>%
+        dplyr::mutate(clades = list(tip)) %>%
+        dplyr::rowwise() %>%
+        dplyr::filter(length(clades) >= 2)
+
+    # build the tip‐tip adjacency
+    indices <- df2 %>%
+        dplyr::select(-tip, -pat) %>%
+        dplyr::distinct() %>%
+        dplyr::pull(clades) %>%
+    {
+        if (!bifur) {
+            lapply(., function(x) t(utils::combn(x, 2))) %>%
+                do.call(rbind, .)
+        } else {
+            do.call(rbind, .)
+        }
+    }
+
+    mat <- Matrix::sparseMatrix(
+        i = c(indices[,1], indices[,2]),
+        j = c(indices[,2], indices[,1]),
+        dims = c(Ntips, Ntips)
+    )
+
+    mp <- mean(df2$pat) * 2
+
+    list(W = mat, mean.pat = mp, pats = df2$pat)
+}
+
+one_node_tree_dist2 = function(tree, norm = TRUE, exclude_root = FALSE) {
+    w <- one_node_depth2(tree, exclude_root = exclude_root)$W
+    if (norm == TRUE) {
+        w <- PATH:::rowNorm(w)
+    }
+    w <- w/sum(w)
+    return(w)
+}
+
+# apparently rooted and unrooted produce different number of internal nodes
+extended_consensus <- function(trees = NULL, pp = NULL, p = 1, check.labels = TRUE, rooted = FALSE) {
+
+  # Recursive helper to rebuild topology from clusters
+  foo <- function(ic, node) {
+    pool <- pp[[ic]]
+    if (ic < m) {
+      for (j in (ic + 1):m) {
+        wh <- match(pp[[j]], pool)
+        if (!any(is.na(wh))) {
+          edge[pos, 1] <<- node
+          pool       <- pool[-wh]
+          edge[pos, 2] <<- nextnode <<- nextnode + 1L
+          pos        <<- pos + 1L
+          foo(j, nextnode)
+        }
+      }
+    }
+    # Attach any remaining tips directly
+    size <- length(pool)
+    if (size) {
+      ind <- pos:(pos + size - 1)
+      edge[ind, 1] <<- node
+      edge[ind, 2] <<- pool
+      pos <<- pos + size
+    }
+  }
+
+  if (!is.null(trees)) {
+    # Align tip labels
+    if (!is.null(attr(trees, "TipLabel"))) {
+        labels <- attr(trees, "TipLabel")
+    } else {
+        labels <- trees[[1]]$tip.label
+        if (check.labels) trees <- .compressTipLabel(trees)
+    }
+
+    # Optionally unroot for unrooted consensus
+    if (!rooted) trees <- root(trees, 1)
+
+    ntree <- length(trees)
+
+    # Extract all splits and their frequencies
+    if (is.null(pp)) {
+        pp <- prop.part(trees, check.labels = FALSE)
+    }
+  }
+
+  labels <- attr(pp, "labels")
+  ntree  <- attr(pp, "number")[1]
+
+  if (!rooted) {
+    pp <- postprocess.prop.part(pp, "SHORTwise")
+    pp[[1]] <- seq_along(labels)
+  }
+
+  # Threshold by frequency
+  bs  <- attr(pp, "number")
+  sel <- bs >= p * ntree
+  pp  <- pp[sel]; bs <- bs[sel]
+
+  # Remove trivial single-tip clusters
+  lens <- lengths(pp)
+  drop <- which(lens == 1)
+  if (length(drop)) {
+    pp  <- pp[-drop]
+    bs  <- bs[-drop]
+    lens <- lens[-drop]
+  }
+
+  # Sort by cluster size
+  ind <- order(lens, decreasing = TRUE)
+  pp  <- pp[ind]; bs <- bs[ind]
+
+  # Greedy compatibility filter
+  keep_idx <- integer(0)
+  for (i in seq_along(pp)) {
+    cl <- pp[[i]]
+    ok <- TRUE
+    for (j in keep_idx) {
+      sj <- pp[[j]]
+      ints <- intersect(cl, sj)
+      if (!(length(ints) == 0 || length(ints) == length(cl) || length(ints) == length(sj))) {
+        ok <- FALSE; break
+      }
+    }
+    if (ok) keep_idx <- c(keep_idx, i)
+  }
+  pp <- pp[keep_idx]; bs <- bs[keep_idx]
+  m  <- length(pp)
+
+  # Build edge matrix
+  n    <- length(labels)
+  edge <- matrix(0L, n + m - 1, 2)
+  if (m == 1) {
+    # star tree: all tips attach to single node
+    edge[, 1] <- n + 1L
+    edge[, 2] <- 1:n
+  } else {
+    nextnode <- n + 1L
+    pos      <- 1L
+    foo(1, nextnode)
+  }
+
+  # Assemble phylo object
+  res <- structure(
+    list(edge = edge, tip.label = labels, Nnode = m),
+    class = "phylo"
+  )
+  res <- reorder(res)
+
+  # Attach support values to nodes
+  res$node.label <- bs / ntree
+  res
+}
+

@@ -50,7 +50,7 @@ plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = T
 
         p_tree = p_tree %<+% 
             dat + 
-            ggraph::geom_node_point(aes(color = p_v), size = dot_size) +
+            ggraph::geom_node_point(aes(color = p_v), size = dot_size, stroke = 0) +
             scale_color_gradient(limits = c(0,het_max), oob = scales::oob_squish)
 
     }
@@ -119,9 +119,9 @@ plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = T
         ggplot(
             aes(x = cell, y = variant, fill = vaf)
         ) +
-        geom_tile(width = 0.8) + 
+        geom_raster() +
         theme_bw() + 
-        theme( 
+        theme(
             plot.margin = margin(0, 1, 0, 0, unit = "mm"), 
             axis.text.x = element_blank(),
             axis.ticks.x = element_blank(),
@@ -314,7 +314,9 @@ order_muts <- function(cell_order, mut_dat) {
 }
 
 plot_phylo_circ = function(gtree, node_conf = FALSE, conf_label = FALSE, title = '', pwidth = 0.25,
-    branch_width = 0.3, dot_size = 1, conf_min = 0.5, cell_annot = NULL, tip_annot = NULL, legend = FALSE, layered = FALSE) {
+    branch_width = 0.3, dot_size = 1, conf_min = 0.5, cell_annot = NULL, offset = 0.05, width = 0.8,
+    activity_mat = NULL,
+    tip_annot = NULL, legend = FALSE, layered = FALSE) {
 
     p_tree = ggtree(gtree, layout = 'circular', branch.length = "none", linewidth = branch_width) +
             ggtitle(title)
@@ -367,6 +369,52 @@ plot_phylo_circ = function(gtree, node_conf = FALSE, conf_label = FALSE, title =
         p_tree = p_tree %<+% 
             dat +
             geom_tippoint(aes(color = annot), size = dot_size, pch = 19, stroke = 0)
+    }
+
+    if (!is.null(activity_mat)) {
+
+        p_tree = p_tree + geom_fruit(
+            data = activity_mat %>%
+                reshape2::melt() %>% 
+                setNames(c('gene', 'cell', 'value')) %>%
+                group_by(gene) %>%
+                mutate(value = as.vector(scale(value))) %>%
+                ungroup() %>%
+                mutate(gene = factor(gene, genes)),
+            geom = geom_tile,
+            offset = offset,
+            width = width,
+            # linewidth = 0.3,
+            axis.params = list(
+            axis       = "x", 
+            text.angle = 45,
+            text.size  = 2,
+            vjust      = 0
+            ),
+            mapping = aes(x = gene, y = cell, fill = value),
+            show.legend = TRUE
+        ) +
+        scale_fill_gradient2(low = "blue", high = "red", limits = c(-2,2), oob = scales::oob_squish)
+
+        if (!is.null(tip_annot)) {
+            cts = unique(tip_annot$annot)
+            annot_cols = RColorBrewer::brewer.pal(length(cts), 'Set1') %>% setNames(cts)
+
+            p_tree = p_tree +
+                scale_color_manual(
+                    name   = "Cell type",   
+                    values = annot_cols
+                ) +
+                geom_point(
+                    data       = data.frame(annot = names(annot_cols)),
+                    aes(colour  = annot),
+                    x          = 0,      # plotted off the panel
+                    y          = 0,
+                    size = 0, stroke = 0,
+                    show.legend= TRUE
+                )  +
+                guides(color = guide_legend(override.aes = list('size' = 1))) 
+        }
     }
 
     return(p_tree)
