@@ -379,8 +379,7 @@ plot_phylo_circ = function(gtree, node_conf = FALSE, conf_label = FALSE, title =
                 setNames(c('gene', 'cell', 'value')) %>%
                 group_by(gene) %>%
                 mutate(value = as.vector(scale(value))) %>%
-                ungroup() %>%
-                mutate(gene = factor(gene, genes)),
+                ungroup(),
             geom = geom_tile,
             offset = offset,
             width = width,

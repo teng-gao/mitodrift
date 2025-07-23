@@ -20,7 +20,12 @@ Imports:
     tidyr,
     parallel,
     ggtree,
+    ggraph,
+    optparse,
     patchwork,
+    parallelDist,
+    RhpcBLASctl,
+    phangorn,
     glue,
     stringr
 Suggests:
