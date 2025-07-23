@@ -18,8 +18,8 @@ library(ggraph)
 library(mitodrift)
 library(optparse)
 
-repo_dir = '/broad/sankaranlab/tgao/mitodrift/mitodrift'
-R.utils::sourceDirectory(glue('{repo_dir}/R'))
+# repo_dir = '/broad/sankaranlab/tgao/mitodrift/mitodrift'
+# R.utils::sourceDirectory(glue('{repo_dir}/R'))
 
 option_list <- list(
     make_option(

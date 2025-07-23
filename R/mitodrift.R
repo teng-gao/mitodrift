@@ -261,6 +261,7 @@ convert_liks_to_logP_list <- function(liks, phy) {
     return(logP_list)
 }
 
+#' @export 
 convert_logliks_to_logP_list <- function(logliks, phy) {
     
     E <- reorder_phylo(phy)$edge

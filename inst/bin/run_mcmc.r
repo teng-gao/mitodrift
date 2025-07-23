@@ -20,8 +20,8 @@ suppressPackageStartupMessages({
     library(mitodrift)
 })
 
-repo_dir = '/broad/sankaranlab/tgao/mitodrift/mitodrift'
-devtools::load_all(repo_dir)
+# repo_dir = '/broad/sankaranlab/tgao/mitodrift/mitodrift'
+# devtools::load_all(repo_dir)
 
 option_list <- list(
     make_option(
