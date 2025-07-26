@@ -18,8 +18,8 @@ library(ggraph)
 library(optparse)
 library(mitodrift)
 
-repo_dir = '/broad/sankaranlab/tgao/mitodrift/mitodrift'
-R.utils::sourceDirectory(glue('{repo_dir}/R'))
+# repo_dir = '/broad/sankaranlab/tgao/mitodrift/mitodrift'
+# R.utils::sourceDirectory(glue('{repo_dir}/R'))
 
 option_list <- list(
     make_option(
@@ -50,7 +50,7 @@ option_list <- list(
     make_option(
         c("-m", "--max_iter"),
         type = "integer",
-        default = Inf,
+        default = 1e8,
         help = "Maximum iteration",
         metavar = "INTEGER"
     ),

@@ -29,8 +29,11 @@ optimize_tree_cpp = function(
         res = readRDS(outfile)
         tree_current = res$tree_list %>% .[[length(.)]]
         max_current = tree_current$logZ
+        start_iter = length(res$tree_list)
         logP = res$params$logP
         logA = res$params$logA
+    } else {
+        start_iter = 1
     }
 
     if (is.list(logA)) {
@@ -58,7 +61,12 @@ optimize_tree_cpp = function(
 
     runtime = c(0,0,0)
 
-    for (i in seq_len(max_iter)) {
+    if (start_iter > max_iter) {
+        message(paste0("Already completed ", start_iter - 1, " iterations. No new iterations to run for max_iter = ", max_iter, "."))
+        return(res)
+    }
+
+    for (i in start_iter:max_iter) {
 
         ptm = proc.time()
 
@@ -1091,12 +1099,14 @@ to_phylo_reorder = function(graph) {
     return(phylo)
 }
 
+#' @export
 add_clade_freq = function(phy, phys, rooted = TRUE) {
     freqs = prop.clades(phy, phys, rooted = rooted)/length(phys)
     phy$node.label = freqs
     return(phy)
 }
 
+#' @export
 parse_conf = function(phy) {
     nodes = unname(unlist(phy$nodes))
     nodes = nodes[!nodes %in% phy$tip.label]

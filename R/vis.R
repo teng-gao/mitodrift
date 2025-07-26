@@ -209,7 +209,7 @@ annot_bar = function(
     }
 
     p = p +
-        geom_tile(width=0.8, height=0.8, size = 0) +
+        geom_raster() +
         theme_void() +
         scale_x_discrete(expand = expansion(add = 1), drop = F) +
         theme(
