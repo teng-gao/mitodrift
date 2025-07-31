@@ -355,6 +355,71 @@ get_transition_mat_wf = function(k, eps = 0.01, N = 100, n_rep = 1e4, n_gen = 10
 
 }
 
+#' @export
+get_transition_mat_wf_hmm <- function(k, eps = 0.01, N = 100, n_gen = 100) {
+    # For zero generations, the transition matrix is the identity matrix
+    if (n_gen == 0) {
+        A <- diag(k + 2)
+    } else {
+        # 1. Create the single-generation transition matrix for allele counts (0 to N)
+        T_mat <- matrix(0, nrow = N + 1, ncol = N + 1)
+        for (i in 0:N) {
+            p <- i / N
+            T_mat[i + 1, ] <- dbinom(0:N, size = N, prob = p)
+        }
+
+        # 2. Compute the multi-generation transition matrix using matrix exponentiation
+        T_ngen <- expm::`%^%`(T_mat, n_gen)
+
+        # 3. Define the VAF bin boundaries, identical to the simulation's logic
+        bin_boundaries <- c(0, seq(0, 1, 1/k), 1)
+        vaf_bins <- get_vaf_bins(k)
+
+        # 4. Aggregate the allele count probabilities into the VAF bins
+        A <- matrix(0, nrow = k + 2, ncol = k + 2)
+        
+        for (i in 1:(k + 2)) {
+            # Determine the representative starting allele count for the i-th VAF bin,
+            # using the bin midpoint, which mirrors the simulation's setup.
+            start_vaf <- vaf_bins[i]
+            start_allele_count <- round(start_vaf * N)
+            start_allele_count <- max(0, min(N, start_allele_count))
+            
+            # Get the probability distribution of allele counts after n_gen generations
+            prob_dist_after_ngen <- T_ngen[start_allele_count + 1, ]
+            
+            for (j in 1:(k + 2)) {
+                # This binning logic now exactly replicates the original simulation function.
+                xstart <- floor(bin_boundaries[j] * N) + 1
+                xend <- floor(bin_boundaries[j+1] * N)
+                xstart <- min(xstart, xend)
+
+                if (j == k + 1) {
+                    xend <- xend - 1
+                }
+
+                if (xstart > xend) {
+                    A[i, j] <- 0
+                } else {
+                    indices <- xstart:xend
+                    # Sum probabilities for allele counts in the current bin
+                    A[i, j] <- sum(prob_dist_after_ngen[indices + 1])
+                }
+            }
+        }
+    }
+
+    # 5. Apply the mutation rate 'eps' to the boundary conditions
+    A[1, ] <- c(1 - eps, rep(eps / (k + 1), k + 1))
+    A[nrow(A), ] <- rev(A[1, ])
+    
+    # Set row and column names for clarity
+    colnames(A) <- vaf_bins
+    rownames(A) <- vaf_bins
+
+    return(A)
+}
+
 modify_A = function(A, eps) {
     A[1,] = c(1-eps, rep(eps/(ncol(A)-1), ncol(A)-1))
     A[nrow(A),] = rev(A[1,])
@@ -965,6 +1030,11 @@ run_tree_mcmc = function(
     if (!is.null(outfile)) {
         outdir = dirname(outfile)
         fname = basename(outfile)
+
+        if (!dir.exists(outdir)) {
+            dir.create(outdir, recursive = TRUE)
+        }
+        
         if (resume) {
             done = sapply(chains, function(s) {file.exists(glue('{outdir}/chain{s}_{fname}'))})
             chains = chains[!done]
@@ -972,6 +1042,8 @@ run_tree_mcmc = function(
     }
 
     message('Running MCMC with ', length(chains), ' chains')
+
+
 
     res = mclapply(
         chains,

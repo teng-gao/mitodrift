@@ -1,22 +1,24 @@
 #!/usr/bin/env Rscript
 args = commandArgs(trailingOnly=TRUE)
 
-library(igraph)
-library(dplyr)
-library(ggplot2)
-library(ape)
-library(tidygraph)
-library(data.table)
-library(stringr)
-library(parallel)
-library(tidytree)
-library(glue)
-library(patchwork)
-library(phangorn)
-library(ggtree)
-library(ggraph)
-library(mitodrift)
-library(optparse)
+suppressPackageStartupMessages({
+    library(igraph)
+    library(dplyr)
+    library(ggplot2)
+    library(ape)
+    library(tidygraph)
+    library(data.table)
+    library(stringr)
+    library(parallel)
+    library(tidytree)
+    library(glue)
+    library(patchwork)
+    library(phangorn)
+    library(ggtree)
+    library(ggraph)
+    library(mitodrift)
+    library(optparse)
+})
 
 # repo_dir = '/broad/sankaranlab/tgao/mitodrift/mitodrift'
 # R.utils::sourceDirectory(glue('{repo_dir}/R'))
@@ -79,6 +81,13 @@ option_list <- list(
         metavar = "INTEGER"
     ),
     make_option(
+        c("-k", "--k"),
+        type = "integer",
+        default = 20,
+        help = "Number of VAF bins",
+        metavar = "INTEGER"
+    ),
+    make_option(
         c("-f", "--freq_dat"),
         type = "character",
         default = '',
@@ -121,10 +130,14 @@ if (n_cells == 0 | n_muts == 0) {
 
 if (!opts$resume) {
 
-    k = 20
+    outdir <- dirname(opts$outfile)
+    if (!dir.exists(outdir)) {
+        dir.create(outdir, recursive = TRUE)
+    }
+
     set.seed(0)
-    A = mitodrift::get_transition_mat_wf(k = k, eps = opts$eps, N = opts$n_pop, n_gen = opts$n_gen)
-    liks = get_leaf_liks(mut_dat, mitodrift::get_vaf_bins(k = k), eps = opts$seq_err, log = TRUE)
+    A = mitodrift::get_transition_mat_wf(k = opts$k, eps = opts$eps, N = opts$n_pop, n_gen = opts$n_gen)
+    liks = get_leaf_liks(mut_dat, mitodrift::get_vaf_bins(k = opts$k), eps = opts$seq_err, log = TRUE)
 
     message('Initial clustering')
 
