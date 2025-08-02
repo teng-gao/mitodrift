@@ -118,8 +118,13 @@ mut_dat = fread(opts$mut_dat) %>% select(variant, cell, d, a) %>%
 # Filter singletons
 mut_dat = mut_dat %>% group_by(variant) %>% filter(sum(a>0)>1) %>% ungroup()
 
-n_muts = length(unique(mut_dat$variant))
-n_cells = length(unique(mut_dat$cell))
+# Convert to matrix format
+amat = long_to_mat(mut_dat, "a")
+dmat = long_to_mat(mut_dat, "d")
+vmat = long_to_mat(mut_dat, "vaf")
+
+n_muts = nrow(amat)
+n_cells = ncol(amat)
 
 message(paste0('Number of mutations: ', n_muts))
 message(paste0('Number of cells: ', n_cells))
@@ -136,44 +141,13 @@ if (!opts$resume) {
     }
 
     set.seed(0)
-    A = mitodrift::get_transition_mat_wf(k = opts$k, eps = opts$eps, N = opts$n_pop, n_gen = opts$n_gen)
-    liks = get_leaf_liks(mut_dat, mitodrift::get_vaf_bins(k = opts$k), eps = opts$seq_err, log = TRUE)
+    A = get_transition_mat_wf_hmm(k = opts$k, eps = opts$eps, N = opts$n_pop, n_gen = opts$n_gen)
+    liks = get_leaf_liks_mat(amat, dmat, get_vaf_bins(k = opts$k), eps = opts$seq_err, log = TRUE)
 
-    message('Initial clustering')
+    message('Building initial tree using NJ')    
+    phy_init = make_rooted_nj(vmat)
 
-    # initial clustering
-    vmat = mut_dat %>% 
-        reshape2::dcast(variant ~ cell, fill = 0, value.var = 'vaf') %>% 
-        tibble::column_to_rownames('variant')
-
-    vmat[,'outgroup'] = 0
-
-    dist_mat = vmat %>% as.matrix %>% t %>% dist(method = 'manhattan')
-
-    if (init_method == 'hc') {
-        
-        phy_init = hclust(dist_mat, method = 'ward.D2') %>%
-            as.phylo %>% root(outgroup = 'outgroup') %>% drop.tip('outgroup')
-
-    } else if (init_method == 'nj') {
-
-        phy_init = nj(dist_mat) %>%
-            as.phylo %>% root(outgroup = 'outgroup') %>% drop.tip('outgroup')
-
-    } else if (init_method == 'random') {
-
-        phy_init = hclust(dist_mat, method = 'ward.D2') %>%
-            as.phylo %>% root(outgroup = 'outgroup') %>% drop.tip('outgroup')
-
-        set.seed(0)
-        phyr = rtree(phy_init$Nnode+1)
-        phyr$tip.label = sample(phy_init$tip.label)
-        phyr$node.label = phy_init$node.label
-        phy_init = phyr
-
-    }
-
-    message('Searching tree')
+    message('Searching for ML tree')
     if (is.null(opts$freq_dat) | opts$freq_dat == "") {
         logA_vec = as.vector(t(log(A)))
     } else {
@@ -196,11 +170,11 @@ if (!opts$resume) {
         )
     }
 
-    # logP_list = convert_liks_to_logP_list(liks, phy_init)
     logP_list = convert_logliks_to_logP_list(liks, phy_init)
 
     res = optimize_tree_cpp(
-        phy_init, logP_list, logA_vec, ncores = opts$ncores,
+        phy_init, logP_list, logA_vec, 
+        ncores = opts$ncores,
         max_iter = opts$max_iter,
         outfile = opts$outfile,
         resume = opts$resume)

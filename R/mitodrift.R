@@ -239,6 +239,38 @@ get_leaf_liks = function(mut_dat, vafs, eps = 0, ncores = 1, log = FALSE) {
     return(liks)
 }
 
+#' get leaft likelihoods given mutation data in matrix format
+#' @param amat matrix of allele counts
+#' @param dmat matrix of total counts
+#' @param vafs vector of VAFs
+#' @param eps error rate
+#' @param log whether to return log likelihoods
+#' @return list of likelihood matrices
+#' @export
+get_leaf_liks_mat = function(amat, dmat, vafs, eps = 0, ncores = 1, log = FALSE) {
+
+    variants = rownames(amat)
+
+    liks = mclapply(
+        variants,
+        mc.cores = ncores,
+        function(v) {
+            m = sapply(
+                    vafs,
+                    function(vaf) {
+                        dbinom(x = amat[v,], 
+                            size = dmat[v,],
+                            prob = pmin(vaf + eps, 1),
+                            log = log)
+                    }
+                )
+            colnames(m) = vafs
+            return(t(m))
+        }) %>% setNames(variants)
+    
+    return(liks)
+}
+
 #' @export 
 convert_liks_to_logP_list <- function(liks, phy) {
     
@@ -355,8 +387,14 @@ get_transition_mat_wf = function(k, eps = 0.01, N = 100, n_rep = 1e4, n_gen = 10
 
 }
 
+#' Get the transition matrix for WF model with HMM
+#' @param k number of VAF bins
+#' @param eps error rate
+#' @param N population size
+#' @param n_gen number of generations
+#' @return transition matrix
 #' @export
-get_transition_mat_wf_hmm <- function(k, eps = 0.01, N = 100, n_gen = 100) {
+get_transition_mat_wf_hmm <- function(k, eps, N, n_gen) {
     # For zero generations, the transition matrix is the identity matrix
     if (n_gen == 0) {
         A <- diag(k + 2)
@@ -418,6 +456,63 @@ get_transition_mat_wf_hmm <- function(k, eps = 0.01, N = 100, n_gen = 100) {
     rownames(A) <- vaf_bins
 
     return(A)
+}
+
+#' Wrapper function to interpolate non-integer generations
+#' @param k number of VAF bins
+#' @param eps error rate
+#' @param N population size
+#' @param n_gen number of generations
+#' @return transition matrix
+#' @export
+get_transition_mat_wf_hmm_wrapper = function(k, eps, N, n_gen) {
+    
+    # Check if n_gen is an integer
+    if (n_gen == round(n_gen)) {
+        # If integer, use the original function directly
+        return(get_transition_mat_wf_hmm(k = k, eps = eps, N = N, n_gen = n_gen))
+    }
+    
+    # If non-integer, interpolate between two nearest integer generations
+    n_gen_lower = floor(n_gen)
+    n_gen_upper = ceiling(n_gen)
+    
+    # Get transition matrices for the two nearest integer generations
+    A_lower = get_transition_mat_wf_hmm(k = k, eps = eps, N = N, n_gen = n_gen_lower)
+    A_upper = get_transition_mat_wf_hmm(k = k, eps = eps, N = N, n_gen = n_gen_upper)
+    
+    # Calculate interpolation weight
+    weight = n_gen - n_gen_lower
+    
+    # Linear interpolation between the two matrices
+    A_interpolated = (1 - weight) * A_lower + weight * A_upper
+    
+    return(A_interpolated)
+}
+
+#' Convert a long format mutation data frame to a matrix
+#' @param mut_dat_long A data frame with columns: variant, cell, variable
+#' @param variable The variable to convert to a matrix
+#' @return A matrix of values
+#' @export
+long_to_mat = function(mut_dat_long, variable) {
+    as.data.table(mut_dat_long) %>%
+        data.table::dcast(variant ~ cell, value.var = variable, fill = 0) %>%
+        tibble::column_to_rownames("variant") %>%
+        as.matrix()
+}
+
+#' Make a rooted NJ tree
+#' @param vmat A matrix of cell-by-variable values
+#' @param dist_method The distance method to use
+#' @return A phylo object
+#' @export
+make_rooted_nj = function(vmat, dist_method = 'manhattan') {
+    vmat = cbind(vmat, outgroup = 0)
+    dist_mat = vmat %>% as.matrix %>% t %>% dist(method = dist_method)
+    nj_tree = ape::nj(dist_mat) %>% 
+        ape::root(outgroup = 'outgroup') %>% drop.tip('outgroup') 
+    return(nj_tree)
 }
 
 modify_A = function(A, eps) {
@@ -1225,245 +1320,7 @@ get_consensus = function(phylist, p = 0.5, check_labels = FALSE, rooted = TRUE, 
     return(gtree_cons)
 }
 
-nnin_multi <- function(tree, n, d = Inf) {
-  # Remove any existing "order" attribute so reorder() works cleanly
-  attr(tree, "order") <- NULL
-  
-  # Prepare variables
-  edge         <- matrix(tree$edge, ncol = 2)
-  parent       <- edge[, 1]
-  child        <- edge[, 2]
-  leaf_cutoff  <- min(parent) - 1  # tips are 1:leaf_cutoff
-  
-  # Find the n-th internal edge (child > leaf_cutoff means "child is an internal node")
-  ind <- which(child > leaf_cutoff)[n]
-  if (is.na(ind)) return(NULL)
-  
-  # p1 → p2 is the selected internal edge
-  p1 <- parent[ind]
-  p2 <- child[ind]
-  
-  # All children of p1 (excluding p2)
-  c1_inds    <- which(parent == p1)
-  siblings1  <- child[c1_inds]
-  x_list     <- setdiff(siblings1, p2)
-  
-  # All children of p2 (excluding p1, if p1 appears in that list)
-  c2_inds <- which(parent == p2)
-  y_list  <- child[c2_inds]
-  
-  # Randomly sample up to d children from each side
-  if (length(x_list) > d) {
-    x_list <- sample(x_list, d)
-  }
-  if (length(y_list) > d) {
-    y_list <- sample(y_list, d)
-  }
-  
-  # Container for resulting trees
-  result <- list()
-  
-  # For each sampled pair (x, y), swap x under p2 and y under p1
-  for (x in x_list) {
-    for (y in y_list) {
-      tr_new <- tree
-      
-      # Locate the edge-rows where child == x and child == y
-      idx_x <- which(tr_new$edge[, 2] == x)
-      idx_y <- which(tr_new$edge[, 2] == y)
-      
-      # Swap parents: detach x from p1 and attach to p2; detach y from p2 and attach to p1
-      tr_new$edge[idx_x, 1] <- p2
-      tr_new$edge[idx_y, 1] <- p1
-      
-      # If there are edge lengths, swap those too so lengths stay consistent
-      if (!is.null(tree$edge.length)) {
-        tmp <- tr_new$edge.length[idx_x]
-        tr_new$edge.length[idx_x] <- tr_new$edge.length[idx_y]
-        tr_new$edge.length[idx_y] <- tmp
-      }
-      
-      # Re-order the tree in postorder so ape will maintain a valid phylo object
-      tr_new <- reorder(tr_new, "postorder")
-      
-      # Add to result list
-      result[[length(result) + 1]] <- tr_new
-    }
-  }
-  
-  # Return as multiPhylo
-  class(result) <- "multiPhylo"
-  return(result)
-}
-
-nni_multi <- function(tree, d = Inf) {
-  # 1) Identify internal edges by finding rows where 'child > k'
-  edge   <- matrix(tree$edge, ncol = 2)
-  parent <- edge[, 1]
-  child  <- edge[, 2]
-  k      <- min(parent) - 1
-  
-  # internal_edges is the vector of row‐indices for edges whose 'child' is an internal node
-  internal_edges <- which(child > k)
-  if (length(internal_edges) == 0) {
-    return(list())  # no internal edges → no NNI moves possible
-  }
-  
-  # 2) For each internal edge (indexed by its position in the 'child>k' list),
-  #    call nnin_multi(tree, n) where n = rank among internal edges
-  results <- list()
-  for (i in seq_along(internal_edges)) {
-    # i is the rank of this internal edge among all internal edges
-    candidate_trees <- nnin_multi(tree, i, d)
-    if (!is.null(candidate_trees) && length(candidate_trees) > 0) {
-      # Append all returned trees to our master list
-      for (tr in candidate_trees) {
-        results[[ length(results) + 1 ]] <- tr
-      }
-    }
-  }
-
-  class(results) = 'multiPhylo'
-  
-  return(results)
-}
-
-rNNI_multi <- function(tree, d = Inf) {
-  # Identify “k” so that any child > k is an internal node
-  edge   <- matrix(tree$edge, ncol = 2)
-  parent <- edge[,1]
-  child  <- edge[,2]
-  k      <- min(parent) - 1
-  
-  # Find all internal edges (rows where child > k)
-  internal_edges <- which(child > k)
-  if (length(internal_edges) == 0) {
-    return(NULL)  # no internal edges → no NNI moves
-  }
-  
-  # Randomly pick one of those internal edges by its rank n
-  # (nnin_multi expects “n” to be the index among child>k)
-  n <- sample(seq_along(internal_edges), 1)
-  
-  # Get the list of possible swaps for that edge
-  moves <- nnin_multi(tree, n, d)
-  if (is.null(moves) || length(moves) == 0) {
-    return(NULL)  # edge had no valid multifurcation‐NNI moves
-  }
-  
-  # Randomly choose one of the returned trees
-  selected <- moves[[ sample(seq_along(moves), 1) ]]
-  return(selected)
-}
-
-
-nntn <- function(tree, n) {
-  # ——— remove any existing “order” attribute, so reorder() won’t choke ———
-  attr(tree, "order") <- NULL
-
-  # Extract parent/child arrays:
-  edges       <- matrix(tree$edge, ncol = 2)
-  parent      <- edges[,1]
-  child       <- edges[,2]
-  leaf_cutoff <- min(parent) - 1    # nodes 1:leaf_cutoff are tips
-
-  # All “internal edges” are those where child > leaf_cutoff
-  internal_edges <- which(child > leaf_cutoff)
-  if (n < 1 || n > length(internal_edges)) {
-    return(list())  # invalid index → no neighbors
-  }
-  ind <- internal_edges[n]
-
-  # Let p1 -> p2 be the chosen internal edge
-  p1 <- parent[ind]
-  p2 <- child[ind]
-
-  # Gather p1’s children (including p2) and p2’s children
-  c1_inds   <- which(parent == p1)
-  children1 <- child[c1_inds]      # all nodes directly under p1
-  x_list    <- setdiff(children1, p2)  # all siblings of p2 under p1
-
-#   print(x_list)
-
-  c2_inds   <- which(parent == p2)
-  children2 <- child[c2_inds]      # all nodes directly under p2
-  y_list    <- children2           # all children under p2
-
-#   print(y_list)
-
-  result <- list()
-
-  # 1) Move “x” from p1 → p2 (downwards), but only if p1 has ≥ 3 children
-  #    (so that after removing x, p1 still has ≥2 children)
-  if (length(children1) >= 3) {
-    for (x in x_list) {
-      tr_new <- tree
-
-      # re‐attach x under p2
-      idx_x <- which(tr_new$edge[,2] == x)
-      tr_new$edge[idx_x, 1] <- p2
-
-      # reorder to get a valid “phylo” object again
-      tr_new <- reorder(tr_new, "postorder")
-      result[[ length(result) + 1 ]] <- tr_new
-    }
-  }
-
-  # 2) Move “y” from p2 → p1 (upwards), but only if p2 has ≥ 3 children
-  #    (so that after removing y, p2 still has ≥2 children)
-  if (length(children2) >= 3) {
-    for (y in y_list) {
-      tr_new <- tree
-
-      # re‐attach y under p1
-      idx_y <- which(tr_new$edge[,2] == y)
-      tr_new$edge[idx_y, 1] <- p1
-
-      tr_new <- reorder(tr_new, "postorder")
-      result[[ length(result) + 1 ]] <- tr_new
-    }
-  }
-
-  class(result) <- "multiPhylo"
-  return(result)
-}
-
-
-nnt <- function(tree) {
-  # Remove any existing “order” attribute
-  attr(tree, "order") <- NULL
-
-  # Identify all internal edges
-  edges       <- matrix(tree$edge, ncol = 2)
-  parent      <- edges[,1]
-  child       <- edges[,2]
-  leaf_cutoff <- min(parent) - 1
-  internal_edges <- which(child > leaf_cutoff)
-
-  if (length(internal_edges) == 0) {
-    return(list())  # no internal edges → no moves
-  }
-
-  all_neighbors <- list()
-  for (i in seq_along(internal_edges)) {
-    nb_i <- nntn(tree, i)
-    if (length(nb_i) > 0) {
-      for (tr in nb_i) {
-        all_neighbors[[ length(all_neighbors) + 1 ]] <- tr
-      }
-    }
-  }
-
-  class(all_neighbors) <- "multiPhylo"
-  return(all_neighbors)
-}
-
-rNNT <- function(tree) {
-  all_nb <- nnt(tree)  
-  choice <- sample(seq_along(all_nb), 1)
-  return(all_nb[[choice]])
-}
-
+#' @export
 getConfidentClades <- function(pp, p = 0.9, max_size = Inf, labels = TRUE, singletons = TRUE) {
     # extract clade sizes and confidences
     tip_labels   <- attr(pp, "labels")
@@ -1522,209 +1379,113 @@ getConfidentClades <- function(pp, p = 0.9, max_size = Inf, labels = TRUE, singl
     return(selected)
 }
 
-find_far_nodes = function(phy) {
-    # assume phy is a rooted ape::phylo
-    root <- Ntip(phy) + 1
-    
-    # 1) immediate internal children of the root
-    imm_int <- phy$edge[phy$edge[,1] == root, 2]
-    imm_int <- imm_int[imm_int > Ntip(phy)]
-    
-    # 2) all internal nodes excluding the root
-    all_int <- (Ntip(phy)+1):(Ntip(phy) + phy$Nnode)
-    all_int = all_int[all_int != root]
-    
-    # 3) those at distance > 1 from root
-    far_int <- setdiff(all_int, imm_int)
 
-    return(far_int)
-
-}
-
-merge_trees = function(subtrees, collapse = FALSE) {
-    phy_merge = subtrees %>%
-        lapply(function(tr){TreeTools::AddTip(tr, label = 'out', where = 0)}) %>%
-        Reduce(bind.tree, .) %>%
-        drop.tip('out')
-    if (collapse) {
-        phy_merge = phy_merge %>% TreeTools::CollapseNode(find_far_nodes(.))
+# write a function to estimate parameters using MCMC with fmcmc package
+#' @param tree_fit phylogenetic tree
+#' @param amat adjacency matrix
+#' @param dmat distance matrix
+#' @param initial_params initial parameter values (n_gen, log_eps, log_err)
+#' @param lower_bounds lower bounds for parameters in transformed space
+#' @param upper_bounds upper bounds for parameters in transformed space
+#' @param nsteps number of MCMC steps
+#' @param nchains number of MCMC chains
+#' @param n_pop population size for likelihood computation
+#' @param k number of clusters for likelihood computation
+#' @param ncores number of cores to use
+#' @param burnin number of MCMC steps to discard as burnin
+#' @param outfile file to save MCMC result
+#' @return MCMC result object from fmcmc
+#' @export
+fit_params_mcmc = function(
+    tree_fit, amat, dmat,
+    initial_params = c('n_gen' = 100, 'log_eps' = log(1e-3), 'log_err' = log(1e-3)),
+    lower_bounds = c('n_gen' = 1, 'log_eps' = log(1e-18), 'log_err' = log(1e-18)),
+    upper_bounds = c('n_gen' = 1000, 'log_eps' = log(0.2), 'log_err' = log(0.2)),
+    nsteps = 500, nchains = 1, outfile = NULL,
+    n_pop = 600, k = 20, ncores = 1, burnin = 100) {
+    
+    # Ensure tree is properly formatted
+    tree_fit = reorder_phylo(tree_fit)
+    tree_fit$edge.length = NULL
+    
+    # All three parameters will be estimated
+    param_names = c('n_gen', 'log_eps', 'log_err')
+    
+    message(glue("Estimating all 3 parameters using MCMC: {paste(param_names, collapse=', ')}"))
+    
+    # Create log-likelihood function for MCMC
+    # This function takes parameters in transformed space and converts them back
+    log_likelihood = function(p, tree_fit., amat., dmat., n_pop., k.) {
+        # Convert parameters back to original scale
+        params_orig = p
+        
+        # Convert log-scale parameters back to original scale
+        params_orig['log_eps'] = exp(p['log_eps'])
+        names(params_orig)[names(params_orig) == 'log_eps'] = 'eps'
+        params_orig['log_err'] = exp(p['log_err'])
+        names(params_orig)[names(params_orig) == 'log_err'] = 'err'
+        
+        # Compute likelihood
+        ll = get_param_lik_cpp(tree_fit., amat., dmat., 
+            n_gen = params_orig['n_gen'],
+            eps = params_orig['eps'], 
+            err = params_orig['err'],
+            n_pop = n_pop., k = k.)
+        
+        return(ll)
     }
-    return(phy_merge)
-}
+    
+    kernel = fmcmc::kernel_normal_reflective(
+            scale = c(5, 0.1, 0.1),
+            scheme = "joint",
+            lb = lower_bounds,
+            ub = upper_bounds
+        )
+    
+    # Run MCMC
+    message("Starting MCMC sampling...")
 
-one_node_depth2 <- function(tree, exclude_root = FALSE) {
-    bifur  <- castor::is_bifurcating(tree)
-    Ntips  <- length(tree$tip.label)
-    root   <- Ntips + 1L
+    res_df_all = mclapply(
+        1:nchains,
+        mc.cores = ncores,
+        function(i) {
+            set.seed(i)
+                    
+            mcmc_result = fmcmc::MCMC(
+                log_likelihood,
+                initial = initial_params,
+                nsteps = nsteps,
+                nchains = 1,
+                kernel = kernel,
+                tree_fit. = tree_fit,
+                amat. = amat,
+                dmat. = dmat,
+                n_pop. = n_pop,
+                k. = k
+            )
 
-    # find all edges that end in a tip
-    tipnodes <- which(tree$edge[,2] %in% seq_len(Ntips))
-    edges    <- tree$edge[tipnodes, , drop=FALSE]
+            res_df = data.frame(mcmc_result) %>% 
+                tibble::rowid_to_column('iter') %>%
+                mutate(
+                    err = exp(log_err), 
+                    eps = exp(log_eps),
+                    chain = i
+                ) %>%
+                reshape2::melt(id.var = c('iter', 'chain'))
 
-    df <- data.frame(
-        node   = edges[,1],
-        tip    = edges[,2],
-        pat    = tree$edge.length[tipnodes]
-    )
-
-    if (exclude_root) {
-        df <- df %>% dplyr::filter(node != root)
-    }
-
-    # now group by internal node and keep only those with ≥2 tips
-    df2 <- df %>%
-        dplyr::group_by(node) %>%
-        dplyr::mutate(clades = list(tip)) %>%
-        dplyr::rowwise() %>%
-        dplyr::filter(length(clades) >= 2)
-
-    # build the tip‐tip adjacency
-    indices <- df2 %>%
-        dplyr::select(-tip, -pat) %>%
-        dplyr::distinct() %>%
-        dplyr::pull(clades) %>%
-    {
-        if (!bifur) {
-            lapply(., function(x) t(utils::combn(x, 2))) %>%
-                do.call(rbind, .)
-        } else {
-            do.call(rbind, .)
+            return(res_df)
         }
+    ) %>% bind_rows()
+
+    if (!is.null(outfile)) {
+        fwrite(res_df_all, outfile)
     }
 
-    mat <- Matrix::sparseMatrix(
-        i = c(indices[,1], indices[,2]),
-        j = c(indices[,2], indices[,1]),
-        dims = c(Ntips, Ntips)
-    )
+    params_est = res_df_all %>%
+        filter(iter > burnin) %>%
+        group_by(variable) %>%
+        summarise(est = mean(value), .groups = 'drop') %>%
+        {setNames(.$est, .$variable)}
 
-    mp <- mean(df2$pat) * 2
-
-    list(W = mat, mean.pat = mp, pats = df2$pat)
+    return(params_est)
 }
-
-one_node_tree_dist2 = function(tree, norm = TRUE, exclude_root = FALSE) {
-    w <- one_node_depth2(tree, exclude_root = exclude_root)$W
-    if (norm == TRUE) {
-        w <- PATH:::rowNorm(w)
-    }
-    w <- w/sum(w)
-    return(w)
-}
-
-# apparently rooted and unrooted produce different number of internal nodes
-extended_consensus <- function(trees = NULL, pp = NULL, p = 1, check.labels = TRUE, rooted = FALSE) {
-
-  # Recursive helper to rebuild topology from clusters
-  foo <- function(ic, node) {
-    pool <- pp[[ic]]
-    if (ic < m) {
-      for (j in (ic + 1):m) {
-        wh <- match(pp[[j]], pool)
-        if (!any(is.na(wh))) {
-          edge[pos, 1] <<- node
-          pool       <- pool[-wh]
-          edge[pos, 2] <<- nextnode <<- nextnode + 1L
-          pos        <<- pos + 1L
-          foo(j, nextnode)
-        }
-      }
-    }
-    # Attach any remaining tips directly
-    size <- length(pool)
-    if (size) {
-      ind <- pos:(pos + size - 1)
-      edge[ind, 1] <<- node
-      edge[ind, 2] <<- pool
-      pos <<- pos + size
-    }
-  }
-
-  if (!is.null(trees)) {
-    # Align tip labels
-    if (!is.null(attr(trees, "TipLabel"))) {
-        labels <- attr(trees, "TipLabel")
-    } else {
-        labels <- trees[[1]]$tip.label
-        if (check.labels) trees <- .compressTipLabel(trees)
-    }
-
-    # Optionally unroot for unrooted consensus
-    if (!rooted) trees <- root(trees, 1)
-
-    ntree <- length(trees)
-
-    # Extract all splits and their frequencies
-    if (is.null(pp)) {
-        pp <- prop.part(trees, check.labels = FALSE)
-    }
-  }
-
-  labels <- attr(pp, "labels")
-  ntree  <- attr(pp, "number")[1]
-
-  if (!rooted) {
-    pp <- postprocess.prop.part(pp, "SHORTwise")
-    pp[[1]] <- seq_along(labels)
-  }
-
-  # Threshold by frequency
-  bs  <- attr(pp, "number")
-  sel <- bs >= p * ntree
-  pp  <- pp[sel]; bs <- bs[sel]
-
-  # Remove trivial single-tip clusters
-  lens <- lengths(pp)
-  drop <- which(lens == 1)
-  if (length(drop)) {
-    pp  <- pp[-drop]
-    bs  <- bs[-drop]
-    lens <- lens[-drop]
-  }
-
-  # Sort by cluster size
-  ind <- order(lens, decreasing = TRUE)
-  pp  <- pp[ind]; bs <- bs[ind]
-
-  # Greedy compatibility filter
-  keep_idx <- integer(0)
-  for (i in seq_along(pp)) {
-    cl <- pp[[i]]
-    ok <- TRUE
-    for (j in keep_idx) {
-      sj <- pp[[j]]
-      ints <- intersect(cl, sj)
-      if (!(length(ints) == 0 || length(ints) == length(cl) || length(ints) == length(sj))) {
-        ok <- FALSE; break
-      }
-    }
-    if (ok) keep_idx <- c(keep_idx, i)
-  }
-  pp <- pp[keep_idx]; bs <- bs[keep_idx]
-  m  <- length(pp)
-
-  # Build edge matrix
-  n    <- length(labels)
-  edge <- matrix(0L, n + m - 1, 2)
-  if (m == 1) {
-    # star tree: all tips attach to single node
-    edge[, 1] <- n + 1L
-    edge[, 2] <- 1:n
-  } else {
-    nextnode <- n + 1L
-    pos      <- 1L
-    foo(1, nextnode)
-  }
-
-  # Assemble phylo object
-  res <- structure(
-    list(edge = edge, tip.label = labels, Nnode = m),
-    class = "phylo"
-  )
-  res <- reorder(res)
-
-  # Attach support values to nodes
-  res$node.label <- bs / ntree
-  res
-}
-
