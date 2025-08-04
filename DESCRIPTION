@@ -29,7 +29,8 @@ Imports:
     RhpcBLASctl,
     phangorn,
     glue,
-    stringr
+    stringr,
+    R6
 Suggests:
     testthat (>= 3.0.0)
 LinkingTo: Rcpp, RcppArmadillo, RcppParallel

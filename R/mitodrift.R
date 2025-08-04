@@ -12,29 +12,13 @@ NULL
 # to fix: apparently the init tree has to be rooted otherwise to_phylo_reoder won't work.
 #' @export 
 optimize_tree_cpp = function(
-    tree_init = NULL, logP = NULL, logA = NULL, max_iter = 100, 
-    outfile = NULL, resume = FALSE,
-    ncores = 1, trace_interval = 5
+    tree_init = NULL, logP, logA, max_iter = 100, 
+    outfile = NULL, resume = FALSE, ncores = 1, trace_interval = 5
 ) {
 
     RhpcBLASctl::blas_set_num_threads(1)
     RhpcBLASctl::omp_set_num_threads(1)
     RcppParallel::setThreadOptions(numThreads = ncores)
-
-    if (resume) {
-        if (is.null(outfile)) {
-            stop('Outfile must be provided if resume = FALSE')
-        }
-        message('Resuming from saved outfile')
-        res = readRDS(outfile)
-        tree_current = res$tree_list %>% .[[length(.)]]
-        max_current = tree_current$logZ
-        start_iter = length(res$tree_list)
-        logP = res$params$logP
-        logA = res$params$logA
-    } else {
-        start_iter = 1
-    }
 
     if (is.list(logA)) {
         score_tree_func = score_tree_bp_wrapper_multi
@@ -44,26 +28,33 @@ optimize_tree_cpp = function(
         nni_func = nni_cpp_parallel
     }
 
-    if (!resume) {
+    if (resume) {
+        message('Resuming from existing tree list')
+        if (is.null(outfile)) {
+            stop("outfile must be provided when resume is TRUE")
+        }
+        tree_list = readRDS(outfile)
+        tree_current = tree_list %>% .[[length(.)]]
+        max_current = tree_current$logZ
+        start_iter = length(tree_list)
+    } else {
         if (is.null(tree_init) || is.null(logP) || is.null(logA)) {
             stop("tree_init, logP, and logA must be provided when resume is FALSE")
         }
+        start_iter = 1
         tree_init = reorder_phylo(tree_init)
         tree_init$edge.length = NULL
         tree_current = tree_init
         max_current = sum(score_tree_func(tree_current$edge, logP, logA))
         tree_current$logZ = max_current
-        res = list(
-            'params' = list('logP' = logP, 'logA' = logA),
-            'tree_list' = phytools::as.multiPhylo(tree_current)
-        )
+        tree_list = phytools::as.multiPhylo(tree_current)
     }
 
     runtime = c(0,0,0)
 
     if (start_iter > max_iter) {
         message(paste0("Already completed ", start_iter - 1, " iterations. No new iterations to run for max_iter = ", max_iter, "."))
-        return(res)
+        return(tree_list)
     }
 
     for (i in start_iter:max_iter) {
@@ -83,21 +74,23 @@ optimize_tree_cpp = function(
             break()
         }
 
-        res$tree_list = res$tree_list %>% c(phytools::as.multiPhylo(tree_current))
+        tree_list = tree_list %>% c(phytools::as.multiPhylo(tree_current))
 
         if (!is.null(outfile)) {
             if (i == 1 | i %% trace_interval == 0) {
-                saveRDS(res, outfile)
+                saveRDS(tree_list, outfile)
             }
         }
 
         runtime = proc.time() - ptm
         
     }
+    
+    if (!is.null(outfile)) {
+        saveRDS(tree_list, outfile)
+    }
 
-    saveRDS(res, outfile)
-
-    return(res)
+    return(tree_list)
 }
 
 # R version of the function
@@ -1345,10 +1338,14 @@ get_param_lik_cpp = function(tree_fit, amat, dmat, ngen, err, eps, npop = 600, k
 
 
 
-# write a function to estimate parameters using MCMC with fmcmc package
+#' Fit tree parameters using MCMC
+#' 
+#' Estimates tree parameters (number of generations, error rates) using MCMC sampling
+#' with the fmcmc package.
+#' 
 #' @param tree_fit phylogenetic tree
-#' @param amat adjacency matrix
-#' @param dmat distance matrix
+#' @param amat alternative allele count matrix
+#' @param dmat total depth matrix
 #' @param initial_params initial parameter values (ngen, log_eps, log_err)
 #' @param lower_bounds lower bounds for parameters in transformed space
 #' @param upper_bounds upper bounds for parameters in transformed space
@@ -1357,6 +1354,7 @@ get_param_lik_cpp = function(tree_fit, amat, dmat, ngen, err, eps, npop = 600, k
 #' @param npop population size for likelihood computation
 #' @param k number of clusters for likelihood computation
 #' @param ncores number of cores to use
+#' @param burnin number of MCMC steps to discard as burnin
 #' @param outfile file to save MCMC result
 #' @return MCMC result object from fmcmc
 #' @export
