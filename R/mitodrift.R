@@ -341,7 +341,7 @@ get_vaf_bins = function(k) {
 }
 
 #' @export 
-get_transition_mat_wf = function(k, eps = 0.01, N = 100, n_rep = 1e4, n_gen = 100) {
+get_transition_mat_wf = function(k, eps = 0.01, N = 100, n_rep = 1e4, ngen = 100) {
 
     A = matrix(NA, ncol = k + 2, k + 2)
     bins = seq(0, 1, 1/k)
@@ -352,7 +352,7 @@ get_transition_mat_wf = function(k, eps = 0.01, N = 100, n_rep = 1e4, n_gen = 10
         p = mean(c(bins[i], bins[i+1]))
 
         p_gen = p
-        for (gen in 1:n_gen) {
+        for (gen in 1:ngen) {
             x = rbinom(n_rep, N, p_gen)
             p_gen = x/N   
         }
@@ -375,7 +375,7 @@ get_transition_mat_wf = function(k, eps = 0.01, N = 100, n_rep = 1e4, n_gen = 10
     A[1,] = c(1-eps, rep(eps/(ncol(A)-1), ncol(A)-1))
     A[nrow(A),] = rev(A[1,])
 
-    if (n_gen == 0) {
+    if (ngen == 0) {
         A = diag(k+2)
     }
 
@@ -391,12 +391,12 @@ get_transition_mat_wf = function(k, eps = 0.01, N = 100, n_rep = 1e4, n_gen = 10
 #' @param k number of VAF bins
 #' @param eps error rate
 #' @param N population size
-#' @param n_gen number of generations
+#' @param ngen number of generations
 #' @return transition matrix
 #' @export
-get_transition_mat_wf_hmm <- function(k, eps, N, n_gen) {
+get_transition_mat_wf_hmm <- function(k, eps, N, ngen) {
     # For zero generations, the transition matrix is the identity matrix
-    if (n_gen == 0) {
+    if (ngen == 0) {
         A <- diag(k + 2)
     } else {
         # 1. Create the single-generation transition matrix for allele counts (0 to N)
@@ -407,7 +407,7 @@ get_transition_mat_wf_hmm <- function(k, eps, N, n_gen) {
         }
 
         # 2. Compute the multi-generation transition matrix using matrix exponentiation
-        T_ngen <- expm::`%^%`(T_mat, n_gen)
+        T_ngen <- expm::`%^%`(T_mat, ngen)
 
         # 3. Define the VAF bin boundaries, identical to the simulation's logic
         bin_boundaries <- c(0, seq(0, 1, 1/k), 1)
@@ -423,7 +423,7 @@ get_transition_mat_wf_hmm <- function(k, eps, N, n_gen) {
             start_allele_count <- round(start_vaf * N)
             start_allele_count <- max(0, min(N, start_allele_count))
             
-            # Get the probability distribution of allele counts after n_gen generations
+            # Get the probability distribution of allele counts after ngen generations
             prob_dist_after_ngen <- T_ngen[start_allele_count + 1, ]
             
             for (j in 1:(k + 2)) {
@@ -462,27 +462,27 @@ get_transition_mat_wf_hmm <- function(k, eps, N, n_gen) {
 #' @param k number of VAF bins
 #' @param eps error rate
 #' @param N population size
-#' @param n_gen number of generations
+#' @param ngen number of generations
 #' @return transition matrix
 #' @export
-get_transition_mat_wf_hmm_wrapper = function(k, eps, N, n_gen) {
+get_transition_mat_wf_hmm_wrapper = function(k, eps, N, ngen) {
     
-    # Check if n_gen is an integer
-    if (n_gen == round(n_gen)) {
+    # Check if ngen is an integer
+    if (ngen == round(ngen)) {
         # If integer, use the original function directly
-        return(get_transition_mat_wf_hmm(k = k, eps = eps, N = N, n_gen = n_gen))
+        return(get_transition_mat_wf_hmm(k = k, eps = eps, N = N, ngen = ngen))
     }
     
     # If non-integer, interpolate between two nearest integer generations
-    n_gen_lower = floor(n_gen)
-    n_gen_upper = ceiling(n_gen)
+    ngen_lower = floor(ngen)
+    ngen_upper = ceiling(ngen)
     
     # Get transition matrices for the two nearest integer generations
-    A_lower = get_transition_mat_wf_hmm(k = k, eps = eps, N = N, n_gen = n_gen_lower)
-    A_upper = get_transition_mat_wf_hmm(k = k, eps = eps, N = N, n_gen = n_gen_upper)
+    A_lower = get_transition_mat_wf_hmm(k = k, eps = eps, N = N, ngen = ngen_lower)
+    A_upper = get_transition_mat_wf_hmm(k = k, eps = eps, N = N, ngen = ngen_upper)
     
     # Calculate interpolation weight
-    weight = n_gen - n_gen_lower
+    weight = ngen - ngen_lower
     
     # Linear interpolation between the two matrices
     A_interpolated = (1 - weight) * A_lower + weight * A_upper
@@ -526,63 +526,6 @@ scale_eps <- function(eps, f, mu = 1) {
   logistic <- function(x) 1 / (1 + exp(-x))
   logistic(logit(eps) + mu * f)
 }
-
-#' @export 
-run_mitodrift = function(
-    mut_dat, n_gen = 100, eps = 0.001, n_pop = 600, k = 20, seq_err = 0, max_iter = 100,
-    init_method = 'nj', ncores = 1, outfile = NULL
-) {
-
-    set.seed(0)
-    A = get_transition_mat_wf(k = k, eps = eps, N = n_pop, n_gen = n_gen)
-    liks = get_leaf_liks(mut_dat, get_vaf_bins(k = k), eps = seq_err, ncores = ncores)
-
-    message('Initial clustering')
-
-    # initial clustering
-    vmat = mut_dat %>% 
-        reshape2::dcast(variant ~ cell, fill = 0, value.var = 'vaf') %>% 
-        tibble::column_to_rownames('variant')
-
-    vmat[,'outgroup'] = 0
-
-    dist_mat = vmat %>% as.matrix %>% t %>% dist(method = 'manhattan')
-
-    if (init_method == 'hc') {
-        
-        phy_init = hclust(dist_mat, method = 'ward.D2') %>%
-            as.phylo %>% root(outgroup = 'outgroup') %>% drop.tip('outgroup')
-
-    } else if (init_method == 'nj') {
-
-        phy_init = ape::nj(dist_mat) %>%
-            as.phylo %>% root(outgroup = 'outgroup') %>% drop.tip('outgroup')
-
-    } else if (init_method == 'random') {
-
-        phy_init = hclust(dist_mat, method = 'ward.D2') %>%
-            as.phylo %>% root(outgroup = 'outgroup') %>% drop.tip('outgroup')
-
-        set.seed(0)
-        phyr = rtree(phy_init$Nnode+1)
-        phyr$tip.label = sample(phy_init$tip.label)
-        phyr$node.label = phy_init$node.label
-        phy_init = phyr
-
-    }
-
-    message('Searching tree')
-    logA_vec = as.vector(t(log(A)))
-    logP_list = convert_liks_to_logP_list(liks, phy_init)
-
-    tree_list = optimize_tree_cpp(
-        phy_init, logP_list, logA_vec, ncores = ncores,
-        max_iter = max_iter, 
-        outfile = outfile)
-
-    return(tree_list)
-}
-
 
 copy_crf = function(crf) {
     crf_copy <- rlang::env_clone(crf)
@@ -737,9 +680,9 @@ decode_tree_brl = function(
         function(i){
 
             flip = flip_df[i,]$flip
-            n_gen = flip_df[i,]$length
+            ngen = flip_df[i,]$length
 
-            A = interpolate_matrices(As, n_gen, min_index = 1e-5)
+            A = interpolate_matrices(As, ngen, min_index = 1e-5)
 
             if (flip) {
                 t(A)
@@ -1379,43 +1322,64 @@ getConfidentClades <- function(pp, p = 0.9, max_size = Inf, labels = TRUE, singl
     return(selected)
 }
 
+#' Compute the likelihood of a tree given model parameters
+#' @param tree_fit phylogenetic tree
+#' @param ngen number of generations
+#' @param err error rate
+#' @param eps mutation rate
+#' @param npop population size
+#' @return log-likelihood
+#' @export
+get_param_lik_cpp = function(tree_fit, amat, dmat, ngen, err, eps, npop = 600, k = 20) {
+    
+    A = get_transition_mat_wf_hmm(k = k, eps = eps, N = npop, ngen = ngen)
+    logA_vec = t(log(A))
+    
+    logliks = get_leaf_liks_mat(amat, dmat, get_vaf_bins(k = k), eps = err, log = TRUE)
+    logP_list = convert_logliks_to_logP_list(logliks, tree_fit)
+
+    l = mitodrift:::score_tree_bp_wrapper(tree_fit$edge, logP_list = logP_list, logA = logA_vec)
+
+    return(l)
+}
+
+
 
 # write a function to estimate parameters using MCMC with fmcmc package
 #' @param tree_fit phylogenetic tree
 #' @param amat adjacency matrix
 #' @param dmat distance matrix
-#' @param initial_params initial parameter values (n_gen, log_eps, log_err)
+#' @param initial_params initial parameter values (ngen, log_eps, log_err)
 #' @param lower_bounds lower bounds for parameters in transformed space
 #' @param upper_bounds upper bounds for parameters in transformed space
 #' @param nsteps number of MCMC steps
 #' @param nchains number of MCMC chains
-#' @param n_pop population size for likelihood computation
+#' @param npop population size for likelihood computation
 #' @param k number of clusters for likelihood computation
 #' @param ncores number of cores to use
-#' @param burnin number of MCMC steps to discard as burnin
 #' @param outfile file to save MCMC result
 #' @return MCMC result object from fmcmc
 #' @export
 fit_params_mcmc = function(
     tree_fit, amat, dmat,
-    initial_params = c('n_gen' = 100, 'log_eps' = log(1e-3), 'log_err' = log(1e-3)),
-    lower_bounds = c('n_gen' = 1, 'log_eps' = log(1e-18), 'log_err' = log(1e-18)),
-    upper_bounds = c('n_gen' = 1000, 'log_eps' = log(0.2), 'log_err' = log(0.2)),
+    initial_params = c('ngen' = 100, 'log_eps' = log(1e-3), 'log_err' = log(1e-3)),
+    lower_bounds = c('ngen' = 1, 'log_eps' = log(1e-18), 'log_err' = log(1e-18)),
+    upper_bounds = c('ngen' = 1000, 'log_eps' = log(0.2), 'log_err' = log(0.2)),
     nsteps = 500, nchains = 1, outfile = NULL,
-    n_pop = 600, k = 20, ncores = 1, burnin = 100) {
+    npop = 600, k = 20, ncores = 1) {
     
     # Ensure tree is properly formatted
     tree_fit = reorder_phylo(tree_fit)
     tree_fit$edge.length = NULL
     
     # All three parameters will be estimated
-    param_names = c('n_gen', 'log_eps', 'log_err')
+    param_names = c('ngen', 'log_eps', 'log_err')
     
     message(glue("Estimating all 3 parameters using MCMC: {paste(param_names, collapse=', ')}"))
     
     # Create log-likelihood function for MCMC
     # This function takes parameters in transformed space and converts them back
-    log_likelihood = function(p, tree_fit., amat., dmat., n_pop., k.) {
+    log_likelihood = function(p, tree_fit., amat., dmat., npop., k.) {
         # Convert parameters back to original scale
         params_orig = p
         
@@ -1427,10 +1391,10 @@ fit_params_mcmc = function(
         
         # Compute likelihood
         ll = get_param_lik_cpp(tree_fit., amat., dmat., 
-            n_gen = params_orig['n_gen'],
+            ngen = params_orig['ngen'],
             eps = params_orig['eps'], 
             err = params_orig['err'],
-            n_pop = n_pop., k = k.)
+            npop = npop., k = k.)
         
         return(ll)
     }
@@ -1460,7 +1424,7 @@ fit_params_mcmc = function(
                 tree_fit. = tree_fit,
                 amat. = amat,
                 dmat. = dmat,
-                n_pop. = n_pop,
+                npop. = npop,
                 k. = k
             )
 
@@ -1481,11 +1445,5 @@ fit_params_mcmc = function(
         fwrite(res_df_all, outfile)
     }
 
-    params_est = res_df_all %>%
-        filter(iter > burnin) %>%
-        group_by(variable) %>%
-        summarise(est = mean(value), .groups = 'drop') %>%
-        {setNames(.$est, .$variable)}
-
-    return(params_est)
+    return(res_df_all)
 }

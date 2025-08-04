@@ -67,14 +67,14 @@ option_list <- list(
         metavar = "DOUBLE"
     ),
     make_option(
-        c("-n", "--n_pop"),
+        c("-n", "--npop"),
         type = "integer",
         default = 600,
         help = "Population size",
         metavar = "INTEGER"
     ),
     make_option(
-        c("-g", "--n_gen"),
+        c("-g", "--ngen"),
         type = "integer",
         default = 100,
         help = "Number of generations",
@@ -140,12 +140,11 @@ if (!opts$resume) {
         dir.create(outdir, recursive = TRUE)
     }
 
-    set.seed(0)
-    A = get_transition_mat_wf_hmm(k = opts$k, eps = opts$eps, N = opts$n_pop, n_gen = opts$n_gen)
-    liks = get_leaf_liks_mat(amat, dmat, get_vaf_bins(k = opts$k), eps = opts$seq_err, log = TRUE)
-
     message('Building initial tree using NJ')    
     phy_init = make_rooted_nj(vmat)
+
+    A = get_transition_mat_wf_hmm(k = opts$k, eps = opts$eps, N = opts$npop, ngen = opts$ngen)
+    liks = get_leaf_liks_mat(amat, dmat, get_vaf_bins(k = opts$k), eps = opts$seq_err, log = TRUE)
 
     message('Searching for ML tree')
     if (is.null(opts$freq_dat) | opts$freq_dat == "") {
