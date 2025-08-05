@@ -1,6 +1,7 @@
 #' @import dplyr
 #' @import tidygraph
 #' @import stringr
+#' @import fmcmc
 #' @importFrom igraph vcount ecount E V V<- E<- 
 #' @importFrom phangorn upgma 
 #' @importFrom ape root drop.tip nj
@@ -1202,9 +1203,61 @@ to_phylo_reorder = function(graph) {
     return(phylo)
 }
 
+
+#' Parallelized Clade Support Calculation
+#'
+#' Computes the support for each clade in a reference phylogeny (`phy`) across a list of phylogenetic trees (`phy_list`).
+#' The calculation can be parallelized across multiple cores for efficiency.
+#'
+#' @param phy A reference phylogeny of class \code{phylo}.
+#' @param phy_list A list of phylogenetic trees (of class \code{phylo}) to compare against the reference tree.
+#' @param rooted Logical; whether to treat the trees as rooted. Default is \code{FALSE}.
+#' @param ncores Integer; number of cores to use for parallel computation. Default is \code{1} (no parallelization).
+#' @param normalize Logical; if \code{TRUE}, the support values are normalized to the range [0, 1] by dividing by the number of trees. Default is \code{TRUE}.
+#'
+#' @return A numeric vector of clade support values, in the same order as the internal nodes of \code{phy}.
+#'         If \code{normalize = TRUE}, values are proportions; otherwise, they are counts.
+#'
 #' @export
-add_clade_freq = function(phy, phys, rooted = TRUE) {
-    freqs = prop.clades(phy, phys, rooted = rooted)/length(phys)
+prop.clades.par <- function(phy, phy_list, rooted = FALSE,
+                            ncores = 1, 
+                            normalize = TRUE) {
+
+    nT <- length(phy_list)
+    if (nT == 0) stop("Need at least one tree in the tree list")
+
+    # If ncores = 1, skip chunking and parallel processing
+    if (ncores == 1) {
+        support <- prop.clades(phy, phy_list, rooted = rooted)
+    } else {
+        # split indices into mc.cores chunks
+        chunks <- split(seq_len(nT), cut(seq_len(nT), breaks = ncores, labels = FALSE))
+
+        # for each chunk, compute support counts
+        partials <- mclapply(chunks, function(idxs) {
+            prop.clades(phy, phy_list[idxs], rooted = rooted)
+        }, mc.cores = ncores)
+
+        # sum support across chunks
+        support <- Reduce(`+`, partials)
+    }
+
+    if (normalize) {
+        support <- support / nT
+    }
+
+    return(support)
+}
+
+#' Add clade frequencies to a phylogenetic tree
+#' @param phy A reference phylogeny of class \code{phylo}.
+#' @param phys A list of phylogenetic trees (of class \code{phylo}) to compare against the reference tree.
+#' @param rooted Logical; whether to treat the trees as rooted. Default is \code{TRUE}.
+#' @param ncores Integer; number of cores to use for parallel computation. Default is \code{1} (no parallelization).
+#' @return A phylo object with clade frequencies added as node labels.
+#' @export
+add_clade_freq = function(phy, phys, rooted = TRUE, ncores = 1) {
+    freqs = prop.clades.par(phy, phys, rooted = rooted, normalize = TRUE, ncores = ncores)
     phy$node.label = freqs
     return(phy)
 }
@@ -1356,6 +1409,7 @@ get_param_lik_cpp = function(tree_fit, amat, dmat, ngen, err, eps, npop = 600, k
 #' @param ncores number of cores to use
 #' @param burnin number of MCMC steps to discard as burnin
 #' @param outfile file to save MCMC result
+#' @param check_conv whether to check convergence of parameter fitting
 #' @return MCMC result object from fmcmc
 #' @export
 fit_params_mcmc = function(
@@ -1364,7 +1418,7 @@ fit_params_mcmc = function(
     lower_bounds = c('ngen' = 1, 'log_eps' = log(1e-18), 'log_err' = log(1e-18)),
     upper_bounds = c('ngen' = 1000, 'log_eps' = log(0.2), 'log_err' = log(0.2)),
     nsteps = 500, nchains = 1, outfile = NULL,
-    npop = 600, k = 20, ncores = 1) {
+    npop = 600, k = 20, ncores = 1, check_conv = FALSE) {
     
     # Ensure tree is properly formatted
     tree_fit = reorder_phylo(tree_fit)
@@ -1396,48 +1450,59 @@ fit_params_mcmc = function(
         
         return(ll)
     }
-    
-    kernel = fmcmc::kernel_normal_reflective(
-            scale = c(5, 0.1, 0.1),
-            scheme = "joint",
-            lb = lower_bounds,
-            ub = upper_bounds
-        )
-    
+        
     # Run MCMC
-    message("Starting MCMC sampling...")
+    ncores = min(ncores, nchains)
+    message("Starting MCMC sampling using ", ncores, " cores")
 
-    res_df_all = mclapply(
-        1:nchains,
-        mc.cores = ncores,
+    cl <- makeCluster(ncores)
+
+    msg = clusterEvalQ(cl, {
+        library(mitodrift)
+        library(parallel)
+    })
+
+    if (check_conv) {
+        checker = fmcmc::convergence_gelman(freq = 50)
+    } else {
+        checker = NULL
+    }
+
+    mcmc_result = fmcmc::MCMC(
+        log_likelihood,
+        initial = initial_params,
+        nsteps = nsteps,
+        nchains = nchains,
+        kernel = fmcmc::kernel_normal_reflective(
+                scale = c(5, 0.1, 0.1),
+                scheme = "joint",
+                lb = lower_bounds,
+                ub = upper_bounds
+            ),
+        tree_fit. = tree_fit,
+        amat. = amat,
+        dmat. = dmat,
+        npop. = npop,
+        k. = k,
+        cl = cl,
+        multicore = TRUE,
+        conv_checker = checker
+    )
+
+    stopCluster(cl)
+
+    res_df_all = lapply(
+        seq_len(nchains),
         function(i) {
-            set.seed(i)
-                    
-            mcmc_result = fmcmc::MCMC(
-                log_likelihood,
-                initial = initial_params,
-                nsteps = nsteps,
-                nchains = 1,
-                kernel = kernel,
-                tree_fit. = tree_fit,
-                amat. = amat,
-                dmat. = dmat,
-                npop. = npop,
-                k. = k
-            )
-
-            res_df = data.frame(mcmc_result) %>% 
-                tibble::rowid_to_column('iter') %>%
-                mutate(
-                    err = exp(log_err), 
-                    eps = exp(log_eps),
-                    chain = i
-                ) %>%
-                reshape2::melt(id.var = c('iter', 'chain'))
-
-            return(res_df)
-        }
-    ) %>% bind_rows()
+            data.frame(mcmc_result[[i]]) %>% mutate(chain = i)
+        }) %>%
+        bind_rows() %>%
+        tibble::rowid_to_column('iter') %>%
+        mutate(
+            err = exp(log_err),
+            eps = exp(log_eps),
+        ) %>%
+        reshape2::melt(id.var = c('iter', 'chain'))
 
     if (!is.null(outfile)) {
         fwrite(res_df_all, outfile)

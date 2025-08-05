@@ -18,6 +18,7 @@ suppressPackageStartupMessages({
     library(ggraph)
     library(mitodrift)
     library(optparse)
+    library(fmcmc)
 })
 
 # Define command line options
@@ -104,6 +105,13 @@ option_list <- list(
         default = 0,
         help = "Burnin for parameter fitting",
         metavar = "INTEGER"
+    ),
+    make_option(
+        c("-v", "--fit_param_check_conv"),
+        type = "logical",
+        default = TRUE,
+        help = "Whether to check convergence of parameter fitting",
+        metavar = "LOGICAL"
     ),
     make_option(
         c("-i", "--ml_iter"),
@@ -210,7 +218,8 @@ if (opts$resume) {
             nchains = opts$fit_param_chains,
             ncores = opts$ncores,
             outfile = param_trace_file,
-            burnin = opts$fit_param_burnin
+            burnin = opts$fit_param_burnin,
+            check_conv = opts$fit_param_check_conv
         )
     } else {
         message("\n=== Skipping parameter fitting ===")
@@ -244,7 +253,8 @@ saveRDS(md, mitodrift_object_file)
 
 message("\n=== Annotating tree with clade frequencies ===")
 md$annotate_tree(
-    burnin = opts$tree_mcmc_burnin
+    burnin = opts$tree_mcmc_burnin,
+    ncores = opts$ncores
 )
 
 write.tree(md$tree_annot, annot_tree_file)

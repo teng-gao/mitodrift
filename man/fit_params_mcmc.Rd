@@ -16,7 +16,8 @@ fit_params_mcmc(
   outfile = NULL,
   npop = 600,
   k = 20,
-  ncores = 1
+  ncores = 1,
+  check_conv = FALSE
 )
 }
 \arguments{
@@ -43,6 +44,8 @@ fit_params_mcmc(
 \item{k}{number of clusters for likelihood computation}
 
 \item{ncores}{number of cores to use}
+
+\item{check_conv}{whether to check convergence of parameter fitting}
 
 \item{burnin}{number of MCMC steps to discard as burnin}
 }

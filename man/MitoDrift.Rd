@@ -133,6 +133,7 @@ Fit tree parameters using MCMC
   nchains = 1,
   ncores = 1,
   burnin = 150,
+  check_conv = FALSE,
   outfile = NULL
 )}\if{html}{\out{</div>}}
 }
@@ -147,6 +148,8 @@ Fit tree parameters using MCMC
 \item{\code{ncores}}{Number of cores to use (default: 1)}
 
 \item{\code{burnin}}{Number of burnin steps (default: 100)}
+
+\item{\code{check_conv}}{whether to check convergence of parameter fitting}
 
 \item{\code{outfile}}{Output file for MCMC results (optional)}
 }
@@ -237,6 +240,7 @@ Trim tree using MCMC results
   burnin = 0,
   max_iter = 1e+08,
   use_nj = FALSE,
+  ncores = 1,
   mcmc_trace_file = NULL
 )}\if{html}{\out{</div>}}
 }
@@ -249,6 +253,8 @@ Trim tree using MCMC results
 \item{\code{max_iter}}{Maximum iteration to include (default: 1e8)}
 
 \item{\code{use_nj}}{Whether to use NJ tree instead of ML tree (default: FALSE)}
+
+\item{\code{ncores}}{Number of cores to use (default: 1)}
 
 \item{\code{mcmc_trace_file}}{MCMC result file (optional, uses stored file if NULL)}
 }

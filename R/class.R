@@ -178,12 +178,14 @@ MitoDrift <- R6::R6Class("MitoDrift",
         #' @param ncores Number of cores to use (default: 1)
         #' @param burnin Number of burnin steps (default: 100)
         #' @param outfile Output file for MCMC results (optional)
+        #' @param check_conv whether to check convergence of parameter fitting
         #' @return MCMC result object
         fit_params = function(
             nsteps = 500,
             nchains = 1,
             ncores = 1,
             burnin = 150,
+            check_conv = FALSE,
             outfile = NULL
         ) {
             
@@ -203,7 +205,8 @@ MitoDrift <- R6::R6Class("MitoDrift",
                 ncores = ncores,
                 outfile = self$param_trace_file,
                 npop = self$model_params["npop"],
-                k = self$model_params["k"]
+                k = self$model_params["k"],
+                check_conv = check_conv
             )
 
             params_est = mcmc_trace %>%
@@ -337,11 +340,13 @@ MitoDrift <- R6::R6Class("MitoDrift",
         #' @param max_iter Maximum iteration to include (default: 1e8)
         #' @param use_nj Whether to use NJ tree instead of ML tree (default: FALSE)
         #' @param mcmc_trace_file MCMC result file (optional, uses stored file if NULL)
+        #' @param ncores Number of cores to use (default: 1)
         #' @return Trimmed tree with clade frequencies
         annotate_tree = function(
             burnin = 0,
             max_iter = 1e8,
             use_nj = FALSE,
+            ncores = 1,
             mcmc_trace_file = NULL
         ) {
             
@@ -372,7 +377,7 @@ MitoDrift <- R6::R6Class("MitoDrift",
             trees_mcmc <- collect_chains(res_mcmc, burnin = burnin, max_iter = max_iter)
             
             message('Adding clade frequencies to tree...')
-            self$tree_annot <- add_clade_freq(tree, trees_mcmc)
+            self$tree_annot <- add_clade_freq(tree, trees_mcmc, ncores = ncores)
             
             message('Tree annotation completed!')
         }

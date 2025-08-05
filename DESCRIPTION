@@ -29,6 +29,7 @@ Imports:
     RhpcBLASctl,
     phangorn,
     glue,
+    fmcmc,
     stringr,
     R6
 Suggests:
