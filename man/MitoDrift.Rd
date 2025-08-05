@@ -132,7 +132,7 @@ Fit tree parameters using MCMC
   nsteps = 500,
   nchains = 1,
   ncores = 1,
-  burnin = 150,
+  keep = 100,
   check_conv = FALSE,
   outfile = NULL
 )}\if{html}{\out{</div>}}
@@ -147,7 +147,7 @@ Fit tree parameters using MCMC
 
 \item{\code{ncores}}{Number of cores to use (default: 1)}
 
-\item{\code{burnin}}{Number of burnin steps (default: 100)}
+\item{\code{keep}}{Number of samples to keep at the end of the chain (default: 100)}
 
 \item{\code{check_conv}}{whether to check convergence of parameter fitting}
 

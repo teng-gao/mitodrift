@@ -17,6 +17,7 @@ fit_params_mcmc(
   npop = 600,
   k = 20,
   ncores = 1,
+  keep = 100,
   check_conv = FALSE
 )
 }
@@ -45,9 +46,9 @@ fit_params_mcmc(
 
 \item{ncores}{number of cores to use}
 
-\item{check_conv}{whether to check convergence of parameter fitting}
+\item{keep}{number of MCMC steps to keep at the end of each chain}
 
-\item{burnin}{number of MCMC steps to discard as burnin}
+\item{check_conv}{whether to check convergence of parameter fitting}
 }
 \value{
 MCMC result object from fmcmc

@@ -21,6 +21,9 @@ suppressPackageStartupMessages({
     library(fmcmc)
 })
 
+# repo_dir = "/lab-share/Hem-Sankaran-e2/Public/projects/tgao/tools/mitodrift"
+# devtools::load_all(repo_dir)
+
 # Define command line options
 option_list <- list(
     make_option(
@@ -100,10 +103,10 @@ option_list <- list(
         metavar = "INTEGER"
     ),
     make_option(
-        c("-d", "--fit_param_burnin"),
+        c("-d", "--fit_param_keep"),
         type = "integer",
-        default = 0,
-        help = "Burnin for parameter fitting",
+        default = 100,
+        help = "Number of samples to keep at the end of the chain for parameter fitting",
         metavar = "INTEGER"
     ),
     make_option(
@@ -218,7 +221,7 @@ if (opts$resume) {
             nchains = opts$fit_param_chains,
             ncores = opts$ncores,
             outfile = param_trace_file,
-            burnin = opts$fit_param_burnin,
+            keep = opts$fit_param_keep,
             check_conv = opts$fit_param_check_conv
         )
     } else {

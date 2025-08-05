@@ -1407,7 +1407,7 @@ get_param_lik_cpp = function(tree_fit, amat, dmat, ngen, err, eps, npop = 600, k
 #' @param npop population size for likelihood computation
 #' @param k number of clusters for likelihood computation
 #' @param ncores number of cores to use
-#' @param burnin number of MCMC steps to discard as burnin
+#' @param keep number of MCMC steps to keep at the end of each chain
 #' @param outfile file to save MCMC result
 #' @param check_conv whether to check convergence of parameter fitting
 #' @return MCMC result object from fmcmc
@@ -1418,7 +1418,7 @@ fit_params_mcmc = function(
     lower_bounds = c('ngen' = 1, 'log_eps' = log(1e-18), 'log_err' = log(1e-18)),
     upper_bounds = c('ngen' = 1000, 'log_eps' = log(0.2), 'log_err' = log(0.2)),
     nsteps = 500, nchains = 1, outfile = NULL,
-    npop = 600, k = 20, ncores = 1, check_conv = FALSE) {
+    npop = 600, k = 20, ncores = 1, keep = 100, check_conv = FALSE) {
     
     # Ensure tree is properly formatted
     tree_fit = reorder_phylo(tree_fit)
@@ -1463,22 +1463,24 @@ fit_params_mcmc = function(
     })
 
     if (check_conv) {
-        checker = fmcmc::convergence_gelman(freq = 50)
+        checker = fmcmc::convergence_gelman(freq = 50, threshold = 1)
     } else {
         checker = NULL
     }
+
+    kernel = fmcmc::kernel_normal_reflective(
+        scale = c(5, 0.1, 0.1),
+        scheme = "joint",
+        lb = lower_bounds,
+        ub = upper_bounds
+    )
 
     mcmc_result = fmcmc::MCMC(
         log_likelihood,
         initial = initial_params,
         nsteps = nsteps,
         nchains = nchains,
-        kernel = fmcmc::kernel_normal_reflective(
-                scale = c(5, 0.1, 0.1),
-                scheme = "joint",
-                lb = lower_bounds,
-                ub = upper_bounds
-            ),
+        kernel = kernel,
         tree_fit. = tree_fit,
         amat. = amat,
         dmat. = dmat,
@@ -1494,10 +1496,11 @@ fit_params_mcmc = function(
     res_df_all = lapply(
         seq_len(nchains),
         function(i) {
-            data.frame(mcmc_result[[i]]) %>% mutate(chain = i)
+            data.frame(mcmc_result[[i]]) %>% 
+                tibble::rowid_to_column('iter') %>%
+                mutate(chain = i)
         }) %>%
         bind_rows() %>%
-        tibble::rowid_to_column('iter') %>%
         mutate(
             err = exp(log_err),
             eps = exp(log_eps),

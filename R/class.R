@@ -176,7 +176,7 @@ MitoDrift <- R6::R6Class("MitoDrift",
         #' @param nsteps Number of MCMC steps (default: 500)
         #' @param nchains Number of MCMC chains (default: 1)
         #' @param ncores Number of cores to use (default: 1)
-        #' @param burnin Number of burnin steps (default: 100)
+        #' @param keep Number of samples to keep at the end of the chain (default: 100)
         #' @param outfile Output file for MCMC results (optional)
         #' @param check_conv whether to check convergence of parameter fitting
         #' @return MCMC result object
@@ -184,7 +184,7 @@ MitoDrift <- R6::R6Class("MitoDrift",
             nsteps = 500,
             nchains = 1,
             ncores = 1,
-            burnin = 150,
+            keep = 100,
             check_conv = FALSE,
             outfile = NULL
         ) {
@@ -210,7 +210,9 @@ MitoDrift <- R6::R6Class("MitoDrift",
             )
 
             params_est = mcmc_trace %>%
-                filter(iter > burnin) %>%
+                group_by(chain, variable) %>%
+                slice_tail(n = keep) %>%
+                ungroup() %>%
                 group_by(variable) %>%
                 summarise(est = mean(value), .groups = 'drop') %>%
                 {setNames(.$est, .$variable)}
