@@ -1,7 +1,7 @@
 #' @export 
 plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = TRUE, dot_size = 1, ylim = NULL,
     clade_annot = NULL, tip_annot = NULL,
-    title = NULL, auc = FALSE, clone_bar = FALSE, label_site = FALSE, cell_annot = NULL, tip_lab = FALSE, node_lab = FALSE, layered = FALSE,
+    title = NULL, label_site = FALSE, cell_annot = NULL, tip_lab = FALSE, node_lab = FALSE, layered = FALSE, annot_bar_height = 0.1,
     het_max = 0.1, conf_min = 0.5, conf_label = FALSE, branch_length = TRUE, node_conf = FALSE, annot_scale = NULL, annot_legend = FALSE, label_group = FALSE,
     annot_legend_title = '', text_size = 3, label_size = 1, mut = NULL, post_max = FALSE, mark_low_cov = FALSE, facet_by_group = FALSE, flip = FALSE) {
 
@@ -184,9 +184,9 @@ plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = T
                 annot_scale = annot_scale, legend_title = annot_legend_title, layered = layered)
 
         if (!is.null(clade_annot)) {
-            (p_tree / p_bar / p_clade / p_heatmap) + plot_layout(heights = c(1, 0.1, 1, 2))
+            (p_tree / p_bar / p_clade / p_heatmap) + plot_layout(heights = c(1, annot_bar_height, 1, 2))
         } else {
-            (p_tree / p_bar / p_heatmap) + plot_layout(heights = c(1, 0.1, 2))
+            (p_tree / p_bar / p_heatmap) + plot_layout(heights = c(1, annot_bar_height, 2))
         }
     } else {
         (p_tree / p_heatmap) + plot_layout(heights = c(1, 2))

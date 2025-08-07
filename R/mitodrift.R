@@ -1235,7 +1235,9 @@ prop.clades.par <- function(phy, phy_list, rooted = FALSE,
 
         # for each chunk, compute support counts
         partials <- mclapply(chunks, function(idxs) {
-            prop.clades(phy, phy_list[idxs], rooted = rooted)
+            pc = prop.clades(phy, phy_list[idxs], rooted = rooted)
+            pc[is.na(pc)] = 0
+            return(pc)
         }, mc.cores = ncores)
 
         # sum support across chunks
