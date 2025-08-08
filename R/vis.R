@@ -1,7 +1,7 @@
 #' @export 
 plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = TRUE, dot_size = 1, ylim = NULL,
     clade_annot = NULL, tip_annot = NULL,
-    title = NULL, label_site = FALSE, cell_annot = NULL, tip_lab = FALSE, node_lab = FALSE, layered = FALSE, annot_bar_height = 0.1,
+    title = NULL, label_site = FALSE, cell_annot = NULL, tip_lab = FALSE, node_lab = FALSE, layered = FALSE, annot_bar_height = 0.1, clade_bar_height = 1,
     het_max = 0.1, conf_min = 0.5, conf_label = FALSE, branch_length = TRUE, node_conf = FALSE, annot_scale = NULL, annot_legend = FALSE, label_group = FALSE,
     annot_legend_title = '', text_size = 3, label_size = 1, mut = NULL, post_max = FALSE, mark_low_cov = FALSE, facet_by_group = FALSE, flip = FALSE) {
 
@@ -155,11 +155,12 @@ plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = T
 
     if (!is.null(clade_annot)) {
         p_clade = clade_annot %>%
+            mutate(I = 1) %>%
             mutate(cell = factor(as.integer(factor(cell, cell_order)), 1:length(cell_order))) %>%
             ggplot(
                 aes(x = cell, y = factor(clade), fill = I)
             ) +
-            geom_tile(width=0.8, height=0.8) +
+            geom_raster(show.legend = FALSE) +
             theme_bw() +
             theme(
                 axis.text.x = element_blank(),
@@ -183,14 +184,29 @@ plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = T
                 label_size = text_size/2,
                 annot_scale = annot_scale, legend_title = annot_legend_title, layered = layered)
 
-        if (!is.null(clade_annot)) {
-            (p_tree / p_bar / p_clade / p_heatmap) + plot_layout(heights = c(1, annot_bar_height, 1, 2))
-        } else {
-            (p_tree / p_bar / p_heatmap) + plot_layout(heights = c(1, annot_bar_height, 2))
-        }
-    } else {
-        (p_tree / p_heatmap) + plot_layout(heights = c(1, 2))
     }
+
+    # Determine heights based on components
+    heights <- c(1)  # tree always has height 1
+
+    # Build plot components list
+    plot_components <- list(p_tree)
+    
+    if (!is.null(cell_annot)) {
+        plot_components <- c(plot_components, list(p_bar))
+        heights <- c(heights, annot_bar_height)
+    }
+    
+    if (!is.null(clade_annot)) {
+        plot_components <- c(plot_components, list(p_clade))
+        heights <- c(heights, clade_bar_height)
+    }
+    
+    plot_components <- c(plot_components, list(p_heatmap))
+    heights <- c(heights, 2)
+    
+    # Combine plots
+    wrap_plots(plot_components) + plot_layout(heights = heights)
 }
 
 # expect columns cell and annot

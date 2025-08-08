@@ -382,6 +382,39 @@ MitoDrift <- R6::R6Class("MitoDrift",
             self$tree_annot <- add_clade_freq(tree, trees_mcmc, ncores = ncores)
             
             message('Tree annotation completed!')
+        },
+        
+        #' @description Create a copy of a MitoDrift object with updated structure
+        #' 
+        #' This method creates a new MitoDrift instance with the same data but updated
+        #' class structure. Useful for refreshing objects created with older versions
+        #' of the code.
+        #' 
+        #' @param old_obj The old MitoDrift object to copy from
+        #' @return A new MitoDrift object with the same data
+        copy = function(old_obj) {
+            
+            # Create new instance with same data
+            new_obj <- MitoDrift$new(
+                amat = old_obj$amat,
+                dmat = old_obj$dmat,
+                model_params = old_obj$model_params
+            )
+            
+            # List of all fields to copy
+            all_fields <- c("tree_init", "A", "leaf_likelihoods", "logA", "logP", 
+                           "tree_ml", "tree_annot", "mcmc_trace", "tree_list",
+                           "ml_trace_file", "mcmc_trace_file", "param_trace_file")
+            
+            # Copy over all fields
+            for (field in all_fields) {
+                if (!is.null(old_obj[[field]])) {
+                    new_obj[[field]] <- old_obj[[field]]
+                }
+            }
+            
+            message("MitoDrift object copied with updated structure")
+            return(new_obj)
         }
     ),
     
