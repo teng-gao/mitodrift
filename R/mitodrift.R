@@ -208,7 +208,7 @@ get_leaf_liks = function(mut_dat, vafs, eps = 0, ncores = 1, log = FALSE) {
                     function(x, key) {
                         l = sapply(vafs,
                             function(v) {
-                                dbinom(x = x$a, size = x$d, prob = pmin(v + eps, 1), log = log)
+                                dbinom(x = x$a, size = x$d, prob = pmin(v + eps, 1 - eps), log = log)
                         })
                         tibble(l, vaf = vafs)
                 }) %>%
@@ -257,7 +257,7 @@ get_leaf_liks_mat = function(amat, dmat, vafs, eps = 0, ncores = 1, log = FALSE)
                     function(vaf) {
                         dbinom(x = amat[v,], 
                             size = dmat[v,],
-                            prob = pmin(vaf + eps, 1),
+                            prob = pmin(vaf + eps, 1 - eps),
                             log = log)
                     }
                 )
@@ -615,6 +615,7 @@ decode_tree = function(
         if (store_bels) {
             ebels[[mut]] = res_mar$edge.bel
             nbels[[mut]] = res_mar$node.bel
+            rownames(nbels[[mut]]) = vnames
         }
 
         if (store_crfs) {
