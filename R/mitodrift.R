@@ -55,6 +55,9 @@ optimize_tree_cpp = function(
 
     if (start_iter > max_iter) {
         message(paste0("Already completed ", start_iter - 1, " iterations. No new iterations to run for max_iter = ", max_iter, "."))
+        if (!is.null(outfile)) {
+            saveRDS(tree_list, outfile)
+        }
         return(tree_list)
     }
 

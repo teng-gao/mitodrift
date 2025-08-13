@@ -17,7 +17,7 @@ plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = T
     }
 
     p_tree = phylo %>%
-        ggtree(ladderize = TRUE, linewidth = branch_width) + 
+        ggtree(ladderize = TRUE, linewidth = branch_width, right = flip) + 
         theme_bw() +
         theme(
             plot.margin = margin(0, 0, 0, 0, unit = "mm"), 
@@ -37,10 +37,6 @@ plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = T
         scale_x_reverse(expand = expansion(mult = 0.05)) +
         scale_y_continuous(expand = expansion(add = 1)) +
         ggtitle(title)
-
-    if (flip) {
-        p_tree = p_tree + scale_y_reverse(expand = expansion(add = 1))
-    }
 
     # plot mutation VAF
     if (!is.null(mut)) {
@@ -154,13 +150,20 @@ plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = T
     }
 
     if (!is.null(clade_annot)) {
+
+        if ('score' %in% colnames(clade_annot)) {
+            show.legend = TRUE
+        } else {
+            clade_annot = clade_annot %>% mutate(score = 1)
+            show.legend = FALSE
+        }
+
         p_clade = clade_annot %>%
-            mutate(I = 1) %>%
             mutate(cell = factor(as.integer(factor(cell, cell_order)), 1:length(cell_order))) %>%
             ggplot(
-                aes(x = cell, y = factor(clade), fill = I)
+                aes(x = cell, y = factor(clade), fill = score)
             ) +
-            geom_raster(show.legend = FALSE) +
+            geom_raster(show.legend = show.legend) +
             theme_bw() +
             theme(
                 axis.text.x = element_blank(),
