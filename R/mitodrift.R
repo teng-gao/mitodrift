@@ -245,6 +245,53 @@ get_leaf_liks = function(mut_dat, vafs, eps = 0, ncores = 1, log = FALSE) {
 #' @return list of likelihood matrices
 #' @export
 get_leaf_liks_mat = function(amat, dmat, vafs, eps = 0, ncores = 1, log = FALSE) {
+	# Precompute clamped probabilities for all VAF bins once
+	p <- pmin(vafs + eps, 1 - eps)
+	K <- length(p)
+	variants <- rownames(amat)
+	ncells <- ncol(amat)
+	cell_names <- colnames(amat)
+
+	# Use at most one core per variant
+	nc <- min(ncores, length(variants))
+
+	liks <- mclapply(
+		variants,
+		mc.cores = nc,
+		function(v) {
+			# Extract counts for this variant (length = #cells)
+			x <- amat[v, ]
+			n <- dmat[v, ]
+
+			# Vectorized dbinom over all VAFs x cells in one call:
+			# replicate x,n for each VAF (row-major by VAF), replicate p across cells
+			X <- rep(x, each = K)
+			N <- rep(n, each = K)
+			P <- rep(p, times = ncells)
+
+			val <- dbinom(x = X, size = N, prob = P, log = log)
+
+			# Reshape to [K x #cells] so that rows=VAFs, cols=cells
+			m <- matrix(val, nrow = K, ncol = ncells, byrow = FALSE)
+			rownames(m) <- vafs
+			colnames(m) <- cell_names
+			m
+		}
+	)
+
+	names(liks) <- variants
+	return(liks)
+}
+
+#' get leaft likelihoods given mutation data in matrix format
+#' @param amat matrix of allele counts
+#' @param dmat matrix of total counts
+#' @param vafs vector of VAFs
+#' @param eps error rate
+#' @param log whether to return log likelihoods
+#' @return list of likelihood matrices
+#' @export
+get_leaf_liks_mat_old = function(amat, dmat, vafs, eps = 0, ncores = 1, log = FALSE) {
 
     variants = rownames(amat)
 
@@ -267,6 +314,7 @@ get_leaf_liks_mat = function(amat, dmat, vafs, eps = 0, ncores = 1, log = FALSE)
     
     return(liks)
 }
+
 
 #' @export 
 convert_liks_to_logP_list <- function(liks, phy) {
@@ -384,26 +432,23 @@ get_transition_mat_wf = function(k, eps = 0.01, N = 100, n_rep = 1e4, ngen = 100
 
 }
 
-
 #' Get the transition matrix for WF model with HMM
 #' TODO: add log option for small probabilities
 #' @param k number of VAF bins
 #' @param eps error rate
 #' @param N population size
 #' @param ngen number of generations
+#' @param safe whether to add small probability to avoid 0s
 #' @return transition matrix
 #' @export
-get_transition_mat_wf_hmm <- function(k, eps, N, ngen) {
+get_transition_mat_wf_hmm <- function(k, eps, N, ngen, safe = FALSE) {
     # For zero generations, the transition matrix is the identity matrix
     if (ngen == 0) {
         A <- diag(k + 2)
     } else {
         # 1. Create the single-generation transition matrix for allele counts (0 to N)
-        T_mat <- matrix(0, nrow = N + 1, ncol = N + 1)
-        for (i in 0:N) {
-            p <- i / N
-            T_mat[i + 1, ] <- dbinom(0:N, size = N, prob = p)
-        }
+        p_vec <- (0:N) / N
+        T_mat <- outer(p_vec, 0:N, function(p, k) dbinom(k, size = N, prob = p))
 
         # 2. Compute the multi-generation transition matrix using matrix exponentiation
         T_ngen <- expm::`%^%`(T_mat, ngen)
@@ -454,8 +499,13 @@ get_transition_mat_wf_hmm <- function(k, eps, N, ngen) {
     colnames(A) <- vaf_bins
     rownames(A) <- vaf_bins
 
+    if (safe) {
+        A[A == 0] = 1e-16
+    }
+
     return(A)
 }
+
 
 #' Wrapper function to interpolate non-integer generations
 #' @param k number of VAF bins
@@ -464,12 +514,12 @@ get_transition_mat_wf_hmm <- function(k, eps, N, ngen) {
 #' @param ngen number of generations
 #' @return transition matrix
 #' @export
-get_transition_mat_wf_hmm_wrapper = function(k, eps, N, ngen) {
+get_transition_mat_wf_hmm_wrapper = function(k, eps, N, ngen, safe = FALSE) {
     
     # Check if ngen is an integer
     if (ngen == round(ngen)) {
         # If integer, use the original function directly
-        return(get_transition_mat_wf_hmm(k = k, eps = eps, N = N, ngen = ngen))
+        return(get_transition_mat_wf_hmm(k = k, eps = eps, N = N, ngen = ngen, safe = safe))
     }
     
     # If non-integer, interpolate between two nearest integer generations
@@ -477,8 +527,8 @@ get_transition_mat_wf_hmm_wrapper = function(k, eps, N, ngen) {
     ngen_upper = ceiling(ngen)
     
     # Get transition matrices for the two nearest integer generations
-    A_lower = get_transition_mat_wf_hmm(k = k, eps = eps, N = N, ngen = ngen_lower)
-    A_upper = get_transition_mat_wf_hmm(k = k, eps = eps, N = N, ngen = ngen_upper)
+    A_lower = get_transition_mat_wf_hmm(k = k, eps = eps, N = N, ngen = ngen_lower, safe = safe)
+    A_upper = get_transition_mat_wf_hmm(k = k, eps = eps, N = N, ngen = ngen_upper, safe = safe)
     
     # Calculate interpolation weight
     weight = ngen - ngen_lower
@@ -580,6 +630,7 @@ decode_tree = function(
     ebels = list()
     nbels = list()
     crfs = list()
+    res_max = NULL
 
     for (mut in names(liks)) {
 
@@ -607,8 +658,6 @@ decode_tree = function(
                 gtree = gtree %>% activate(nodes) %>%
                     select(-any_of(c(paste0('z_', mut)))) %>% 
                     left_join(z_dat, by = join_by(name))
-            } else {
-                res_max = NULL
             }
         }
 
@@ -1520,4 +1569,144 @@ fit_params_mcmc = function(
     }
 
     return(res_df_all)
+}
+
+get_q = function(nbels, ebels, logliks, A) {
+    leafs = colnames(logliks)
+    l_leaf = sum(nbels[leafs,] * t(logliks))
+    l_trans = sum(Reduce('+', ebels) * log(A))
+    q = l_trans + l_leaf
+    return(q)
+}
+
+get_q_vec = function(nbels, ebels, logliks, A) {
+    sapply(seq_along(nbels), function(i) {
+        get_q(nbels[[i]], ebels[[i]], logliks[[i]], A)
+    }) %>% sum
+}
+
+fit_params_em = function(tree_fit, amat, dmat, 
+    initial_params = c('ngen' = 100, 'log_eps' = log(1e-3), 'log_err' = log(1e-3)),
+    lower_bounds = c('ngen' = 1, 'log_eps' = log(1e-12), 'log_err' = log(1e-12)),
+    upper_bounds = c('ngen' = 1000, 'log_eps' = log(0.2), 'log_err' = log(0.2)),
+    max_iter = 10, k = 20, npop = 600
+    ) {
+
+    # always renumber tree otherwise results are different
+    tree_fit = TreeTools::Renumber(tree_fit)
+
+    par = initial_params
+
+    for (i in 1:max_iter) {
+        
+        ngen = par[1]
+        eps = exp(par[2])
+        err = exp(par[3])
+        
+        liks = get_leaf_liks_mat(amat, dmat, vafs = get_vaf_bins(k), eps = err)
+        A = get_transition_mat_wf_hmm(k = k, eps = eps, N = npop, ngen = ngen, safe = TRUE)
+        
+        res = decode_tree(tree_fit, A, liks, store_bels = TRUE, debug = TRUE, score_only = TRUE)
+        nbels = res$nbels
+        ebels = res$ebels
+
+        logL = sum(res$gtree$logZ)
+        
+        message(glue("Iteration {i} E step: logL = {logL}"))
+        
+        fit = optim(
+                fn = function(x) {
+        
+                    ngen = x[1]
+                    eps = exp(x[2])
+                    err = exp(x[3])
+                    
+                    logliks = get_leaf_liks_mat(amat, dmat, vafs = get_vaf_bins(k), eps = err, log = T)
+                    A = get_transition_mat_wf_hmm_wrapper(k = k, eps = eps, N = npop, ngen = ngen, safe = TRUE)
+                    -get_q_vec(nbels, ebels, logliks, A)
+
+                },
+                method = 'L-BFGS-B',
+                par = par,
+                lower = lower_bounds,
+                upper = upper_bounds
+            )
+
+        par = fit$par
+        message(glue("Iteration {i} M step: ngen = {par[1]}, log_eps = {par[2]}, log_err = {par[3]}"))
+    }
+
+    return(par)
+
+}
+
+fit_params_em_par = function(tree_fit, amat, dmat, 
+    initial_params = c('ngen' = 100, 'log_eps' = log(1e-3), 'log_err' = log(1e-3)),
+    lower_bounds = c('ngen' = 1, 'log_eps' = log(1e-12), 'log_err' = log(1e-12)),
+    upper_bounds = c('ngen' = 1000, 'log_eps' = log(0.2), 'log_err' = log(0.2)),
+    max_iter = 10, k = 20, npop = 600, ncores = 3
+    ) {
+
+    # always renumber tree otherwise results are different
+    tree_fit = TreeTools::Renumber(tree_fit)
+
+    par = initial_params
+
+    cl <- makeCluster(ncores)
+
+    msg = clusterEvalQ(cl, {
+        library(mitodrift)
+        library(parallel)
+        library(dplyr)
+    })
+
+    clusterExport(cl, c("get_q", "get_q_vec", "amat", "dmat",
+     "get_transition_mat_wf_hmm_wrapper", "get_transition_mat_wf_hmm", 
+     "get_leaf_liks_mat"))
+
+    setDefaultCluster(cl=cl)
+
+    for (i in 1:max_iter) {
+        
+        ngen = par[1]
+        eps = exp(par[2])
+        err = exp(par[3])
+        
+        liks = get_leaf_liks_mat(amat, dmat, vafs = get_vaf_bins(k), eps = err)
+        A = get_transition_mat_wf_hmm(k = k, eps = eps, N = npop, ngen = ngen, safe = TRUE)
+        
+        res = decode_tree(tree_fit, A, liks, store_bels = TRUE, debug = TRUE, score_only = TRUE)
+        nbels = res$nbels
+        ebels = res$ebels
+
+        logL = sum(res$gtree$logZ)
+        
+        message(glue("Iteration {i} E step: logL = {logL}"))
+        
+        fit = optimParallel(
+                fn = function(x) {
+        
+                    ngen = x[1]
+                    eps = exp(x[2])
+                    err = exp(x[3])
+                    
+                    logliks = get_leaf_liks_mat(amat, dmat, vafs = get_vaf_bins(k), eps = err, log = TRUE)
+                    A = get_transition_mat_wf_hmm_wrapper(k = k, eps = eps, N = npop, ngen = ngen, safe = TRUE)
+                    -get_q_vec(nbels, ebels, logliks, A)
+
+                },
+                method = 'L-BFGS-B',
+                par = par,
+                lower = lower_bounds,
+                upper = upper_bounds
+            )
+
+        par = fit$par
+        message(glue("Iteration {i} M step: ngen = {par[1]}, log_eps = {par[2]}, log_err = {par[3]}"))
+    }
+
+    stopCluster(cl)
+
+    return(par)
+
 }
