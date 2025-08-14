@@ -384,7 +384,9 @@ get_transition_mat_wf = function(k, eps = 0.01, N = 100, n_rep = 1e4, ngen = 100
 
 }
 
+
 #' Get the transition matrix for WF model with HMM
+#' TODO: add log option for small probabilities
 #' @param k number of VAF bins
 #' @param eps error rate
 #' @param N population size
