@@ -231,6 +231,58 @@ MitoDrift <- R6::R6Class("MitoDrift",
             return(params_est)
         },
         
+        #' @description Fit tree parameters using Expectation-Maximization (EM) algorithm
+        #' @param initial_params Initial parameter values (ngen, log_eps, log_err)
+        #' @param lower_bounds Lower bounds for parameters in transformed space
+        #' @param upper_bounds Upper bounds for parameters in transformed space
+        #' @param max_iter Maximum number of EM iterations (default: 10)
+        #' @param epsilon Convergence threshold (default: 1e-3)
+        #' @param ncores Number of cores to use (default: 3)
+        #' @param trace Whether to return trace of parameter values (default: TRUE)
+        #' @param outfile Output file for EM results (optional)
+        #' @return Fitted parameters or list of parameters and trace
+        fit_params_em = function(
+            initial_params = c('ngen' = 100, 'log_eps' = log(1e-3), 'log_err' = log(1e-3)),
+            lower_bounds = c('ngen' = 1, 'log_eps' = log(1e-12), 'log_err' = log(1e-12)),
+            upper_bounds = c('ngen' = 1000, 'log_eps' = log(0.2), 'log_err' = log(0.2)),
+            max_iter = 10,
+            epsilon = 1e-3,
+            ncores = 3
+        ) {
+            
+            if (!is.null(outfile)) {
+                self$param_trace_file <- normalizePath(outfile, mustWork = FALSE)
+            }
+            
+            message("Fitting tree parameters using Expectation-Maximization...")
+            
+            # Run EM parameter fitting using the existing function
+            params_est <- fit_params_em_par(
+                tree_fit = self$tree_init,
+                amat = self$amat,
+                dmat = self$dmat,
+                initial_params = initial_params,
+                lower_bounds = lower_bounds,
+                upper_bounds = upper_bounds,
+                max_iter = max_iter,
+                k = self$model_params["k"],
+                npop = self$model_params["npop"],
+                ncores = ncores,
+                epsilon = epsilon,
+                trace = FALSE
+            )
+
+            # Update model parameters with fitted values
+            for (param in names(params_est)) {
+                self$model_params[param] <- params_est[param]
+            }
+            
+            message("EM parameter fitting completed!")
+            message("Fitted parameters: ", paste(names(params_est), params_est, sep = " = ", collapse = ", "))
+            
+            return(params_est)
+        },
+        
         
         #' @description Optimize tree using C++ implementation
         #' @param max_iter Maximum number of iterations (default: 100)

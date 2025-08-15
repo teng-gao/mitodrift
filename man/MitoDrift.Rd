@@ -54,7 +54,8 @@ A class for mitochondrial drift analysis with tree-based inference
 \item \href{#method-MitoDrift-new}{\code{MitoDrift$new()}}
 \item \href{#method-MitoDrift-print}{\code{MitoDrift$print()}}
 \item \href{#method-MitoDrift-make_model}{\code{MitoDrift$make_model()}}
-\item \href{#method-MitoDrift-fit_params}{\code{MitoDrift$fit_params()}}
+\item \href{#method-MitoDrift-fit_params_mcmc}{\code{MitoDrift$fit_params_mcmc()}}
+\item \href{#method-MitoDrift-fit_params_em}{\code{MitoDrift$fit_params_em()}}
 \item \href{#method-MitoDrift-optimize_tree}{\code{MitoDrift$optimize_tree()}}
 \item \href{#method-MitoDrift-run_mcmc}{\code{MitoDrift$run_mcmc()}}
 \item \href{#method-MitoDrift-annotate_tree}{\code{MitoDrift$annotate_tree()}}
@@ -124,12 +125,12 @@ None
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-MitoDrift-fit_params"></a>}}
-\if{latex}{\out{\hypertarget{method-MitoDrift-fit_params}{}}}
-\subsection{Method \code{fit_params()}}{
+\if{html}{\out{<a id="method-MitoDrift-fit_params_mcmc"></a>}}
+\if{latex}{\out{\hypertarget{method-MitoDrift-fit_params_mcmc}{}}}
+\subsection{Method \code{fit_params_mcmc()}}{
 Fit tree parameters using MCMC
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{MitoDrift$fit_params(
+\if{html}{\out{<div class="r">}}\preformatted{MitoDrift$fit_params_mcmc(
   nsteps = 500,
   nchains = 1,
   ncores = 1,
@@ -158,6 +159,47 @@ Fit tree parameters using MCMC
 }
 \subsection{Returns}{
 MCMC result object
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-MitoDrift-fit_params_em"></a>}}
+\if{latex}{\out{\hypertarget{method-MitoDrift-fit_params_em}{}}}
+\subsection{Method \code{fit_params_em()}}{
+Fit tree parameters using Expectation-Maximization (EM) algorithm
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{MitoDrift$fit_params_em(
+  initial_params = c(ngen = 100, log_eps = log(0.001), log_err = log(0.001)),
+  lower_bounds = c(ngen = 1, log_eps = log(1e-12), log_err = log(1e-12)),
+  upper_bounds = c(ngen = 1000, log_eps = log(0.2), log_err = log(0.2)),
+  max_iter = 10,
+  epsilon = 0.001,
+  ncores = 3
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{initial_params}}{Initial parameter values (ngen, log_eps, log_err)}
+
+\item{\code{lower_bounds}}{Lower bounds for parameters in transformed space}
+
+\item{\code{upper_bounds}}{Upper bounds for parameters in transformed space}
+
+\item{\code{max_iter}}{Maximum number of EM iterations (default: 10)}
+
+\item{\code{epsilon}}{Convergence threshold (default: 1e-3)}
+
+\item{\code{ncores}}{Number of cores to use (default: 3)}
+
+\item{\code{trace}}{Whether to return trace of parameter values (default: TRUE)}
+
+\item{\code{outfile}}{Output file for EM results (optional)}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+Fitted parameters or list of parameters and trace
 }
 }
 \if{html}{\out{<hr>}}
