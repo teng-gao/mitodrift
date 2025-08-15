@@ -239,7 +239,6 @@ MitoDrift <- R6::R6Class("MitoDrift",
         #' @param epsilon Convergence threshold (default: 1e-3)
         #' @param ncores Number of cores to use (default: 3)
         #' @param trace Whether to return trace of parameter values (default: TRUE)
-        #' @param outfile Output file for EM results (optional)
         #' @return Fitted parameters or list of parameters and trace
         fit_params_em = function(
             initial_params = c('ngen' = 100, 'log_eps' = log(1e-3), 'log_err' = log(1e-3)),
@@ -249,10 +248,6 @@ MitoDrift <- R6::R6Class("MitoDrift",
             epsilon = 1e-3,
             ncores = 3
         ) {
-            
-            if (!is.null(outfile)) {
-                self$param_trace_file <- normalizePath(outfile, mustWork = FALSE)
-            }
             
             message("Fitting tree parameters using Expectation-Maximization...")
             
@@ -273,7 +268,7 @@ MitoDrift <- R6::R6Class("MitoDrift",
             )
 
             # Update model parameters with fitted values
-            for (param in names(params_est)) {
+            for (param in c('ngen', 'eps', 'err')) {
                 self$model_params[param] <- params_est[param]
             }
             

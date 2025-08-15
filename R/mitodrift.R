@@ -1571,19 +1571,6 @@ fit_params_mcmc = function(
     return(res_df_all)
 }
 
-get_q = function(nbels, ebels, logliks, A) {
-    leafs = colnames(logliks)
-    l_leaf = sum(nbels[leafs,] * t(logliks))
-    l_trans = sum(Reduce('+', ebels) * log(A))
-    q = l_trans + l_leaf
-    return(q)
-}
-
-get_q_vec = function(nbels, ebels, logliks, A) {
-    sapply(seq_along(nbels), function(i) {
-        get_q(nbels[[i]], ebels[[i]], logliks[[i]], A)
-    }) %>% sum
-}
 
 fit_params_em = function(tree_fit, amat, dmat, 
     initial_params = c('ngen' = 100, 'log_eps' = log(1e-3), 'log_err' = log(1e-3)),
@@ -1620,7 +1607,21 @@ fit_params_em = function(tree_fit, amat, dmat,
                     ngen = x[1]
                     eps = exp(x[2])
                     err = exp(x[3])
-                    
+
+                    get_q = function(nbels, ebels, logliks, A) {
+                        leafs = colnames(logliks)
+                        l_leaf = sum(nbels[leafs,] * t(logliks))
+                        l_trans = sum(Reduce('+', ebels) * log(A))
+                        q = l_trans + l_leaf
+                        return(q)
+                    }
+
+                    get_q_vec = function(nbels, ebels, logliks, A) {
+                        sapply(seq_along(nbels), function(i) {
+                            get_q(nbels[[i]], ebels[[i]], logliks[[i]], A)
+                        }) %>% sum
+                    }
+
                     logliks = get_leaf_liks_mat(amat, dmat, vafs = get_vaf_bins(k), eps = err, log = T)
                     A = get_transition_mat_wf_hmm_wrapper(k = k, eps = eps, N = npop, ngen = ngen, safe = TRUE)
                     -get_q_vec(nbels, ebels, logliks, A)
@@ -1667,7 +1668,7 @@ fit_params_em_par = function(tree_fit, amat, dmat,
 
     par = initial_params
 
-    cl <- makeCluster(ncores)
+    cl <- makeCluster(min(ncores, 3))
 
     msg = clusterEvalQ(cl, {
         library(mitodrift)
@@ -1675,9 +1676,7 @@ fit_params_em_par = function(tree_fit, amat, dmat,
         library(dplyr)
     })
 
-    clusterExport(cl, c("get_q", "get_q_vec", "amat", "dmat",
-     "get_transition_mat_wf_hmm_wrapper", "get_transition_mat_wf_hmm", 
-     "get_leaf_liks_mat_cpp"))
+    clusterExport(cl, c("amat", "dmat"), envir = environment())
 
     setDefaultCluster(cl=cl)
 
@@ -1724,10 +1723,19 @@ fit_params_em_par = function(tree_fit, amat, dmat,
                     ngen = x[1]
                     eps = exp(x[2])
                     err = exp(x[3])
+
+                    get_q_vec = function(nbels, ebels, logliks, logA) {
+                        sapply(seq_along(nbels), function(i) {
+                            leafs = colnames(logliks[[i]])
+                            l_leaf = sum(nbels[[i]][leafs,] * t(logliks[[i]]))
+                            l_trans = sum(Reduce('+', ebels[[i]]) * logA)
+                            l_trans + l_leaf
+                        }) %>% sum
+                    }
                     
-                    logliks = get_leaf_liks_mat_cpp(amat, dmat, vafs = get_vaf_bins(k), eps = err, log = TRUE)
+                    logliks = mitodrift:::get_leaf_liks_mat_cpp(amat, dmat, vafs = get_vaf_bins(k), eps = err, log = TRUE)
                     A = get_transition_mat_wf_hmm_wrapper(k = k, eps = eps, N = npop, ngen = ngen, safe = TRUE)
-                    -get_q_vec(nbels, ebels, logliks, A)
+                    -get_q_vec(nbels, ebels, logliks, log(A))
 
                 },
                 method = 'L-BFGS-B',
@@ -1742,7 +1750,7 @@ fit_params_em_par = function(tree_fit, amat, dmat,
             log_err_diff = abs(par[3] - fit$par[3])
             ngen_diff = abs(par[1] - fit$par[1])
             
-            if (log_eps_diff < epsilon && log_err_diff < epsilon && ngen_diff < 0.25) {
+            if (log_eps_diff < epsilon && log_err_diff < epsilon && ngen_diff < epsilon) {
                 message(glue("Converged at iteration {i}"))
                 par <- fit$par
                 break
@@ -1755,10 +1763,12 @@ fit_params_em_par = function(tree_fit, amat, dmat,
 
     stopCluster(cl)
 
+    par_final = c('ngen' = par[['ngen']], 'eps' = exp(par[['log_eps']]), 'err' = exp(par[['log_err']]))
+
     if (trace) {
-        return(list(par = par, trace = trace_df))
+        return(list(par = par_final, trace = trace_df))
     } else {
-        return(par)
+        return(par_final)
     }
 
 }

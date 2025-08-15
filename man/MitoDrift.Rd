@@ -193,8 +193,6 @@ Fit tree parameters using Expectation-Maximization (EM) algorithm
 \item{\code{ncores}}{Number of cores to use (default: 3)}
 
 \item{\code{trace}}{Whether to return trace of parameter values (default: TRUE)}
-
-\item{\code{outfile}}{Output file for EM results (optional)}
 }
 \if{html}{\out{</div>}}
 }

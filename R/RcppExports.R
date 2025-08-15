@@ -5,8 +5,6 @@ get_leaf_liks_mat_cpp <- function(amat, dmat, vafs, eps = 0.0, ncores = 1L, log 
     .Call('_mitodrift_get_leaf_liks_mat_cpp', PACKAGE = 'mitodrift', amat, dmat, vafs, eps, ncores, log)
 }
 
-#' definitions for logSumExp function
-NULL
 
 reorderRcpp <- function(E) {
     .Call('_mitodrift_reorderRcpp', PACKAGE = 'mitodrift', E)
