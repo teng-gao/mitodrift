@@ -4,7 +4,7 @@
 \alias{get_transition_mat_wf_hmm_wrapper}
 \title{Wrapper function to interpolate non-integer generations}
 \usage{
-get_transition_mat_wf_hmm_wrapper(k, eps, N, ngen)
+get_transition_mat_wf_hmm_wrapper(k, eps, N, ngen, safe = FALSE)
 }
 \arguments{
 \item{k}{number of VAF bins}

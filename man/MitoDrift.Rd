@@ -58,6 +58,7 @@ A class for mitochondrial drift analysis with tree-based inference
 \item \href{#method-MitoDrift-optimize_tree}{\code{MitoDrift$optimize_tree()}}
 \item \href{#method-MitoDrift-run_mcmc}{\code{MitoDrift$run_mcmc()}}
 \item \href{#method-MitoDrift-annotate_tree}{\code{MitoDrift$annotate_tree()}}
+\item \href{#method-MitoDrift-copy}{\code{MitoDrift$copy()}}
 \item \href{#method-MitoDrift-clone}{\code{MitoDrift$clone()}}
 }
 }
@@ -262,6 +263,30 @@ Trim tree using MCMC results
 }
 \subsection{Returns}{
 Trimmed tree with clade frequencies
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-MitoDrift-copy"></a>}}
+\if{latex}{\out{\hypertarget{method-MitoDrift-copy}{}}}
+\subsection{Method \code{copy()}}{
+Create a copy of a MitoDrift object with updated structure
+
+This method creates a new MitoDrift instance with the same data but updated
+class structure. Useful for refreshing objects created with older versions
+of the code.
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{MitoDrift$copy(old_obj)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{old_obj}}{The old MitoDrift object to copy from}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+A new MitoDrift object with the same data
 }
 }
 \if{html}{\out{<hr>}}

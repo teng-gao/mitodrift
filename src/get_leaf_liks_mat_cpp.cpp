@@ -8,7 +8,7 @@ List get_leaf_liks_mat_cpp(const IntegerMatrix &amat,
 					   	   const NumericVector &vafs,
 					   	   double eps = 0.0,
 					   	   int ncores = 1, // kept for signature parity; not used
-					   	   bool log_ = false) {
+					   	   bool log = false) {
 
 	// dimension checks
 	if (amat.nrow() != dmat.nrow() || amat.ncol() != dmat.ncol()) {
@@ -54,7 +54,7 @@ List get_leaf_liks_mat_cpp(const IntegerMatrix &amat,
 			// M[k + j*K] addresses (k,j) in column-major for m (K x ncells)
 			double *colptr = M + j * K;
 			for (int k = 0; k < K; ++k) {
-				colptr[k] = R::dbinom(static_cast<double>(x), static_cast<double>(n), P[k], log_ ? 1 : 0);
+				colptr[k] = R::dbinom(static_cast<double>(x), static_cast<double>(n), P[k], log ? 1 : 0);
 			}
 		}
 

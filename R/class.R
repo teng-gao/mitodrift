@@ -180,7 +180,7 @@ MitoDrift <- R6::R6Class("MitoDrift",
         #' @param outfile Output file for MCMC results (optional)
         #' @param check_conv whether to check convergence of parameter fitting
         #' @return MCMC result object
-        fit_params = function(
+        fit_params_mcmc = function(
             nsteps = 500,
             nchains = 1,
             ncores = 1,
@@ -230,6 +230,7 @@ MitoDrift <- R6::R6Class("MitoDrift",
             
             return(params_est)
         },
+        
         
         #' @description Optimize tree using C++ implementation
         #' @param max_iter Maximum number of iterations (default: 100)

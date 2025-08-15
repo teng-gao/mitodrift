@@ -1640,6 +1640,21 @@ fit_params_em = function(tree_fit, amat, dmat,
 
 }
 
+#' Fit tree parameters using EM algorithm in parallel
+#' @param tree_fit phylogenetic tree
+#' @param amat alternative allele count matrix
+#' @param dmat total depth matrix
+#' @param initial_params initial parameter values (ngen, log_eps, log_err)
+#' @param lower_bounds lower bounds for parameters in transformed space
+#' @param upper_bounds upper bounds for parameters in transformed space
+#' @param max_iter maximum number of iterations
+#' @param k number of clusters for likelihood computation
+#' @param npop population size for likelihood computation
+#' @param ncores number of cores to use
+#' @param epsilon convergence threshold
+#' @param trace whether to return trace of parameter values
+#' @return parameter values or list of parameter values and trace
+#' @export
 fit_params_em_par = function(tree_fit, amat, dmat, 
     initial_params = c('ngen' = 100, 'log_eps' = log(1e-3), 'log_err' = log(1e-3)),
     lower_bounds = c('ngen' = 1, 'log_eps' = log(1e-12), 'log_err' = log(1e-12)),
@@ -1662,7 +1677,7 @@ fit_params_em_par = function(tree_fit, amat, dmat,
 
     clusterExport(cl, c("get_q", "get_q_vec", "amat", "dmat",
      "get_transition_mat_wf_hmm_wrapper", "get_transition_mat_wf_hmm", 
-     "get_leaf_liks_mat"))
+     "get_leaf_liks_mat_cpp"))
 
     setDefaultCluster(cl=cl)
 
@@ -1682,7 +1697,7 @@ fit_params_em_par = function(tree_fit, amat, dmat,
         eps = exp(par[2])
         err = exp(par[3])
         
-        liks = get_leaf_liks_mat(amat, dmat, vafs = get_vaf_bins(k), eps = err)
+        liks = get_leaf_liks_mat_cpp(amat, dmat, vafs = get_vaf_bins(k), eps = err)
         A = get_transition_mat_wf_hmm(k = k, eps = eps, N = npop, ngen = ngen, safe = TRUE)
         
         res = decode_tree(tree_fit, A, liks, store_bels = TRUE, debug = TRUE, score_only = TRUE)
@@ -1710,7 +1725,7 @@ fit_params_em_par = function(tree_fit, amat, dmat,
                     eps = exp(x[2])
                     err = exp(x[3])
                     
-                    logliks = get_leaf_liks_mat(amat, dmat, vafs = get_vaf_bins(k), eps = err, log = TRUE)
+                    logliks = get_leaf_liks_mat_cpp(amat, dmat, vafs = get_vaf_bins(k), eps = err, log = TRUE)
                     A = get_transition_mat_wf_hmm_wrapper(k = k, eps = eps, N = npop, ngen = ngen, safe = TRUE)
                     -get_q_vec(nbels, ebels, logliks, A)
 

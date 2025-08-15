@@ -12,8 +12,8 @@ Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
 // get_leaf_liks_mat_cpp
-List get_leaf_liks_mat_cpp(const IntegerMatrix& amat, const IntegerMatrix& dmat, const NumericVector& vafs, double eps, int ncores, bool log_);
-RcppExport SEXP _mitodrift_get_leaf_liks_mat_cpp(SEXP amatSEXP, SEXP dmatSEXP, SEXP vafsSEXP, SEXP epsSEXP, SEXP ncoresSEXP, SEXP log_SEXP) {
+List get_leaf_liks_mat_cpp(const IntegerMatrix& amat, const IntegerMatrix& dmat, const NumericVector& vafs, double eps, int ncores, bool log);
+RcppExport SEXP _mitodrift_get_leaf_liks_mat_cpp(SEXP amatSEXP, SEXP dmatSEXP, SEXP vafsSEXP, SEXP epsSEXP, SEXP ncoresSEXP, SEXP logSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -22,8 +22,8 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const NumericVector& >::type vafs(vafsSEXP);
     Rcpp::traits::input_parameter< double >::type eps(epsSEXP);
     Rcpp::traits::input_parameter< int >::type ncores(ncoresSEXP);
-    Rcpp::traits::input_parameter< bool >::type log_(log_SEXP);
-    rcpp_result_gen = Rcpp::wrap(get_leaf_liks_mat_cpp(amat, dmat, vafs, eps, ncores, log_));
+    Rcpp::traits::input_parameter< bool >::type log(logSEXP);
+    rcpp_result_gen = Rcpp::wrap(get_leaf_liks_mat_cpp(amat, dmat, vafs, eps, ncores, log));
     return rcpp_result_gen;
 END_RCPP
 }

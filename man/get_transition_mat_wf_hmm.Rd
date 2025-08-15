@@ -2,9 +2,10 @@
 % Please edit documentation in R/mitodrift.R
 \name{get_transition_mat_wf_hmm}
 \alias{get_transition_mat_wf_hmm}
-\title{Get the transition matrix for WF model with HMM}
+\title{Get the transition matrix for WF model with HMM
+TODO: add log option for small probabilities}
 \usage{
-get_transition_mat_wf_hmm(k, eps, N, ngen)
+get_transition_mat_wf_hmm(k, eps, N, ngen, safe = FALSE)
 }
 \arguments{
 \item{k}{number of VAF bins}
@@ -14,10 +15,13 @@ get_transition_mat_wf_hmm(k, eps, N, ngen)
 \item{N}{population size}
 
 \item{ngen}{number of generations}
+
+\item{safe}{whether to add small probability to avoid 0s}
 }
 \value{
 transition matrix
 }
 \description{
 Get the transition matrix for WF model with HMM
+TODO: add log option for small probabilities
 }
