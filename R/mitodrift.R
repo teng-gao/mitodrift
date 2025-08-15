@@ -1644,7 +1644,7 @@ fit_params_em_par = function(tree_fit, amat, dmat,
     initial_params = c('ngen' = 100, 'log_eps' = log(1e-3), 'log_err' = log(1e-3)),
     lower_bounds = c('ngen' = 1, 'log_eps' = log(1e-12), 'log_err' = log(1e-12)),
     upper_bounds = c('ngen' = 1000, 'log_eps' = log(0.2), 'log_err' = log(0.2)),
-    max_iter = 10, k = 20, npop = 600, ncores = 3
+    max_iter = 10, k = 20, npop = 600, ncores = 3, epsilon = 1e-3, trace = TRUE
     ) {
 
     # always renumber tree otherwise results are different
@@ -1666,6 +1666,16 @@ fit_params_em_par = function(tree_fit, amat, dmat,
 
     setDefaultCluster(cl=cl)
 
+    if (trace) {
+        trace_df = data.frame(
+            iter = integer(),
+            ngen = numeric(),
+            log_eps = numeric(),
+            log_err = numeric(),
+            logL = numeric()
+        )
+    }
+
     for (i in 1:max_iter) {
         
         ngen = par[1]
@@ -1682,6 +1692,16 @@ fit_params_em_par = function(tree_fit, amat, dmat,
         logL = sum(res$gtree$logZ)
         
         message(glue("Iteration {i} E step: logL = {logL}"))
+
+        if (trace) {
+            trace_df = rbind(trace_df, data.frame(
+                iter = i,
+                ngen = par[1],
+                log_eps = par[2],
+                log_err = par[3], 
+                logL = logL
+            ))
+        }
         
         fit = optimParallel(
                 fn = function(x) {
@@ -1701,12 +1721,29 @@ fit_params_em_par = function(tree_fit, amat, dmat,
                 upper = upper_bounds
             )
 
+        if (i > 1) {
+
+            log_eps_diff = abs(par[2] - fit$par[2])
+            log_err_diff = abs(par[3] - fit$par[3])
+            ngen_diff = abs(par[1] - fit$par[1])
+            
+            if (log_eps_diff < epsilon && log_err_diff < epsilon && ngen_diff < 0.25) {
+                message(glue("Converged at iteration {i}"))
+                par <- fit$par
+                break
+            }
+        }
+
         par = fit$par
         message(glue("Iteration {i} M step: ngen = {par[1]}, log_eps = {par[2]}, log_err = {par[3]}"))
     }
 
     stopCluster(cl)
 
-    return(par)
+    if (trace) {
+        return(list(par = par, trace = trace_df))
+    } else {
+        return(par)
+    }
 
 }

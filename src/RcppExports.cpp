@@ -11,6 +11,22 @@ Rcpp::Rostream<true>&  Rcpp::Rcout = Rcpp::Rcpp_cout_get();
 Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
+// get_leaf_liks_mat_cpp
+List get_leaf_liks_mat_cpp(const IntegerMatrix& amat, const IntegerMatrix& dmat, const NumericVector& vafs, double eps, int ncores, bool log_);
+RcppExport SEXP _mitodrift_get_leaf_liks_mat_cpp(SEXP amatSEXP, SEXP dmatSEXP, SEXP vafsSEXP, SEXP epsSEXP, SEXP ncoresSEXP, SEXP log_SEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const IntegerMatrix& >::type amat(amatSEXP);
+    Rcpp::traits::input_parameter< const IntegerMatrix& >::type dmat(dmatSEXP);
+    Rcpp::traits::input_parameter< const NumericVector& >::type vafs(vafsSEXP);
+    Rcpp::traits::input_parameter< double >::type eps(epsSEXP);
+    Rcpp::traits::input_parameter< int >::type ncores(ncoresSEXP);
+    Rcpp::traits::input_parameter< bool >::type log_(log_SEXP);
+    rcpp_result_gen = Rcpp::wrap(get_leaf_liks_mat_cpp(amat, dmat, vafs, eps, ncores, log_));
+    return rcpp_result_gen;
+END_RCPP
+}
 // reorderRcpp
 arma::Col<int> reorderRcpp(const arma::Col<int>& E);
 RcppExport SEXP _mitodrift_reorderRcpp(SEXP ESEXP) {
@@ -146,6 +162,7 @@ END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
+    {"_mitodrift_get_leaf_liks_mat_cpp", (DL_FUNC) &_mitodrift_get_leaf_liks_mat_cpp, 6},
     {"_mitodrift_reorderRcpp", (DL_FUNC) &_mitodrift_reorderRcpp, 1},
     {"_mitodrift_nnin_cpp", (DL_FUNC) &_mitodrift_nnin_cpp, 2},
     {"_mitodrift_logSumExp", (DL_FUNC) &_mitodrift_logSumExp, 1},
