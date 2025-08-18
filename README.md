@@ -21,124 +21,28 @@ devtools::install_local('.')
 
 Note that depth information should be provided even if there is no alternate allele detected at the variant position (a=0), so that there is a row for each cell x variant combination.
 
-## Step 1: ML tree search
-First, run `inst/bin/build_tree.r` to perform ML tree search.
-
+## One Step Wrapper
+# run the complete MitoDrift pipeline
 ```
-Usage: build_tree.r [options]
-
-
-Options:
-	-m CHARACTER, --mut_dat=CHARACTER
-		Mutation data file
-
-	-i INTEGER, --max_iter=INTEGER
-		Maximum number of iteration
-
-	-o CHARACTER, --outfile=CHARACTER
-		Output file .RDS
-
-	-p INTEGER, --ncores=INTEGER
-		Number of cores to use
-
-	-e DOUBLE, --eps=DOUBLE
-		mutation rate
-
-	-s DOUBLE, --seq_err=DOUBLE
-		sequencing error rate
-
-	-n INTEGER, --n_pop=INTEGER
-		Population size
-
-	-g INTEGER, --n_gen=INTEGER
-		Number of generations
-
-	-f CHARACTER, --freq_dat=CHARACTER
-		Mutation frequency table
-
-	-r LOGICAL, --resume=LOGICAL
-		Whether to resume from output file
-
-	-h, --help
-		Show this help message and exit
+Rscript "$repo_dir/inst/bin/run_mitodrift_em.R" \
+    --mut_dat "$mutfile" \
+    --outdir "$OUTDIR" \
+    --ncores "$NCORES" \
+    --ncores_annot "$NCORES_ANNOT" \
+    --k "$K" \
+    --npop "$NPOP" \
+    --eps "$EPS" \
+    --err "$ERR" \
+    --ngen "$NGEN" \
+    --fit_params "$FIT_PARAMS" \
+    --fit_param_max_iter "$FIT_PARAM_MAX_ITER" \
+    --fit_param_epsilon "$FIT_PARAM_EPSILON" \
+    --ml_iter "$ML_ITER" \
+    --tree_mcmc_iter "$TREE_MCMC_ITER" \
+    --tree_mcmc_chains "$TREE_MCMC_CHAINS" \
+    --tree_mcmc_burnin "$TREE_MCMC_BURNIN" \
+    --resume "$RESUME"
 ```
-Example command:
-```
-Rscript $home/mitodrift/mitodrift/inst/bin/build_tree.r \
-    -m $infile \
-    -o $outfile \
-    -p $ncores -i 1000 -e 0.005 -n 600 -g 100
-```
-
-## Step2: MCMC
-Once ML tree search finishes, use `inst/bin/run_mcmc.r` to perform MCMC in order to estimate clade confidence.
-
-```
-Usage: run_mcmc.r [options]
-
-
-Options:
-	-t CHARACTER, --tree_file=CHARACTER
-		Tree list file from mitodrift ML module
-
-	-i INTEGER, --max_iter=INTEGER
-		Maximum number of iteration
-
-	-c INTEGER, --nchains=INTEGER
-		Maximum number of iteration
-
-	-o CHARACTER, --outfile=CHARACTER
-		Output file .RDS
-
-	-p INTEGER, --ncores=INTEGER
-		Number of cores to use
-
-	-h, --help
-		Show this help message and exit
-```
-Example command:
-```
-Rscript $home/mitodrift/mitodrift/inst/bin/run_mcmc.r \
-    -t $infile \
-    -o $outfile \
-    -i 1000 \
-    -c 50 \
-    -p $ncores
-```
-
-## Step3: Trim ML tree by clade confidence
-
-```
-Options:
-	-t CHARACTER, --tree_file=CHARACTER
-		ML result RDS file
-
-	-c CHARACTER, --mcmc_file=CHARACTER
-		MCMC result RDS file
-
-	-o CHARACTER, --outfile=CHARACTER
-		Output file .RDS
-
-	-b INTEGER, --burnin=INTEGER
-		Burnin
-
-	-m INTEGER, --max_iter=INTEGER
-		Maximum iteration
-
-	-h, --help
-		Show this help message and exit
-```
-
-Example command:
-```
-Rscript trim_ml_tree.r \
-    -t $ml_out \
-    -c $mcmc_out \
-    -o $outfile \
-    -b 100 \
-    -m 1000
-```
-This produces an RDS file containing a list of trimmed phylogenies with different branch confidence cutoffs. 
 
 # Visualizing results
 ## ML tree
@@ -162,12 +66,13 @@ Result:
 
 ## Trimmed (consensus) ML tree with clade confidence
 ```
-# {sample}_ml_trim.rds is an example output of trim ML R script
+# Saved MitoDrift object in the output folder
+md = readRDS('{outdir}/mitodrift_object.rds')
 
-phyML_trim_all = readRDS(glue('~/broad/sankaranlab/tgao/mitodrift/results/{sample}_ml_trim.rds'))
+phy_trim = trim_tree(md$tree_annot, conf = 0.5)
 
 plot_phylo_heatmap2(
-    phyML_trim_all[['0.5']], # choose tree with branch confidence cutoff = 0.5
+    phy_trim, # choose tree with branch confidence cutoff = 0.5
     mut_dat, # input mutation dataframe for the ML module
     dot_size = 1,
     branch_width = 0.3,
