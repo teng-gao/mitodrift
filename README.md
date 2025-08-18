@@ -21,8 +21,7 @@ devtools::install_local('.')
 
 Note that depth information should be provided even if there is no alternate allele detected at the variant position (a=0), so that there is a row for each cell x variant combination.
 
-## One Step Wrapper
-# run the complete MitoDrift pipeline
+# One Step Wrapper
 ```
 Rscript "$repo_dir/inst/bin/run_mitodrift_em.R" \
     --mut_dat "$mutfile" \
