@@ -22,6 +22,70 @@ devtools::install_local('.')
 Note that depth information should be provided even if there is no alternate allele detected at the variant position (a=0), so that there is a row for each cell x variant combination.
 
 # One Step Wrapper
+
+
+```
+inst/bin/run_mitodrift_em.R
+Usage: run_mitodrift_em.R [options]
+
+
+Options:
+	-m CHARACTER, --mut_dat=CHARACTER
+		Mutation data file (CSV format with columns: variant, cell, d, a)
+
+	-o CHARACTER, --outdir=CHARACTER
+		Output directory for results
+
+	-p INTEGER, --ncores=INTEGER
+		Number of cores to use
+
+	-q INTEGER, --ncores_annot=INTEGER
+		Number of cores to use for branch confidence annotation
+
+	-k INTEGER, --k=INTEGER
+		Number of VAF bins
+
+	-n INTEGER, --npop=INTEGER
+		Population size
+
+	-e DOUBLE, --eps=DOUBLE
+		Mutation rate per branch
+
+	-s DOUBLE, --err=DOUBLE
+		Sequencing error rate
+
+	-g INTEGER, --ngen=INTEGER
+		Number of generations
+
+	-f LOGICAL, --fit_params=LOGICAL
+		Whether to fit parameters using EM
+
+	-t INTEGER, --fit_param_max_iter=INTEGER
+		Maximum EM iterations for parameter fitting
+
+	-c DOUBLE, --fit_param_epsilon=DOUBLE
+		Convergence threshold for EM parameter fitting
+
+	-i INTEGER, --ml_iter=INTEGER
+		Maximum iterations for tree optimization
+
+	-j INTEGER, --tree_mcmc_iter=INTEGER
+		Maximum iterations for phylogenetic MCMC
+
+	-l INTEGER, --tree_mcmc_chains=INTEGER
+		Number of MCMC chains for phylogenetic sampling
+
+	-b INTEGER, --tree_mcmc_burnin=INTEGER
+		Burnin for phylogenetic MCMC
+
+	-r LOGICAL, --resume=LOGICAL
+		Whether to resume from existing files
+
+	-h, --help
+		Show this help message and exit
+
+```
+
 ```
 Rscript "$repo_dir/inst/bin/run_mitodrift_em.R" \
     --mut_dat "$mutfile" \
