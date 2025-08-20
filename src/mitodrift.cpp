@@ -274,6 +274,62 @@ double score_tree_bp_wrapper(arma::Col<int> E,
     return logZ;
 }
 
+
+// --------------------------------------------------------------------------
+// Worker struct that scores multiple trees in parallel.
+// Each worker processes a subset of trees from the input list.
+struct ScoreTreesWorker : public Worker {
+    // Inputs are passed by const reference.
+    const std::vector<arma::Col<int>>& trees;
+    const std::vector< std::vector<double> >& logP;
+    const std::vector<double>& logA;
+    
+    // Output: scores for each tree
+    RVector<double> scores;
+    
+    // Constructor.
+    ScoreTreesWorker(const std::vector<arma::Col<int>>& trees,
+                     const std::vector< std::vector<double> >& logP,
+                     const std::vector<double>& logA,
+                     NumericVector scores)
+      : trees(trees), logP(logP), logA(logA), scores(scores) {}
+    
+    // Operator() for processing tree indices [begin, end)
+    void operator()(std::size_t begin, std::size_t end) {
+        // Each iteration scores one tree.
+        for (std::size_t i = begin; i < end; i++) {
+            scores[i] = score_tree_bp_wrapper(trees[i], logP, logA);
+        }
+    }
+};
+
+// --------------------------------------------------------------------------
+// Parallel wrapper: scores multiple trees in parallel.
+// Parameters:
+//   trees: vector of edge matrices (each arma::Col<int>) in column-major order.
+//   logP: list of flattened likelihood matrices (each in row-major order).
+//   logA: flattened transition matrix (row-major order).
+// Returns a vector of scores (one per tree).
+// [[Rcpp::export]]
+NumericVector score_trees_parallel(const std::vector<arma::Col<int>>& trees,
+                                   const std::vector< std::vector<double> >& logP,
+                                   const std::vector<double>& logA) {
+    
+    int n_trees = trees.size();
+    
+    // Prepare the output vector to hold scores for all trees.
+    NumericVector scores(n_trees);
+    
+    // Create the worker that will score trees in parallel.
+    ScoreTreesWorker worker(trees, logP, logA, scores);
+    
+    // Launch parallelFor over tree indices [0, n_trees).
+    parallelFor(0, n_trees, worker);
+    
+    return scores;
+}
+
+
 // E: Edge matrix (each row is a (parent, child) pair, 1-indexed from R) provided as an arma::Col<int> in column-major order.
 // logP_list: List of flattened likelihood matrices (each in row-major order)
 // logA: Flattened transition matrix (row-major order)
@@ -386,6 +442,7 @@ NumericVector nni_cpp_parallel_multi(arma::Col<int> E, const std::vector<std::ve
 }
 
 /////////////////////////////////////// MCMC ////////////////////////////////////////
+
 
 // [[Rcpp::export]]
 std::vector<arma::Col<int>> tree_mcmc_cpp(

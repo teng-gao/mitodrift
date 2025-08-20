@@ -2,7 +2,7 @@
 plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = TRUE, dot_size = 1, ylim = NULL,
     clade_annot = NULL, tip_annot = NULL,
     title = NULL, label_site = FALSE, cell_annot = NULL, tip_lab = FALSE, node_lab = FALSE, layered = FALSE, annot_bar_height = 0.1, clade_bar_height = 1,
-    het_max = 0.1, conf_min = 0.5, conf_label = FALSE, branch_length = TRUE, node_conf = FALSE, annot_scale = NULL, annot_legend = FALSE, label_group = FALSE,
+    het_max = 0.1, conf_min = 0.5, conf_max = 0.5 , conf_label = FALSE, branch_length = TRUE, node_conf = FALSE, annot_scale = NULL, annot_legend = FALSE, label_group = FALSE,
     annot_legend_title = '', text_size = 3, label_size = 1, mut = NULL, post_max = FALSE, mark_low_cov = FALSE, facet_by_group = FALSE, flip = FALSE) {
 
     if (inherits(gtree, 'tbl_graph')) {
@@ -62,7 +62,7 @@ plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = T
             p_tree = p_tree %<+% 
                 dat + 
                 geom_nodepoint(aes(fill = conf, subset = !isTip & !isRoot, x = branch), size = dot_size, pch = 22, stroke = 0) +
-                scale_fill_gradient(low = 'white', high = 'firebrick', limits = c(conf_min,1), oob = scales::oob_squish)
+                scale_fill_gradient(low = 'white', high = 'firebrick', limits = c(conf_min, conf_max), oob = scales::oob_squish)
 
             if (conf_label) {
                 p_tree = p_tree + 
@@ -81,7 +81,7 @@ plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = T
 
         p_tree = p_tree %<+% 
             dat +
-            geom_tippoint(aes(color = annot), size = dot_size, pch = 19)
+            geom_tippoint(aes(color = annot, subset = !is.na(annot)), size = dot_size, pch = 19, show.legend = FALSE)
     }
 
     if (tip_lab) {
@@ -333,8 +333,8 @@ order_muts <- function(cell_order, mut_dat) {
 }
 
 plot_phylo_circ = function(gtree, node_conf = FALSE, conf_label = FALSE, title = '', pwidth = 0.25,
-    branch_width = 0.3, dot_size = 1, conf_min = 0.5, cell_annot = NULL, offset = 0.05, width = 0.8,
-    activity_mat = NULL,
+    branch_width = 0.3, dot_size = 1, conf_min = 0.5, conf_max = 0.5, cell_annot = NULL, offset = 0.05, width = 0.8,
+    activity_mat = NULL, label_size = 2,
     tip_annot = NULL, legend = FALSE, layered = FALSE) {
 
     p_tree = ggtree(gtree, layout = 'circular', branch.length = "none", linewidth = branch_width) +
@@ -351,7 +351,7 @@ plot_phylo_circ = function(gtree, node_conf = FALSE, conf_label = FALSE, title =
             p_tree = p_tree %<+% 
                 dat +
                 geom_nodepoint(aes(color = conf, subset = !isTip & !isRoot, x = branch), size = dot_size, pch = 16, stroke = 1) +
-                scale_color_gradient(low = 'white', high = 'firebrick', limits = c(conf_min,1), oob = scales::oob_squish)
+                scale_color_gradient(low = 'white', high = 'firebrick', limits = c(conf_min, conf_max), oob = scales::oob_squish)
     
             if (conf_label) {
                 p_tree = p_tree + 
@@ -395,8 +395,8 @@ plot_phylo_circ = function(gtree, node_conf = FALSE, conf_label = FALSE, title =
         p_tree = p_tree + geom_fruit(
             data = activity_mat %>%
                 reshape2::melt() %>% 
-                setNames(c('gene', 'cell', 'value')) %>%
-                group_by(gene) %>%
+                setNames(c('feature', 'cell', 'value')) %>%
+                group_by(feature) %>%
                 mutate(value = as.vector(scale(value))) %>%
                 ungroup(),
             geom = geom_tile,
@@ -406,10 +406,10 @@ plot_phylo_circ = function(gtree, node_conf = FALSE, conf_label = FALSE, title =
             axis.params = list(
             axis       = "x", 
             text.angle = 45,
-            text.size  = 2,
+            text.size  = label_size,
             vjust      = 0
             ),
-            mapping = aes(x = gene, y = cell, fill = value),
+            mapping = aes(x = feature, y = cell, fill = value),
             show.legend = TRUE
         ) +
         scale_fill_gradient2(low = "blue", high = "red", limits = c(-2,2), oob = scales::oob_squish)
@@ -420,7 +420,7 @@ plot_phylo_circ = function(gtree, node_conf = FALSE, conf_label = FALSE, title =
 
             p_tree = p_tree +
                 scale_color_manual(
-                    name   = "Cell type",   
+                    name   = "Annotation",   
                     values = annot_cols
                 ) +
                 geom_point(

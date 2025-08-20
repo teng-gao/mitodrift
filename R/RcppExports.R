@@ -5,6 +5,8 @@ get_leaf_liks_mat_cpp <- function(amat, dmat, vafs, eps = 0.0, ncores = 1L, log 
     .Call('_mitodrift_get_leaf_liks_mat_cpp', PACKAGE = 'mitodrift', amat, dmat, vafs, eps, ncores, log)
 }
 
+#' definitions for logSumExp function
+NULL
 
 reorderRcpp <- function(E) {
     .Call('_mitodrift_reorderRcpp', PACKAGE = 'mitodrift', E)
@@ -29,6 +31,10 @@ score_tree_bp <- function(E, logP, logA, n, C, m, root) {
 
 score_tree_bp_wrapper <- function(E, logP_list, logA) {
     .Call('_mitodrift_score_tree_bp_wrapper', PACKAGE = 'mitodrift', E, logP_list, logA)
+}
+
+score_trees_parallel <- function(trees, logP, logA) {
+    .Call('_mitodrift_score_trees_parallel', PACKAGE = 'mitodrift', trees, logP, logA)
 }
 
 score_tree_bp_wrapper_multi <- function(E, logP_list, logA_list) {

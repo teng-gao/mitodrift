@@ -1772,3 +1772,74 @@ fit_params_em_par = function(tree_fit, amat, dmat,
     }
 
 }
+
+#' Add "Node<n>" labels to the internal nodes of a phylo tree
+#'
+#' @param tree A phylo object
+#' @param prefix Character prefix for node names (default "Node")
+#' @return The same phylo object, with tree$node.label set to prefix + node numbers
+add_node_names <- function(tree, prefix = "Node", start_from_tip = TRUE) {
+  if (!inherits(tree, "phylo")) {
+    stop("`tree` must be a phylo object")
+  }
+  ntip  <- length(tree$tip.label)
+  nnode <- tree$Nnode
+
+  # internal node IDs run from ntip+1 to ntip+nnode
+  if (start_from_tip) {
+    ids <- seq(ntip + 1, ntip + nnode)
+  } else {
+    ids <- seq(1, nnode)
+  }
+
+  # assign labels
+  tree$node.label <- paste0(prefix, ids)
+
+  return(tree)
+}
+
+map_cell_to_tree = function(tree, cell, logliks, logA_vec, leaf_only = FALSE, ncores = 1) {
+
+    RhpcBLASctl::blas_set_num_threads(1)
+    RhpcBLASctl::omp_set_num_threads(1)
+    RcppParallel::setThreadOptions(numThreads = ncores)
+
+    tree = TreeTools::Renumber(tree)
+    
+    if (leaf_only) {
+        nodes = 1:length(tree$tip.label)
+        labels = tree$tip.label
+    } else {
+        nodes = 1:(length(tree$tip.label) + tree$Nnode)
+        tree = add_node_names(tree)
+        labels = c(tree$tip.label, tree$node.label)
+    }
+
+    # check if all cells are in logliks
+    if (!all(c(cell, tree$tip.label) %in% colnames(logliks[[1]]))) {
+        stop(glue('Some cells not found in logliks'))
+    }
+
+    # generate all possible assignment to nodes
+    trees_new = lapply(
+        nodes,
+        function(i) {
+            TreeTools::AddTip(tree, where = i, label = cell)
+        })
+
+    edges_new = lapply(
+        trees_new, 
+        function(tree) {
+            reorderRcpp(tree$edge)
+        })
+
+    # subset likelihoods
+    logP_list = convert_logliks_to_logP_list(logliks, trees_new[[1]])
+
+    # score assignments
+    scores = score_trees_parallel(edges_new, logP_list, logA_vec)
+    
+    probs = exp(scores - logSumExp(scores)) %>% setNames(labels)
+
+    return(probs)
+}

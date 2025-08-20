@@ -91,6 +91,19 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// score_trees_parallel
+NumericVector score_trees_parallel(const std::vector<arma::Col<int>>& trees, const std::vector< std::vector<double> >& logP, const std::vector<double>& logA);
+RcppExport SEXP _mitodrift_score_trees_parallel(SEXP treesSEXP, SEXP logPSEXP, SEXP logASEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const std::vector<arma::Col<int>>& >::type trees(treesSEXP);
+    Rcpp::traits::input_parameter< const std::vector< std::vector<double> >& >::type logP(logPSEXP);
+    Rcpp::traits::input_parameter< const std::vector<double>& >::type logA(logASEXP);
+    rcpp_result_gen = Rcpp::wrap(score_trees_parallel(trees, logP, logA));
+    return rcpp_result_gen;
+END_RCPP
+}
 // score_tree_bp_wrapper_multi
 double score_tree_bp_wrapper_multi(arma::Col<int> E, const std::vector< std::vector<double> >& logP_list, const std::vector< std::vector<double> >& logA_list);
 RcppExport SEXP _mitodrift_score_tree_bp_wrapper_multi(SEXP ESEXP, SEXP logP_listSEXP, SEXP logA_listSEXP) {
@@ -168,6 +181,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_mitodrift_logSumExp", (DL_FUNC) &_mitodrift_logSumExp, 1},
     {"_mitodrift_score_tree_bp", (DL_FUNC) &_mitodrift_score_tree_bp, 7},
     {"_mitodrift_score_tree_bp_wrapper", (DL_FUNC) &_mitodrift_score_tree_bp_wrapper, 3},
+    {"_mitodrift_score_trees_parallel", (DL_FUNC) &_mitodrift_score_trees_parallel, 3},
     {"_mitodrift_score_tree_bp_wrapper_multi", (DL_FUNC) &_mitodrift_score_tree_bp_wrapper_multi, 3},
     {"_mitodrift_nni_cpp_parallel", (DL_FUNC) &_mitodrift_nni_cpp_parallel, 3},
     {"_mitodrift_nni_cpp_parallel_multi", (DL_FUNC) &_mitodrift_nni_cpp_parallel_multi, 3},
