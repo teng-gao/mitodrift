@@ -1,3 +1,18 @@
+#' Fit tree parameters using EM algorithm
+#' @param tree_fit phylogenetic tree
+#' @param amat alternative allele count matrix
+#' @param dmat total depth matrix
+#' @param initial_params initial parameter values (ngen, log_eps, log_err)
+#' @param lower_bounds lower bounds for parameters in transformed space
+#' @param upper_bounds upper bounds for parameters in transformed space
+#' @param max_iter maximum number of iterations
+#' @param k number of clusters for likelihood computation
+#' @param npop population size for likelihood computation
+#' @param ncores number of cores to use
+#' @param epsilon convergence threshold
+#' @param trace whether to return trace of parameter values
+#' @return parameter values or list of parameter values and trace
+#' @export
 fit_params_em = function(tree_fit, amat, dmat, 
 	initial_params = c('ngen' = 100, 'log_eps' = log(1e-3), 'log_err' = log(1e-3)),
 	lower_bounds = c('ngen' = 1, 'log_eps' = log(1e-12), 'log_err' = log(1e-12)),
@@ -66,7 +81,6 @@ fit_params_em = function(tree_fit, amat, dmat,
 
 		# 2) Optimize log_err using ONLY the emission term:
 		#    Q_leaf(log_err) = sum_i sum_{cells,states} nbels_i * logliks_i(err)
-
 		Q_leaf <- function(le) {
 			err_cur <- exp(le)
 			logliks <- get_leaf_liks_mat_cpp(amat, dmat, vafs = vafs, eps = err_cur, log = TRUE)
@@ -111,6 +125,12 @@ fit_params_em = function(tree_fit, amat, dmat,
 }
 
 
+#' Decode tree using EM algorithm
+#' @param tn phylogenetic tree
+#' @param A transition matrix
+#' @param liks leaf likelihoods
+#' @param ncores number of cores to use
+#' @return list of logZ, edge beliefs, and node beliefs
 #' @export 
 decode_tree_em = function(
     tn, A, liks, ncores = 1

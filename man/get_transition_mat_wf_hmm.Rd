@@ -2,7 +2,7 @@
 % Please edit documentation in R/mitodrift.R
 \name{get_transition_mat_wf_hmm}
 \alias{get_transition_mat_wf_hmm}
-\title{Get the transition matrix for WF model with HMM
+\title{Get the transition matrix for WF model with HMM (with caching)
 TODO: add log option for small probabilities}
 \usage{
 get_transition_mat_wf_hmm(k, eps, N, ngen, safe = FALSE)
@@ -22,6 +22,6 @@ get_transition_mat_wf_hmm(k, eps, N, ngen, safe = FALSE)
 transition matrix
 }
 \description{
-Get the transition matrix for WF model with HMM
+Get the transition matrix for WF model with HMM (with caching)
 TODO: add log option for small probabilities
 }

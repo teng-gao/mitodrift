@@ -246,13 +246,13 @@ MitoDrift <- R6::R6Class("MitoDrift",
             upper_bounds = c('ngen' = 1000, 'log_eps' = log(0.2), 'log_err' = log(0.2)),
             max_iter = 10,
             epsilon = 1e-3,
-            ncores = 3
+            ncores = 1
         ) {
             
-            message("Fitting tree parameters using Expectation-Maximization...")
+            message("Fitting tree parameters using EM with ", ncores, " cores")
             
             # Run EM parameter fitting using the existing function
-            params_est <- fit_params_em_par(
+            params_est <- fit_params_em(
                 tree_fit = self$tree_init,
                 amat = self$amat,
                 dmat = self$dmat,
