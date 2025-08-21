@@ -432,7 +432,12 @@ get_transition_mat_wf = function(k, eps = 0.01, N = 100, n_rep = 1e4, ngen = 100
 
 }
 
-#' Get the transition matrix for WF model with HMM
+
+# Caching environments for transition matrices
+.mitodrift_T_cache <- new.env(parent = emptyenv())
+.mitodrift_Tmat_cache <- new.env(parent = emptyenv())
+
+#' Get the transition matrix for WF model with HMM (with caching)
 #' TODO: add log option for small probabilities
 #' @param k number of VAF bins
 #' @param eps error rate
@@ -442,70 +447,73 @@ get_transition_mat_wf = function(k, eps = 0.01, N = 100, n_rep = 1e4, ngen = 100
 #' @return transition matrix
 #' @export
 get_transition_mat_wf_hmm <- function(k, eps, N, ngen, safe = FALSE) {
-    # For zero generations, the transition matrix is the identity matrix
-    if (ngen == 0) {
-        A <- diag(k + 2)
-    } else {
-        # 1. Create the single-generation transition matrix for allele counts (0 to N)
-        p_vec <- (0:N) / N
-        T_mat <- outer(p_vec, 0:N, function(p, k) dbinom(k, size = N, prob = p))
+	# Precompute bin boundaries and VAF bin midpoints
+	bin_boundaries <- c(0, seq(0, 1, 1 / k), 1)
+	vaf_bins <- get_vaf_bins(k)
 
-        # 2. Compute the multi-generation transition matrix using matrix exponentiation
-        T_ngen <- expm::`%^%`(T_mat, ngen)
+	# Zero generations: identity (then boundary rows adjusted below)
+	if (ngen == 0) {
+		A <- diag(k + 2)
+	} else {
+		# ---- T_ngen cache key depends only on N (matrix size) and ngen (power) ----
+		key_T <- paste0(N, "|", as.integer(ngen))
 
-        # 3. Define the VAF bin boundaries, identical to the simulation's logic
-        bin_boundaries <- c(0, seq(0, 1, 1/k), 1)
-        vaf_bins <- get_vaf_bins(k)
+		if (exists(key_T, envir = .mitodrift_T_cache, inherits = FALSE)) {
+			T_ngen <- get(key_T, envir = .mitodrift_T_cache, inherits = FALSE)
+		} else {
+			# Build or reuse the single-generation transition matrix T_mat for this N
+			key_Tmat <- as.character(N)
+			if (exists(key_Tmat, envir = .mitodrift_Tmat_cache, inherits = FALSE)) {
+				T_mat <- get(key_Tmat, envir = .mitodrift_Tmat_cache, inherits = FALSE)
+			} else {
+				p_vec <- (0:N) / N
+				T_mat <- outer(p_vec, 0:N, function(p, k) dbinom(k, size = N, prob = p))
+				assign(key_Tmat, T_mat, envir = .mitodrift_Tmat_cache)
+			}
 
-        # 4. Aggregate the allele count probabilities into the VAF bins
-        A <- matrix(0, nrow = k + 2, ncol = k + 2)
-        
-        for (i in 1:(k + 2)) {
-            # Determine the representative starting allele count for the i-th VAF bin,
-            # using the bin midpoint, which mirrors the simulation's setup.
-            start_vaf <- vaf_bins[i]
-            start_allele_count <- round(start_vaf * N)
-            start_allele_count <- max(0, min(N, start_allele_count))
-            
-            # Get the probability distribution of allele counts after ngen generations
-            prob_dist_after_ngen <- T_ngen[start_allele_count + 1, ]
-            
-            for (j in 1:(k + 2)) {
-                # This binning logic now exactly replicates the original simulation function.
-                xstart <- floor(bin_boundaries[j] * N) + 1
-                xend <- floor(bin_boundaries[j+1] * N)
-                xstart <- min(xstart, xend)
+			# Multi-generation transition via integer matrix power
+			T_ngen <- expm::`%^%`(T_mat, ngen)
+			assign(key_T, T_ngen, envir = .mitodrift_T_cache)
+		}
 
-                if (j == k + 1) {
-                    xend <- xend - 1
-                }
+		# ---- Aggregate allele-count probabilities into VAF bins ----
+		A <- matrix(0, nrow = k + 2, ncol = k + 2)
+		for (i in 1:(k + 2)) {
+			# Representative starting allele count for bin i (midpoint mapping)
+			start_vaf <- vaf_bins[i]
+			start_allele_count <- round(start_vaf * N)
+			start_allele_count <- max(0, min(N, start_allele_count))
 
-                if (xstart > xend) {
-                    A[i, j] <- 0
-                } else {
-                    indices <- xstart:xend
-                    # Sum probabilities for allele counts in the current bin
-                    A[i, j] <- sum(prob_dist_after_ngen[indices + 1])
-                }
-            }
-        }
-    }
+			# Probability distribution after ngen generations
+			prob_dist_after_ngen <- T_ngen[start_allele_count + 1, ]
 
-    # 5. Apply the mutation rate 'eps' to the boundary conditions
-    A[1, ] <- c(1 - eps, rep(eps / (k + 1), k + 1))
-    A[nrow(A), ] <- rev(A[1, ])
-    
-    # Set row and column names for clarity
-    colnames(A) <- vaf_bins
-    rownames(A) <- vaf_bins
+			for (j in 1:(k + 2)) {
+				xstart <- floor(bin_boundaries[j] * N) + 1
+				xend <- floor(bin_boundaries[j + 1] * N)
+				xstart <- min(xstart, xend)
+				if (j == k + 1) xend <- xend - 1
+				if (xstart <= xend) {
+					indices <- xstart:xend
+					A[i, j] <- sum(prob_dist_after_ngen[indices + 1])
+				} else {
+					A[i, j] <- 0
+				}
+			}
+		}
+	}
 
-    if (safe) {
-        A[A == 0] = 1e-16
-    }
+	# ---- Apply mutation rate to boundary rows ----
+	A[1, ] <- c(1 - eps, rep(eps / (k + 1), k + 1))
+	A[nrow(A), ] <- rev(A[1, ])
 
-    return(A)
+	# Names and safety floor
+	colnames(A) <- vaf_bins
+	rownames(A) <- vaf_bins
+	if (safe) {
+		A[A == 0] <- 1e-16
+	}
+	return(A)
 }
-
 
 #' Wrapper function to interpolate non-integer generations
 #' @param k number of VAF bins
