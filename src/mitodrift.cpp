@@ -199,6 +199,38 @@ double logSumExp(const arma::vec& x) {
 }
 
 
+static inline double logsumexp_array(const double* x, int len) {
+	double maxv = -std::numeric_limits<double>::infinity();
+	for (int i = 0; i < len; ++i) {
+		if (x[i] > maxv) maxv = x[i];
+	}
+	if (!(maxv > -std::numeric_limits<double>::infinity())) {
+		return -std::numeric_limits<double>::infinity();
+	}
+	double sum = 0.0;
+	for (int i = 0; i < len; ++i) {
+		sum += std::exp(x[i] - maxv);
+	}
+	return maxv + std::log(sum);
+}
+
+static inline double logsumexp_sum_two(const double* a, const double* b, int len) {
+	double maxv = -std::numeric_limits<double>::infinity();
+	for (int i = 0; i < len; ++i) {
+		double v = a[i] + b[i];
+		if (v > maxv) maxv = v;
+	}
+	if (!(maxv > -std::numeric_limits<double>::infinity())) {
+		return -std::numeric_limits<double>::infinity();
+	}
+	double sum = 0.0;
+	for (int i = 0; i < len; ++i) {
+		sum += std::exp((a[i] + b[i]) - maxv);
+	}
+	return maxv + std::log(sum);
+}
+
+
 // bp: Belief-propagation function.
 // logP is a flattened likelihood matrix (row-major; dimensions: C x n)
 // logA is a flattened transition matrix (dimensions: C x C)
@@ -273,6 +305,92 @@ double score_tree_bp_wrapper(arma::Col<int> E,
     }
     return logZ;
 }
+
+
+
+
+// bp: Belief-propagation function.
+// logP is a flattened likelihood matrix (row-major; dimensions: C x n)
+// logA is a flattened transition matrix (dimensions: C x C)
+// E is a flattened edge list in postorder (each edge: parent, child) stored in column-major order.
+// n: number of nodes, C: number of states, m: number of edges, root: index of the root node.
+// [[Rcpp::export]]
+double score_tree_bp2(const arma::Col<int>& E,
+                     const std::vector<double>& logP, 
+                     const std::vector<double>& logA,
+                     const int n, const int C, const int m, const int root) {
+	// messages: size C * n, laid out as [c * n + node]
+	std::vector<double> log_messages(C * n, 0.0);
+	std::vector<double> temp(C);
+
+	const int stride = n;
+	const int* e_ptr = E.memptr();
+	const double* logA_ptr = logA.data();
+	const double* logP_ptr = logP.data();
+	double* msg_ptr = log_messages.data();
+
+	for (int i = 0; i < m; ++i) {
+		const int par = e_ptr[i];
+		const int node = e_ptr[m + i];
+
+		// temp[c_child] = logP[c_child * n + node] + log_messages[c_child * n + node]
+		int idx = node;
+		for (int c_child = 0; c_child < C; ++c_child) {
+			temp[c_child] = logP_ptr[idx] + msg_ptr[idx];
+			idx += stride;
+		}
+
+		// For each parent state c, add log-sum-exp over c_child of (logA[c, c_child] + temp[c_child])
+		double* msg_par = msg_ptr + par;
+		const double* rowA = logA_ptr;
+		for (int c = 0; c < C; ++c, rowA += C, msg_par += stride) {
+			*msg_par += logsumexp_sum_two(rowA, temp.data(), C);
+		}
+	}
+
+	// Score at root: log-sum-exp over states of logP + accumulated messages
+	std::vector<double> root_vals(C);
+	const double* msg_root = msg_ptr + root;
+	for (int c = 0; c < C; ++c) {
+		root_vals[c] = logP_ptr[c * stride + root] + msg_root[c * stride];
+	}
+	return logsumexp_array(root_vals.data(), C);
+}
+
+// E: Edge matrix (each row is a (parent, child) pair, 1-indexed from R) provided as an arma::Col<int> in column-major order.
+// logP_list: List of flattened likelihood matrices (each in row-major order)
+// logA: Flattened transition matrix (row-major order)
+// Computes:
+//   - L: number of loci (length of logP_list),
+//   - C: number of states (inferred from logA),
+//   - n: number of nodes (inferred from the first likelihood matrix),
+//   - m: number of edges (number of rows in the original edge matrix),
+//   - root: parent's value from the last edge.
+// [[Rcpp::export]]
+double score_tree_bp_wrapper2(arma::Col<int> E,
+    const std::vector< std::vector<double> >& logP_list,
+    const std::vector<double>& logA) {
+    // Compute number of loci.
+    int L = logP_list.size();
+    // Infer number of states from the transition matrix.
+    int C = std::sqrt(logA.size());
+    // Infer number of nodes from the first likelihood matrix.
+    int n = logP_list[0].size() / C;
+    // Compute m: number of edges.
+    int m = E.n_elem / 2;
+
+    // Adjust the edge matrix from 1-indexing (R) to 0-indexing (C++).
+    E -= 1;
+    // Find the root
+    int root = E(m - 1);
+
+    double logZ = 0.0;
+    for (int l = 0; l < L; l++) {
+        logZ += score_tree_bp2(E, logP_list[l], logA, n, C, m, root);
+    }
+    return logZ;
+}
+
 
 
 // --------------------------------------------------------------------------
