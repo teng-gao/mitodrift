@@ -1,5 +1,9 @@
 #include <RcppParallel.h>
 // [[Rcpp::depends(RcppArmadillo)]]
+
+#include <limits>
+#include <algorithm>
+#include <cmath>
 #include <RcppArmadillo.h>
 
 using namespace Rcpp;
@@ -214,23 +218,6 @@ static inline double logsumexp_array(const double* x, int len) {
 	return maxv + std::log(sum);
 }
 
-static inline double logsumexp_sum_two(const double* a, const double* b, int len) {
-	double maxv = -std::numeric_limits<double>::infinity();
-	for (int i = 0; i < len; ++i) {
-		double v = a[i] + b[i];
-		if (v > maxv) maxv = v;
-	}
-	if (!(maxv > -std::numeric_limits<double>::infinity())) {
-		return -std::numeric_limits<double>::infinity();
-	}
-	double sum = 0.0;
-	for (int i = 0; i < len; ++i) {
-		sum += std::exp((a[i] + b[i]) - maxv);
-	}
-	return maxv + std::log(sum);
-}
-
-
 // bp: Belief-propagation function.
 // logP is a flattened likelihood matrix (row-major; dimensions: C x n)
 // logA is a flattened transition matrix (dimensions: C x C)
@@ -309,6 +296,52 @@ double score_tree_bp_wrapper(arma::Col<int> E,
 
 
 
+// Core routine for belief propagation with precomputed exp-shifted A and row maxes.
+// Messages are stored in node-major layout: msg[node * C + c]
+static inline double score_tree_bp2_core(const int* e_ptr, int m, int n, int C, int root,
+                                         const double* logP_ptr,
+                                         const double* expA_shifted,   // size C*C, row-major
+                                         const double* row_maxA,       // size C
+                                         double* msg_nm,               // size n*C, node-major
+                                         double* temp,                 // size C (scratch)
+                                         double* u) {                  // size C (scratch)
+	for (int i = 0; i < m; ++i) {
+		const int par  = e_ptr[i];
+		const int node = e_ptr[m + i];
+
+		// Build temp[c] = logP[c*n + node] + msg_nm[node*C + c], and find its max for stability.
+		double max_t = -std::numeric_limits<double>::infinity();
+		int offP = node;
+		const int base_child = node * C;
+		for (int c = 0; c < C; ++c, offP += n) {
+			const double v = logP_ptr[offP] + msg_nm[base_child + c];
+			temp[c] = v;
+			if (v > max_t) max_t = v;
+		}
+		// u[c] = exp(temp[c] - max_t)  (shared across all rows of A)
+		for (int c = 0; c < C; ++c) u[c] = std::exp(temp[c] - max_t);
+
+		// For each parent state c, accumulate log-sum-exp as:
+		// row_maxA[c] + max_t + log( dot( expA_shifted_row_c , u ) )
+		const int base_par = par * C;
+		const double* rowA = expA_shifted;
+		for (int c = 0; c < C; ++c, rowA += C) {
+			double s = 0.0;
+			// dot product between rowA (length C) and u (length C)
+			for (int j = 0; j < C; ++j) s += rowA[j] * u[j];
+			msg_nm[base_par + c] += row_maxA[c] + max_t + std::log(s);
+		}
+	}
+
+	// Aggregate at root over states: logsumexp_c( logP[c*n + root] + msg_nm[root*C + c] )
+	int offP = root;
+	const int base_root = root * C;
+	for (int c = 0; c < C; ++c, offP += n) {
+		temp[c] = logP_ptr[offP] + msg_nm[base_root + c];
+	}
+	return logsumexp_array(temp, C);
+}
+
 // bp: Belief-propagation function.
 // logP is a flattened likelihood matrix (row-major; dimensions: C x n)
 // logA is a flattened transition matrix (dimensions: C x C)
@@ -316,79 +349,75 @@ double score_tree_bp_wrapper(arma::Col<int> E,
 // n: number of nodes, C: number of states, m: number of edges, root: index of the root node.
 // [[Rcpp::export]]
 double score_tree_bp2(const arma::Col<int>& E,
-                     const std::vector<double>& logP, 
-                     const std::vector<double>& logA,
-                     const int n, const int C, const int m, const int root) {
-	// messages: size C * n, laid out as [c * n + node]
-	std::vector<double> log_messages(C * n, 0.0);
+                      const std::vector<double>& logP, 
+                      const std::vector<double>& logA,
+                      const int n, const int C, const int m, const int root) {
+	// Precompute per-row max of A and exp(A - max_row) once.
+	std::vector<double> row_maxA(C);
+	std::vector<double> expA_shifted(static_cast<size_t>(C) * C);
+	for (int r = 0; r < C; ++r) {
+		const double* Arow = logA.data() + static_cast<size_t>(r) * C;
+		double mr = Arow[0];
+		for (int j = 1; j < C; ++j) if (Arow[j] > mr) mr = Arow[j];
+		row_maxA[r] = mr;
+		double* out = expA_shifted.data() + static_cast<size_t>(r) * C;
+		for (int j = 0; j < C; ++j) out[j] = std::exp(Arow[j] - mr);
+	}
+
+	// Node-major message buffer and small scratch.
+	std::vector<double> msg_nm(static_cast<size_t>(n) * C, 0.0);
 	std::vector<double> temp(C);
+	std::vector<double> u(C);
 
-	const int stride = n;
-	const int* e_ptr = E.memptr();
-	const double* logA_ptr = logA.data();
-	const double* logP_ptr = logP.data();
-	double* msg_ptr = log_messages.data();
-
-	for (int i = 0; i < m; ++i) {
-		const int par = e_ptr[i];
-		const int node = e_ptr[m + i];
-
-		// temp[c_child] = logP[c_child * n + node] + log_messages[c_child * n + node]
-		int idx = node;
-		for (int c_child = 0; c_child < C; ++c_child) {
-			temp[c_child] = logP_ptr[idx] + msg_ptr[idx];
-			idx += stride;
-		}
-
-		// For each parent state c, add log-sum-exp over c_child of (logA[c, c_child] + temp[c_child])
-		double* msg_par = msg_ptr + par;
-		const double* rowA = logA_ptr;
-		for (int c = 0; c < C; ++c, rowA += C, msg_par += stride) {
-			*msg_par += logsumexp_sum_two(rowA, temp.data(), C);
-		}
-	}
-
-	// Score at root: log-sum-exp over states of logP + accumulated messages
-	std::vector<double> root_vals(C);
-	const double* msg_root = msg_ptr + root;
-	for (int c = 0; c < C; ++c) {
-		root_vals[c] = logP_ptr[c * stride + root] + msg_root[c * stride];
-	}
-	return logsumexp_array(root_vals.data(), C);
+	return score_tree_bp2_core(E.memptr(), m, n, C, root,
+	                           logP.data(),
+	                           expA_shifted.data(), row_maxA.data(),
+	                           msg_nm.data(), temp.data(), u.data());
 }
 
-// E: Edge matrix (each row is a (parent, child) pair, 1-indexed from R) provided as an arma::Col<int> in column-major order.
+// bp2: Belief-propagation function.
 // logP_list: List of flattened likelihood matrices (each in row-major order)
 // logA: Flattened transition matrix (row-major order)
-// Computes:
-//   - L: number of loci (length of logP_list),
-//   - C: number of states (inferred from logA),
-//   - n: number of nodes (inferred from the first likelihood matrix),
-//   - m: number of edges (number of rows in the original edge matrix),
-//   - root: parent's value from the last edge.
 // [[Rcpp::export]]
 double score_tree_bp_wrapper2(arma::Col<int> E,
-    const std::vector< std::vector<double> >& logP_list,
-    const std::vector<double>& logA) {
-    // Compute number of loci.
-    int L = logP_list.size();
-    // Infer number of states from the transition matrix.
-    int C = std::sqrt(logA.size());
-    // Infer number of nodes from the first likelihood matrix.
-    int n = logP_list[0].size() / C;
-    // Compute m: number of edges.
-    int m = E.n_elem / 2;
+                              const std::vector< std::vector<double> >& logP_list,
+                              const std::vector<double>& logA) {
+	const int L = static_cast<int>(logP_list.size());
+	const int C = static_cast<int>(std::sqrt(logA.size()));
+	const int n = static_cast<int>(logP_list[0].size() / C);
+	const int m = static_cast<int>(E.n_elem / 2);
 
-    // Adjust the edge matrix from 1-indexing (R) to 0-indexing (C++).
-    E -= 1;
-    // Find the root
-    int root = E(m - 1);
+	// 1-indexed (R) -> 0-indexed (C++)
+	E -= 1;
+	const int root = E(m - 1);
+	const int* e_ptr = E.memptr();
 
-    double logZ = 0.0;
-    for (int l = 0; l < L; l++) {
-        logZ += score_tree_bp2(E, logP_list[l], logA, n, C, m, root);
-    }
-    return logZ;
+	// Precompute exp-shifted rows of A and per-row max once (shared across loci).
+	std::vector<double> row_maxA(C);
+	std::vector<double> expA_shifted(static_cast<size_t>(C) * C);
+	for (int r = 0; r < C; ++r) {
+		const double* Arow = logA.data() + static_cast<size_t>(r) * C;
+		double mr = Arow[0];
+		for (int j = 1; j < C; ++j) if (Arow[j] > mr) mr = Arow[j];
+		row_maxA[r] = mr;
+		double* out = expA_shifted.data() + static_cast<size_t>(r) * C;
+		for (int j = 0; j < C; ++j) out[j] = std::exp(Arow[j] - mr);
+	}
+
+	// Reusable buffers
+	std::vector<double> msg_nm(static_cast<size_t>(n) * C);
+	std::vector<double> temp(C);
+	std::vector<double> u(C);
+
+	double logZ = 0.0;
+	for (int l = 0; l < L; ++l) {
+		std::fill(msg_nm.begin(), msg_nm.end(), 0.0);
+		logZ += score_tree_bp2_core(e_ptr, m, n, C, root,
+		                            logP_list[l].data(),
+		                            expA_shifted.data(), row_maxA.data(),
+		                            msg_nm.data(), temp.data(), u.data());
+	}
+	return logZ;
 }
 
 
@@ -416,7 +445,7 @@ struct ScoreTreesWorker : public Worker {
     void operator()(std::size_t begin, std::size_t end) {
         // Each iteration scores one tree.
         for (std::size_t i = begin; i < end; i++) {
-            scores[i] = score_tree_bp_wrapper(trees[i], logP, logA);
+            scores[i] = score_tree_bp_wrapper2(trees[i], logP, logA);
         }
     }
 };
@@ -498,8 +527,8 @@ struct score_neighbours: public Worker {
     void operator()(std::size_t begin, std::size_t end) {
         for (std::size_t i = begin; i < end; i++) {
             std::vector<arma::Col<int>> Ep = nnin_cpp(E, i+1);
-            scores[2*i] = score_tree_bp_wrapper(Ep[0], logP, logA);
-            scores[2*i+1] = score_tree_bp_wrapper(Ep[1], logP, logA);
+            scores[2*i] = score_tree_bp_wrapper2(Ep[0], logP, logA);
+            scores[2*i+1] = score_tree_bp_wrapper2(Ep[1], logP, logA);
         }
     }
 };
@@ -577,7 +606,7 @@ std::vector<arma::Col<int>> tree_mcmc_cpp(
     std::vector<arma::Col<int>> tree_list(max_iter + 1);
     std::vector<double> score_list(max_iter + 1);
 
-    double l_0 = score_tree_bp_wrapper(E, logP, logA);
+    double l_0 = score_tree_bp_wrapper2(E, logP, logA);
     tree_list[0] = E;
     score_list[0] = l_0;
 
@@ -602,7 +631,7 @@ std::vector<arma::Col<int>> tree_mcmc_cpp(
         std::vector<arma::Col<int>> Ep = nnin_cpp(E, r1);
         arma::Col<int> E_new = std::move(Ep[r2]);
         
-        double l_1 = score_tree_bp_wrapper(E_new, logP, logA);
+        double l_1 = score_tree_bp_wrapper2(E_new, logP, logA);
         
         double probab = exp(l_1 - l_0);
         double r3 = dis3(gen);
