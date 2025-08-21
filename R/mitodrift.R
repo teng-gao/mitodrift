@@ -25,7 +25,7 @@ optimize_tree_cpp = function(
         score_tree_func = score_tree_bp_wrapper_multi
         nni_func = nni_cpp_parallel_multi
     } else {
-        score_tree_func = score_tree_bp_wrapper
+        score_tree_func = score_tree_bp_wrapper2
         nni_func = nni_cpp_parallel
     }
 
@@ -1441,7 +1441,7 @@ get_param_lik_cpp = function(tree_fit, amat, dmat, ngen, err, eps, npop = 600, k
     logliks = get_leaf_liks_mat(amat, dmat, get_vaf_bins(k = k), eps = err, log = TRUE)
     logP_list = convert_logliks_to_logP_list(logliks, tree_fit)
 
-    l = mitodrift:::score_tree_bp_wrapper(tree_fit$edge, logP_list = logP_list, logA = logA_vec)
+    l = mitodrift:::score_tree_bp_wrapper2(tree_fit$edge, logP_list = logP_list, logA = logA_vec)
 
     return(l)
 }
