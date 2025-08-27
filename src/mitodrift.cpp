@@ -420,6 +420,92 @@ double score_tree_bp_wrapper2(arma::Col<int> E,
 	return logZ;
 }
 
+// ========================= FAST INPUT-FORMAT VARIANTS =========================
+// Goal: maximize memory locality by (1) interleaving edges as (par,node) pairs,
+// and (2) consuming logP in a layout where states for a given node are contiguous
+// in memory (i.e., column-major C x n in R, flattened as index = node*C + c).
+
+// Core using: (a) interleaved edge pairs, (b) logP in column-major C x n (idx = node*C + c).
+// Messages are node-major: msg_nm[node*C + c].
+static inline double score_tree_bp2_core_cm_pairs(const int* e_pairs, int m, int n, int C, int root,
+	const double* logP_ptr,                 // column-major C x n (idx = node*C + c)
+	const double* expA_shifted,             // size C*C, row-major
+	const double* row_maxA,                 // size C
+	double* msg_nm,                         // size n*C, node-major
+	double* temp,                           // size C (scratch)
+	double* u) {                            // size C (scratch)
+	for (int i = 0; i < m; ++i) {
+		const int par  = e_pairs[2*i];
+		const int node = e_pairs[2*i + 1];
+
+		// temp[c] = logP[node*C + c] + msg_nm[node*C + c]
+		const int base_child = node * C;
+		double max_t = -std::numeric_limits<double>::infinity();
+		for (int c = 0; c < C; ++c) {
+			const double v = logP_ptr[base_child + c] + msg_nm[base_child + c];
+			temp[c] = v;
+			if (v > max_t) max_t = v;
+		}
+		for (int c = 0; c < C; ++c) u[c] = std::exp(temp[c] - max_t);
+
+		const int base_par = par * C;
+		const double* rowA = expA_shifted;
+		for (int c = 0; c < C; ++c, rowA += C) {
+			double s = 0.0;
+			// dot(rowA, u)
+			for (int j = 0; j < C; ++j) s += rowA[j] * u[j];
+			msg_nm[base_par + c] += row_maxA[c] + max_t + std::log(s);
+		}
+	}
+
+	// Aggregate at root
+	const int base_root = root * C;
+	for (int c = 0; c < C; ++c) temp[c] = logP_ptr[base_root + c] + msg_nm[base_root + c];
+	return logsumexp_array(temp, C);
+}
+
+// [[Rcpp::export]]
+double score_tree_bp_wrapper2_fast_pairs(arma::Col<int> E_pairs, // interleaved pairs: [parents(0..m-1), children(m..2m-1)]
+	const std::vector< std::vector<double> >& logP_list_colmajor,  // each locus: column-major C x n (idx = node*C + c)
+	const std::vector<double>& logA) {
+
+	const int L = static_cast<int>(logP_list_colmajor.size());
+	const int C = static_cast<int>(std::sqrt(logA.size()));
+	const int n = static_cast<int>(logP_list_colmajor[0].size() / C);
+	const int m = static_cast<int>(E_pairs.n_elem / 2);
+
+	// Convert 1-indexed -> 0-indexed and get root from the last (parent,child) pair.
+	E_pairs -= 1;
+	const int root = E_pairs[2*(m - 1)];
+
+	// Precompute A once
+	std::vector<double> row_maxA(C);
+	std::vector<double> expA_shifted(static_cast<size_t>(C) * C);
+	for (int r = 0; r < C; ++r) {
+		const double* Arow = logA.data() + static_cast<size_t>(r) * C;
+		double mr = Arow[0];
+		for (int j = 1; j < C; ++j) if (Arow[j] > mr) mr = Arow[j];
+		row_maxA[r] = mr;
+		double* out = expA_shifted.data() + static_cast<size_t>(r) * C;
+		for (int j = 0; j < C; ++j) out[j] = std::exp(Arow[j] - mr);
+	}
+
+	// Reusable buffers
+	std::vector<double> msg_nm(static_cast<size_t>(n) * C);
+	std::vector<double> temp(C);
+	std::vector<double> u(C);
+
+	double logZ = 0.0;
+	const int* e_pairs_ptr = E_pairs.memptr();
+	for (int l = 0; l < L; ++l) {
+		std::fill(msg_nm.begin(), msg_nm.end(), 0.0);
+		logZ += score_tree_bp2_core_cm_pairs(e_pairs_ptr, m, n, C, root,
+			logP_list_colmajor[l].data(),
+			expA_shifted.data(), row_maxA.data(),
+			msg_nm.data(), temp.data(), u.data());
+	}
+	return logZ;
+}
 
 
 // --------------------------------------------------------------------------

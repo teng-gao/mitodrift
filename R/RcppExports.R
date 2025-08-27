@@ -41,6 +41,14 @@ score_tree_bp_wrapper2 <- function(E, logP_list, logA) {
     .Call('_mitodrift_score_tree_bp_wrapper2', PACKAGE = 'mitodrift', E, logP_list, logA)
 }
 
+score_tree_bp_wrapper2_fast <- function(E, logP_list_colmajor, logA) {
+    .Call('_mitodrift_score_tree_bp_wrapper2_fast', PACKAGE = 'mitodrift', E, logP_list_colmajor, logA)
+}
+
+score_tree_bp_wrapper2_fast_pairs <- function(E_pairs, logP_list_colmajor, logA) {
+    .Call('_mitodrift_score_tree_bp_wrapper2_fast_pairs', PACKAGE = 'mitodrift', E_pairs, logP_list_colmajor, logA)
+}
+
 score_trees_parallel <- function(trees, logP, logA) {
     .Call('_mitodrift_score_trees_parallel', PACKAGE = 'mitodrift', trees, logP, logA)
 }

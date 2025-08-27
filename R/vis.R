@@ -416,7 +416,14 @@ plot_phylo_circ = function(gtree, node_conf = FALSE, conf_label = FALSE, title =
 
         if (!is.null(tip_annot)) {
             cts = unique(tip_annot$annot)
-            annot_cols = RColorBrewer::brewer.pal(length(cts), 'Set1') %>% setNames(cts)
+            n_cts = length(cts)
+            max_set1 = RColorBrewer::brewer.pal.info['Set1','maxcolors']
+            if (n_cts <= max_set1) {
+                annot_cols = RColorBrewer::brewer.pal(n_cts, 'Set1') %>% setNames(cts)
+            } else {
+                base_cols = RColorBrewer::brewer.pal(max_set1, 'Set1')
+                annot_cols = grDevices::colorRampPalette(base_cols)(n_cts) %>% setNames(cts)
+            }
 
             p_tree = p_tree +
                 scale_color_manual(
@@ -431,7 +438,7 @@ plot_phylo_circ = function(gtree, node_conf = FALSE, conf_label = FALSE, title =
                     size = 0, stroke = 0,
                     show.legend= TRUE
                 )  +
-                guides(color = guide_legend(override.aes = list('size' = 1))) 
+                guides(color = guide_legend(override.aes = list('size' = 2), ncol = 2)) 
         }
     }
 

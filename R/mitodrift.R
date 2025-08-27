@@ -376,6 +376,38 @@ convert_logliks_to_logP_list <- function(logliks, phy) {
     return(logP_list)
 }
 
+#' @export 
+convert_logliks_to_logP_list_colmajor <- function(logliks, phy) {
+	# Build a column-major (C x n) flattened logP_list:
+	# for each locus, states (rows) are contiguous per node (column),
+	# so the flattened index is node * C + state (0-based).
+	E <- reorder_phylo(phy)$edge
+	phy$node.label <- NULL
+
+	logP_list_cm <- lapply(logliks, function(liks_mut) {
+		n_tips <- length(phy$tip.label)
+		n_nodes <- phy$Nnode
+		root_node <- E[nrow(E), 1]
+		k <- nrow(liks_mut)
+
+		# Matrix shape: C x n (states x nodes); R uses column-major by default.
+		P <- matrix(nrow = k, ncol = n_tips + n_nodes)
+		rownames(P) <- rownames(liks_mut)
+
+		# Tip log-likelihoods, internal nodes prior, and root node clamp
+		P[, 1:n_tips] <- liks_mut[, phy$tip.label]
+		P[, (n_tips + 1):(n_tips + n_nodes)] <- log(1 / k)
+		P[, root_node] <- c(0, rep(-Inf, k - 1))  # log(c(1, 0, ...))
+
+		# Flatten in column-major order (default in R), yielding node-major layout.
+		as.vector(P)
+	})
+
+	return(logP_list_cm)
+}
+
+
+
 
 #' @export 
 get_vaf_bins = function(k) {
@@ -1181,6 +1213,93 @@ run_tree_mcmc = function(
     saveRDS(res, outfile)
 
     return(res)
+}
+
+# to fix: apparently the init tree has to be rooted otherwise to_phylo_reoder won't work. 
+#' @export
+run_tree_mcmc_batch = function(
+    phy_init, logP_list, logA_vec, outfile, max_iter = 100, nchains = 1, ncores = 1,
+    batch_size = 1000, resume = FALSE
+) {
+
+    chains = 1:nchains
+
+    outdir = dirname(outfile)
+    fname = basename(outfile)
+
+    if (!dir.exists(outdir)) {
+        dir.create(outdir, recursive = TRUE)
+    }
+
+    tree_list_all = mclapply(
+        chains,
+        mc.cores = ncores,
+        function(s) {
+            chain_path = glue('{outdir}/chain{s}_{fname}')
+            if (resume && file.exists(chain_path)) {
+                readRDS(chain_path)
+            } else {
+                list(phy_init)
+            }
+        })
+
+    # If all chains have finished, stop early
+    all_done = all(sapply(chains, function(s) {
+        chain_list = tree_list_all[[s]]
+        length(chain_list) == (max_iter + 1)
+    }))
+
+    if (all_done) {
+        message('All chains have completed the requested iterations.')
+        return(tree_list_all)
+    }
+
+    message('Running MCMC with ', length(chains), ' chains in batches of ', batch_size)
+
+    n_batches = ceiling(max_iter / batch_size)
+
+    for (i in 1:n_batches) {
+
+        message('Running batch ', i, ' of ', n_batches)
+
+        # Run one batch for all chains simultaneously
+        tree_list_all = mclapply(
+            chains,
+            mc.cores = ncores,
+            function(s) {
+
+                chain_list = tree_list_all[[s]]
+                max_iter_i = min(batch_size, max_iter - length(chain_list) + 1)
+
+                # Starting tree for this batch: last of existing chain
+                start_phy = chain_list[[length(chain_list)]]
+
+                # Generate max_iter_i steps from the current start tree
+                elist = tree_mcmc_cpp(start_phy$edge, logP_list, logA_vec, max_iter = max_iter_i, seed = s)
+
+                tree_list = lapply(
+                    elist,
+                    function(edges){
+                        attach_edges(start_phy, edges)
+                })
+
+                # Drop the first tree for all subsequent batches
+                if (i > 0) {
+                    tree_list = tree_list[-1]
+                }
+
+                new_list = c(chain_list, tree_list)
+                class(new_list) = 'multiPhylo'
+
+                saveRDS(new_list, glue('{outdir}/chain{s}_{fname}'))
+
+                return(new_list)
+            })
+    }
+
+    saveRDS(tree_list_all, outfile)
+
+    return(tree_list_all)
 }
 
 #' @export

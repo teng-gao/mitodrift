@@ -37,6 +37,12 @@ option_list <- list(
         metavar = "CHARACTER"
     ),
     make_option(
+        c("-x", "--prefix"),
+        type = "character",
+        help = "Prefix for cell names in the mitodrift object",
+        metavar = "CHARACTER"
+    ),
+    make_option(
         c("-m", "--mut_dat"),
         type = "character",
         help = "Mutation data file (alternative to providing amat/dmat separately)",
@@ -89,13 +95,19 @@ if (!is.null(opts$mut_dat)) {
     amat = long_to_mat(mut_dat, 'a')
     dmat = long_to_mat(mut_dat, 'd')
 } else if (!is.null(opts$amat) & !is.null(opts$dmat)) {
-    amat = fread(opts$amat)
-    dmat = fread(opts$dmat)
+    amat = fread(opts$amat) %>% tibble::column_to_rownames('Variants') %>% as.matrix()
+    dmat = fread(opts$dmat) %>% tibble::column_to_rownames('Variants') %>% as.matrix()
 } else {
     stop('Either mut_dat or amat/dmat must be provided')
 }
 
 md = readRDS(opts$mitodrift_obj)
+
+if (!is.null(opts$prefix)) {
+    md$tree_annot$tip.label = paste0(opts$prefix, '_', md$tree_annot$tip.label)
+    colnames(md$amat) = paste0(opts$prefix, '_', colnames(md$amat))
+    colnames(md$dmat) = paste0(opts$prefix, '_', colnames(md$dmat))
+}
 
 if (!all(colnames(md$amat) %in% colnames(amat)) | !all(rownames(md$amat) %in% rownames(amat))) {
     stop('Allele count matrices does not match mitodrift object')
