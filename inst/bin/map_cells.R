@@ -62,6 +62,13 @@ option_list <- list(
         metavar = "CHARACTER"
     ),
     make_option(
+        c("-r", "--resume"),
+        type = "logical",
+        help = "Whether to resume from the outfile",
+        default = FALSE,
+        metavar = "LOGICAL"
+    ),
+    make_option(
         c("-p", "--ncores"),
         type = "integer",
         help = "Number of cores",
@@ -120,6 +127,15 @@ if (!is.null(opts$cell_list)) {
     cells_map_all = colnames(amat)
 }
 
+# filter out germline variants
+cf_dict = rowSums(amat > 0)/ncol(amat)
+variants_germline = names(cf_dict[cf_dict > 0.75])
+cf_max = max(cf_dict[!names(cf_dict) %in% variants_germline])
+amat = amat[!rownames(amat) %in% variants_germline,,drop=FALSE]
+dmat = dmat[!rownames(dmat) %in% variants_germline,,drop=FALSE]
+message(glue('filtering out {length(variants_germline)} germline variants with cf > 0.75'))
+message(glue('max cf for non-germline variants: {cf_max}'))
+
 tree_guide = md$tree_annot
 cells_guide = tree_guide$tip.label
 cells_map_all = cells_map_all[!cells_map_all %in% cells_guide]
@@ -160,36 +176,36 @@ logliks_all = get_leaf_liks_mat_cpp(amat, dmat, vaf_bins, log = TRUE, eps = err)
 
 message(glue('Starting mapping'))
 
-res_all = lapply(
-        cells_map,
-        function(cell_map) {
-    
-            message(cell_map)
-            
-            # subset likelihood by relevant cells and variants
-            cells_comb = c(tree_guide$tip.label, cell_map)
-            variants_comb = union(variants_new[[cell_map]], variants_guide) %>% intersect(names(logliks_all))
-            liks_comb = logliks_all[variants_comb] %>% lapply(function(liks){liks[,colnames(liks) %in% cells_comb,drop=FALSE]})
-            
-            probs = map_cell_to_tree(
-                tree_guide,
-                cell_map,
-                liks_comb, 
-                logA_vec,
-                ncores = ncores,
-                leaf_only = leaf_only
-            )
-    
-            res = tibble(p = unname(probs), guide_node = names(probs), cell_map = cell_map)
+if (opts$resume) {
+    res_map = fread(outfile)
+    cells_map = setdiff(cells_map, res_map$cell_map)
+    message(glue('Resuming mapping for {length(cells_map)} cells'))
+} else {
+    file.create(outfile, showWarnings = FALSE)
+}
 
-            fwrite(res, outfile, append = TRUE)
+out = lapply(
+    cells_map,
+    function(cell_map) {
 
-            return(res)
-    
-        }
-    ) %>%
-    bind_rows()
+        message(cell_map)
+        
+        # subset likelihood by relevant cells and variants
+        cells_comb = c(tree_guide$tip.label, cell_map)
+        variants_comb = union(variants_new[[cell_map]], variants_guide) %>% intersect(names(logliks_all))
+        liks_comb = logliks_all[variants_comb] %>% lapply(function(liks){liks[,colnames(liks) %in% cells_comb,drop=FALSE]})
+        
+        res_map = map_cell_to_tree(
+            tree_guide,
+            cell_map,
+            liks_comb, 
+            logA_vec,
+            ncores = ncores,
+            leaf_only = leaf_only
+        )
+
+        write_header <- !file.exists(outfile) || file.info(outfile)$size == 0
+        fwrite(res_map, outfile, append = TRUE, col.names = write_header)
+})
 
 message('Done!')
-fwrite(res_all, outfile)
-

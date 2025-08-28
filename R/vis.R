@@ -3,7 +3,7 @@ plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = T
     clade_annot = NULL, tip_annot = NULL,
     title = NULL, label_site = FALSE, cell_annot = NULL, tip_lab = FALSE, node_lab = FALSE, layered = FALSE, annot_bar_height = 0.1, clade_bar_height = 1,
     het_max = 0.1, conf_min = 0.5, conf_max = 0.5 , conf_label = FALSE, branch_length = TRUE, node_conf = FALSE, annot_scale = NULL, annot_legend = FALSE, label_group = FALSE,
-    annot_legend_title = '', text_size = 3, label_size = 1, mut = NULL, post_max = FALSE, mark_low_cov = FALSE, facet_by_group = FALSE, flip = FALSE) {
+    annot_legend_title = '', text_size = 3, label_size = 1, mut = NULL, mark_low_cov = FALSE, facet_by_group = FALSE, flip = FALSE) {
 
     if (inherits(gtree, 'tbl_graph')) {
         phylo = to_phylo_reorder(gtree)
@@ -81,7 +81,7 @@ plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = T
 
         p_tree = p_tree %<+% 
             dat +
-            geom_tippoint(aes(color = annot, subset = !is.na(annot)), size = dot_size, pch = 19, show.legend = FALSE)
+            geom_tippoint(aes(color = annot, subset = !is.na(annot)), size = dot_size, pch = 19, stroke = 0, show.legend = FALSE)
     }
 
     if (tip_lab) {
@@ -334,10 +334,10 @@ order_muts <- function(cell_order, mut_dat) {
 
 plot_phylo_circ = function(gtree, node_conf = FALSE, conf_label = FALSE, title = '', pwidth = 0.25,
     branch_width = 0.3, dot_size = 1, conf_min = 0.5, conf_max = 0.5, cell_annot = NULL, offset = 0.05, width = 0.8,
-    activity_mat = NULL, label_size = 2,
+    activity_mat = NULL, label_size = 2, rescale = FALSE, limits = c(-2,2), flip = TRUE,
     tip_annot = NULL, legend = FALSE, layered = FALSE) {
 
-    p_tree = ggtree(gtree, layout = 'circular', branch.length = "none", linewidth = branch_width) +
+    p_tree = ggtree(gtree, ladderize = TRUE, layout = 'circular', branch.length = "none", linewidth = branch_width, right = flip) +
             ggtitle(title)
 
     if (node_conf & inherits(gtree, 'tbl_graph')) {
@@ -392,13 +392,20 @@ plot_phylo_circ = function(gtree, node_conf = FALSE, conf_label = FALSE, title =
 
     if (!is.null(activity_mat)) {
 
-        p_tree = p_tree + geom_fruit(
-            data = activity_mat %>%
-                reshape2::melt() %>% 
-                setNames(c('feature', 'cell', 'value')) %>%
+        df_activity = activity_mat %>%
+            reshape2::melt() %>% 
+            setNames(c('feature', 'cell', 'value')) %>%
+            mutate(cell = as.character(cell))
+
+        if (rescale) {
+            df_activity = df_activity %>%
                 group_by(feature) %>%
                 mutate(value = as.vector(scale(value))) %>%
-                ungroup(),
+                ungroup()
+        }
+
+        p_tree = p_tree + geom_fruit(
+            data = df_activity,
             geom = geom_tile,
             offset = offset,
             width = width,
@@ -412,7 +419,7 @@ plot_phylo_circ = function(gtree, node_conf = FALSE, conf_label = FALSE, title =
             mapping = aes(x = feature, y = cell, fill = value),
             show.legend = TRUE
         ) +
-        scale_fill_gradient2(low = "blue", high = "red", limits = c(-2,2), oob = scales::oob_squish)
+        scale_fill_gradient2(low = "blue", high = "red", limits = limits, oob = scales::oob_squish)
 
         if (!is.null(tip_annot)) {
             cts = unique(tip_annot$annot)

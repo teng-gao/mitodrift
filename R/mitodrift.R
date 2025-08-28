@@ -591,6 +591,38 @@ long_to_mat = function(mut_dat_long, variable) {
         as.matrix()
 }
 
+#' Convert allele count matrix (amat) and total count matrix (dmat) to long format
+#' @param amat Allele count matrix with variants as rows and cells as columns
+#' @param dmat Total count matrix with variants as rows and cells as columns
+#' @return A data.table in long format with columns: variant, cell, a (allele count), d (total count)
+#' @export
+mat_to_long = function(amat, dmat) {
+    # Ensure both matrices have the same dimensions and row/column names
+    if (!identical(dim(amat), dim(dmat)) || 
+        !identical(rownames(amat), rownames(dmat)) || 
+        !identical(colnames(amat), colnames(dmat))) {
+        stop("amat and dmat must have identical dimensions and row/column names")
+    }
+    
+    # Convert to data.table and melt to long format
+    amat_dt <- as.data.table(amat, keep.rownames = "variant")
+    dmat_dt <- as.data.table(dmat, keep.rownames = "variant")
+    
+    # Melt both matrices to long format
+    amat_long <- data.table::melt(amat_dt, id.vars = "variant", 
+                                  variable.name = "cell", value.name = "a")
+    dmat_long <- data.table::melt(dmat_dt, id.vars = "variant", 
+                                  variable.name = "cell", value.name = "d")
+    
+    # Merge the two long tables
+    result <- merge(amat_long, dmat_long, by = c("variant", "cell"))
+    
+    # Set column order
+    setcolorder(result, c("variant", "cell", "a", "d"))
+    
+    return(result)
+}
+
 #' Make a rooted NJ tree
 #' @param vmat A matrix of cell-by-variable values
 #' @param dist_method The distance method to use
@@ -1896,7 +1928,9 @@ map_cell_to_tree = function(tree, cell, logliks, logA_vec, leaf_only = FALSE, nc
     # score assignments
     scores = score_trees_parallel(edges_new, logP_list, logA_vec)
     
-    probs = exp(scores - logSumExp(scores)) %>% setNames(labels)
+    probs = exp(scores - logSumExp(scores))
+    
+    res = data.frame(guide_node = labels, cell_map = cell, probs = probs, scores = scores)
 
-    return(probs)
+    return(res)
 }
