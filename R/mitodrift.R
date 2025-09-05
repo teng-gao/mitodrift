@@ -1512,8 +1512,9 @@ phylo_to_gtree = function(phy) {
 
 #' @export
 trim_tree = function(tree, conf) {
-    tree$node.label[is.na(tree$node.label)] = 0
-    tree = TreeTools::CollapseNode(tree, which(tree$node.label < conf) + length(tree$tip.label))
+    node_confs = as.numeric(tree$node.label)
+    node_confs[is.na(node_confs)] = 0
+    tree = TreeTools::CollapseNode(tree, which(node_confs < conf) + length(tree$tip.label))
     tree = TreeTools::Renumber(tree)
     return(tree)
 }

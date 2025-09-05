@@ -2,8 +2,8 @@
 plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = TRUE, dot_size = 1, ylim = NULL,
     clade_annot = NULL, tip_annot = NULL,
     title = NULL, label_site = FALSE, cell_annot = NULL, tip_lab = FALSE, node_lab = FALSE, layered = FALSE, annot_bar_height = 0.1, clade_bar_height = 1,
-    het_max = 0.1, conf_min = 0.5, conf_max = 0.5 , conf_label = FALSE, branch_length = TRUE, node_conf = FALSE, annot_scale = NULL, annot_legend = FALSE, label_group = FALSE,
-    annot_legend_title = '', text_size = 3, label_size = 1, mut = NULL, mark_low_cov = FALSE, facet_by_group = FALSE, flip = FALSE) {
+    het_max = 0.1, conf_min = 0, conf_max = 0.5 , conf_label = FALSE, branch_length = TRUE, node_conf = FALSE, annot_pal = NULL, annot_legend = FALSE, label_group = FALSE,
+    annot_legend_title = '', text_size = 3, label_size = 1, mut = NULL, mark_low_cov = FALSE, facet_by_group = FALSE, flip = TRUE) {
 
     if (inherits(gtree, 'tbl_graph')) {
         phylo = to_phylo_reorder(gtree)
@@ -178,14 +178,36 @@ plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = T
     }
 
     if (!is.null(cell_annot)) {
-
-        cell_annot = cell_annot %>% filter(cell %in% phylo$tip.label)
-
-        p_bar = cell_annot %>%
-            mutate(cell = factor(cell, cell_order)) %>%  
-            annot_bar(legend = annot_legend, label_group = label_group, 
-                label_size = text_size/2,
-                annot_scale = annot_scale, legend_title = annot_legend_title, layered = layered)
+        
+        # Handle both single data frame and list of data frames
+        if (!is.list(cell_annot) || is.data.frame(cell_annot)) {
+            cell_annot <- list(cell_annot)
+        }
+        
+        # Handle annot_pal - if single value, replicate for all annotations
+        if (!is.null(annot_pal)) {
+            if (!is.list(annot_pal)) {
+                annot_pal <- rep(list(annot_pal), length(cell_annot))
+            }
+        } else {
+            annot_pal <- rep(list(NULL), length(cell_annot))
+        }
+        
+        # Filter each annotation to only include cells in the tree
+        cell_annot <- lapply(cell_annot, function(annot) {
+            annot %>% filter(cell %in% phylo$tip.label)
+        })
+        
+        # Create separate bars for each annotation with its own palette
+        p_bars <- mapply(function(annot, pal) {
+            annot %>%
+                mutate(cell = factor(cell, cell_order)) %>%  
+                annot_bar(legend = annot_legend, label_group = label_group, 
+                    label_size = text_size/2,
+                    annot_pal = pal,
+                    legend_title = annot_legend_title, 
+                    layered = layered)
+        }, cell_annot, annot_pal, SIMPLIFY = FALSE)
 
     }
 
@@ -196,8 +218,8 @@ plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = T
     plot_components <- list(p_tree)
     
     if (!is.null(cell_annot)) {
-        plot_components <- c(plot_components, list(p_bar))
-        heights <- c(heights, annot_bar_height)
+        plot_components <- c(plot_components, p_bars)
+        heights <- c(heights, rep(annot_bar_height, length(p_bars)))
     }
     
     if (!is.null(clade_annot)) {
@@ -216,7 +238,7 @@ plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = T
 #' @keywords internal
 annot_bar = function(
     D, transpose = FALSE, legend = TRUE, legend_title = '', size = 0.05, label_group = FALSE, label_size = 5,
-    pal_annot = NULL, annot_scale = NULL, raster = FALSE, layered = FALSE
+    annot_pal = NULL, annot_scale = NULL, raster = FALSE, layered = FALSE
 ) {
 
     if (layered) {
@@ -247,18 +269,12 @@ annot_bar = function(
         p = p + geom_text(aes(label = annot), size = label_size, angle = 90)
     }
 
-    # if (!is.null(annot_scale)) {
-    #     p = p + annot_scale
-    # } else {
-    #     if (is.null(pal_annot)) {
-    #         pal = c("#E41A1C", "#377EB8", "#4DAF4A", "#984EA3", "#FF7F00", "#FFFF33", "#A65628", "#F781BF")
-    #         getPalette = colorRampPalette(pal)
-    #         pal_annot = getPalette(length(unique(D$annot)))
-    #     }
-    #     p = p + scale_fill_manual(values = pal_annot, na.value = 'gray90', limits = force)
-    # }
 
-    p = p + scale_fill_discrete(na.value = 'gray90', limits = force)
+    if (!is.null(annot_pal)) {
+        p = p + scale_fill_manual(values = annot_pal, na.value = 'gray90', limits = force)
+    } else {
+        p = p + scale_fill_discrete(na.value = 'gray90', limits = force)
+    }
 
     if (transpose) {
         p = p + coord_flip() +
@@ -277,6 +293,7 @@ annot_bar = function(
 
     return(p)
 }
+
 
 
 order_muts_binary = function(cell_order, mut_dat) {
@@ -333,7 +350,7 @@ order_muts <- function(cell_order, mut_dat) {
 }
 
 plot_phylo_circ = function(gtree, node_conf = FALSE, conf_label = FALSE, title = '', pwidth = 0.25,
-    branch_width = 0.3, dot_size = 1, conf_min = 0.5, conf_max = 0.5, cell_annot = NULL, offset = 0.05, width = 0.8,
+    branch_width = 0.3, dot_size = 1, conf_min = 0, conf_max = 0.5, cell_annot = NULL, annot_pal = NULL, offset = 0.05, width = 0.8,
     activity_mat = NULL, label_size = 2, rescale = FALSE, limits = c(-2,2), flip = TRUE,
     tip_annot = NULL, legend = FALSE, layered = FALSE) {
 
@@ -364,20 +381,51 @@ plot_phylo_circ = function(gtree, node_conf = FALSE, conf_label = FALSE, title =
     }
 
     if (!is.null(cell_annot)) {
-        if (layered) {
-            p_tree = p_tree + geom_fruit(
-                data = cell_annot,
-                geom = geom_tile,
-                pwidth = pwidth,
-                mapping = aes(y = cell, fill = annot, x = annot),
-                show.legend = legend)
+        
+        # Handle both single data frame and list of data frames
+        if (!is.list(cell_annot) || is.data.frame(cell_annot)) {
+            cell_annot <- list(cell_annot)
+        }
+        
+        # Handle annot_pal - if single value, replicate for all annotations
+        if (!is.null(annot_pal)) {
+            if (!is.list(annot_pal)) {
+                annot_pal <- rep(list(annot_pal), length(cell_annot))
+            }
         } else {
-            p_tree = p_tree + geom_fruit(
-                data = cell_annot,
-                geom = geom_col,
-                pwidth = pwidth,
-                mapping = aes(y = cell, fill = annot, x = 1),
-                show.legend = legend)
+            annot_pal <- rep(list(NULL), length(cell_annot))
+        }
+        
+        # Add each annotation as a separate fruit layer
+        for (i in seq_along(cell_annot)) {
+            annot_data <- cell_annot[[i]]
+            pal <- annot_pal[[i]]
+            
+            # Start new scale for each annotation (except the first one)
+            if (i > 1) {
+                p_tree = p_tree + ggnewscale::new_scale_fill()
+            }
+            
+            if (layered) {
+                p_tree = p_tree + geom_fruit(
+                    data = annot_data,
+                    geom = geom_tile,
+                    pwidth = pwidth,
+                    mapping = aes(y = cell, fill = annot, x = annot),
+                    show.legend = legend)
+            } else {
+                p_tree = p_tree + geom_fruit(
+                    data = annot_data,
+                    geom = geom_col,
+                    pwidth = pwidth,
+                    mapping = aes(y = cell, fill = annot, x = 1),
+                    show.legend = legend)
+            }
+            
+            # Add custom palette if provided
+            if (!is.null(pal)) {
+                p_tree = p_tree + scale_fill_manual(values = pal, na.value = 'gray90')
+            }
         }
     }
 
