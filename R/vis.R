@@ -352,7 +352,7 @@ order_muts <- function(cell_order, mut_dat) {
 plot_phylo_circ = function(gtree, node_conf = FALSE, conf_label = FALSE, title = '', pwidth = 0.25,
     branch_width = 0.3, dot_size = 1, conf_min = 0, conf_max = 0.5, cell_annot = NULL, annot_pal = NULL, offset = 0.05, width = 0.8,
     activity_mat = NULL, label_size = 2, rescale = FALSE, limits = c(-2,2), flip = TRUE,
-    tip_annot = NULL, legend = FALSE, layered = FALSE) {
+    tip_annot = NULL, legend = FALSE, layered = FALSE, smooth_k = 0) {
 
     p_tree = ggtree(gtree, ladderize = TRUE, layout = 'circular', branch.length = "none", linewidth = branch_width, right = flip) +
             ggtitle(title)
@@ -438,7 +438,14 @@ plot_phylo_circ = function(gtree, node_conf = FALSE, conf_label = FALSE, title =
             geom_tippoint(aes(color = annot), size = dot_size, pch = 19, stroke = 0)
     }
 
+    cell_order = p_tree$data %>% filter(isTip) %>% arrange(y) %>% 
+        pull(label)
+
     if (!is.null(activity_mat)) {
+
+        if (smooth_k > 0) {
+            activity_mat = activity_mat[,cell_order,drop = FALSE] %>% row_smooth(k = smooth_k)
+        }
 
         df_activity = activity_mat %>%
             reshape2::melt() %>% 
@@ -498,4 +505,48 @@ plot_phylo_circ = function(gtree, node_conf = FALSE, conf_label = FALSE, title =
     }
 
     return(p_tree)
+}
+
+
+row_smooth <- function(M, k, na_rm = FALSE, edge = c("partial", "full")) {
+	edge <- match.arg(edge)
+	if (!is.matrix(M)) stop("M must be a matrix.")
+	if (k < 1L) stop("k must be >= 1.")
+	if (k == 1L) return(M)
+
+	nr <- nrow(M)
+	nc <- ncol(M)
+	out <- matrix(NA_real_, nr, nc, dimnames = dimnames(M))
+
+	left <- k %/% 2L
+	right <- k - left - 1L
+
+	idx <- seq_len(nc)
+	L <- pmax(1L, idx - left)
+	R <- pmin(nc, idx + right)
+	win_len <- R - L + 1L
+
+	for (i in seq_len(nr)) {
+		x <- M[i, ]
+		val <- ifelse(is.na(x), 0, x)
+		cs <- c(0, cumsum(val))
+		cc <- c(0, cumsum(!is.na(x)))
+
+		sums <- cs[R + 1L] - cs[L]
+		cnt  <- cc[R + 1L] - cc[L]
+
+		if (na_rm) {
+			den <- cnt
+			if (edge == "full") den[win_len < k] <- NA_integer_
+			res <- sums / den
+			res[!is.finite(res)] <- NA_real_
+		} else {
+			ok <- (cnt == win_len)
+			if (edge == "full") ok <- ok & (win_len == k)
+			res <- sums / win_len
+			res[!ok] <- NA_real_
+		}
+		out[i, ] <- res
+	}
+	out
 }
