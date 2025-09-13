@@ -1,8 +1,8 @@
 #' @export 
 plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = TRUE, dot_size = 1, ylim = NULL,
-    clade_annot = NULL, tip_annot = NULL,
+    tip_annot = NULL, annot_scale = NULL, feature_mat = NULL, feature_limits = c(-2,2),
     title = NULL, label_site = FALSE, cell_annot = NULL, tip_lab = FALSE, node_lab = FALSE, layered = FALSE, annot_bar_height = 0.1, clade_bar_height = 1,
-    het_max = 0.1, conf_min = 0, conf_max = 0.5 , conf_label = FALSE, branch_length = TRUE, node_conf = FALSE, annot_pal = NULL, annot_legend = FALSE, label_group = FALSE,
+    het_max = 0.1, conf_min = 0, conf_max = 1, conf_label = FALSE, branch_length = TRUE, node_conf = FALSE, annot_pal = NULL, annot_legend = FALSE, label_group = FALSE,
     annot_legend_title = '', text_size = 3, label_size = 1, mut = NULL, mark_low_cov = FALSE, facet_by_group = FALSE, flip = TRUE) {
 
     if (inherits(gtree, 'tbl_graph')) {
@@ -149,34 +149,6 @@ plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = T
         )
     }
 
-    if (!is.null(clade_annot)) {
-
-        if ('score' %in% colnames(clade_annot)) {
-            show.legend = TRUE
-        } else {
-            clade_annot = clade_annot %>% mutate(score = 1)
-            show.legend = FALSE
-        }
-
-        p_clade = clade_annot %>%
-            mutate(cell = factor(as.integer(factor(cell, cell_order)), 1:length(cell_order))) %>%
-            ggplot(
-                aes(x = cell, y = factor(clade), fill = score)
-            ) +
-            geom_raster(show.legend = show.legend) +
-            theme_bw() +
-            theme(
-                axis.text.x = element_blank(),
-                axis.text.y = element_text(size = text_size),
-                axis.title = element_blank(),
-                axis.ticks = element_blank(),
-                panel.grid = element_blank(),
-                plot.margin = margin(1, 0, 0, 0, unit = "mm"), 
-            ) +
-            scale_x_discrete(expand = expansion(add = 1), drop = F) +
-            scale_y_discrete(expand = expansion(add = 1))
-    }
-
     if (!is.null(cell_annot)) {
         
         # Handle both single data frame and list of data frames
@@ -205,10 +177,33 @@ plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = T
                 annot_bar(legend = annot_legend, label_group = label_group, 
                     label_size = text_size/2,
                     annot_pal = pal,
+                    annot_scale = annot_scale,
                     legend_title = annot_legend_title, 
                     layered = layered)
         }, cell_annot, annot_pal, SIMPLIFY = FALSE)
 
+    }
+
+    if (!is.null(feature_mat)) {
+
+        p_feature = feature_mat %>%
+            as.data.frame() %>%
+            tibble::rownames_to_column('feature') %>%
+            mutate(feature = factor(feature, rev(rownames(feature_mat)))) %>%
+            reshape2::melt(id.vars = 'feature', variable.name = 'cell', value.name = 'value') %>%
+            mutate(cell = factor(cell, cell_order)) %>%
+            ggplot(aes(x = cell, y = feature, fill = value)) +
+            geom_raster() +
+            theme_bw() +
+            theme(axis.text.x = element_blank(), 
+                axis.text.y = element_text(size = text_size),
+                plot.margin = margin(t = 1, r = 0, b = 0, l = 0, unit = "mm"),
+                axis.ticks.x = element_blank(),
+                axis.title.x = element_blank(),
+            ) +
+            scale_x_discrete(expand = expansion(add = 1), drop = F) +
+            scale_y_discrete(expand = expansion(add = 0)) +
+            scale_fill_gradient2(low = 'blue', mid = 'white', high = 'red', limits = feature_limits, oob = scales::oob_squish)
     }
 
     # Determine heights based on components
@@ -222,9 +217,9 @@ plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = T
         heights <- c(heights, rep(annot_bar_height, length(p_bars)))
     }
     
-    if (!is.null(clade_annot)) {
-        plot_components <- c(plot_components, list(p_clade))
-        heights <- c(heights, clade_bar_height)
+    if (!is.null(feature_mat)) {
+        plot_components <- c(plot_components, list(p_feature))
+        heights <- c(heights, 1)
     }
     
     plot_components <- c(plot_components, list(p_heatmap))
@@ -274,6 +269,10 @@ annot_bar = function(
         p = p + scale_fill_manual(values = annot_pal, na.value = 'gray90', limits = force)
     } else {
         p = p + scale_fill_discrete(na.value = 'gray90', limits = force)
+    }
+
+    if (!is.null(annot_scale)) {
+        p = p + annot_scale
     }
 
     if (transpose) {
