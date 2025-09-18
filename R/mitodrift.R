@@ -1462,6 +1462,8 @@ prop.clades.par <- function(phy, phy_list, rooted = FALSE,
         support <- support / nT
     }
 
+    support[is.na(support)] = 0
+
     return(support)
 }
 
