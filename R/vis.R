@@ -442,8 +442,10 @@ plot_phylo_circ = function(gtree, node_conf = FALSE, conf_label = FALSE, title =
 
     if (!is.null(activity_mat)) {
 
+        activity_mat = activity_mat[,cell_order,drop = FALSE] 
+
         if (smooth_k > 0) {
-            activity_mat = activity_mat[,cell_order,drop = FALSE] %>% row_smooth(k = smooth_k)
+            activity_mat = activity_mat %>% row_smooth(k = smooth_k)
         }
 
         df_activity = activity_mat %>%
