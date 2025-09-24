@@ -147,6 +147,13 @@ option_list <- list(
         metavar = "INTEGER"
     ),
     make_option(
+        c("-d", "--tree_mcmc_batch_size"),
+        type = "integer",
+        default = 1000,
+        help = "Batch size for phylogenetic MCMC",
+        metavar = "INTEGER"
+    ),
+    make_option(
         c("-r", "--resume"),
         type = "logical",
         default = FALSE,
@@ -246,6 +253,7 @@ md$run_mcmc(
     max_iter = opts$tree_mcmc_iter,
     nchains = opts$tree_mcmc_chains,
     ncores = opts$ncores,
+    batch_size = opts$tree_mcmc_batch_size,
     outfile = mcmc_trace_file,
     resume = opts$resume
 )

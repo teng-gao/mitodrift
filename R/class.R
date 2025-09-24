@@ -338,6 +338,7 @@ MitoDrift <- R6::R6Class("MitoDrift",
             max_iter = 10000,
             nchains = 1000,
             ncores = 1,
+            batch_size = 1000,
             outfile = NULL,
             resume = FALSE,
             use_nj = FALSE
@@ -365,10 +366,10 @@ MitoDrift <- R6::R6Class("MitoDrift",
                 tree_init_mcmc <- self$tree_ml
             }
             
-            message('Running phylogenetic MCMC...')
+            message('Running phylogenetic MCMC with batch size ', batch_size, '...')
             
             # Run MCMC
-            run_tree_mcmc(
+            run_tree_mcmc_batch(
                 phy_init = tree_init_mcmc,
                 logP_list = self$logP,
                 logA_vec = self$logA,
@@ -376,7 +377,8 @@ MitoDrift <- R6::R6Class("MitoDrift",
                 nchains = nchains,
                 ncores = ncores,
                 outfile = self$mcmc_trace_file,
-                resume = resume
+                resume = resume,
+                batch_size = batch_size
             )
             
             message('Phylogenetic MCMC completed!')

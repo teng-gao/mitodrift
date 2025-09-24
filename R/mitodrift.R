@@ -1263,26 +1263,45 @@ run_tree_mcmc_batch = function(
         dir.create(outdir, recursive = TRUE)
     }
 
+    # Minimal guard: safe read for possibly truncated/partial RDS
+    safe_read_chain = function(path) {
+        if (!file.exists(path)) return(NULL)
+        fi = file.info(path)
+        if (is.na(fi$size) || fi$size <= 0) return(NULL)
+        tryCatch(readRDS(path), error = function(e) NULL)
+    }
+
+    # load existing chains
     tree_list_all = mclapply(
         chains,
         mc.cores = ncores,
         function(s) {
             chain_path = glue('{outdir}/chain{s}_{fname}')
-            if (resume && file.exists(chain_path)) {
-                readRDS(chain_path)
+            if (resume) {
+                chain_list = safe_read_chain(chain_path)
+                if (is.null(chain_list)) {
+                    chain_list = list(phy_init)
+                }
             } else {
-                list(phy_init)
+                chain_list = list(phy_init)
             }
+            max_len = max_iter + 1
+            if (length(chain_list) > max_len) {
+                chain_list = chain_list[1:max_len]
+            }
+            saveRDS(chain_list, chain_path)
+            chain_list
         })
 
     # If all chains have finished, stop early
     all_done = all(sapply(chains, function(s) {
         chain_list = tree_list_all[[s]]
-        length(chain_list) == (max_iter + 1)
+        length(chain_list) >= (max_iter + 1)
     }))
 
     if (all_done) {
         message('All chains have completed the requested iterations.')
+        saveRDS(tree_list_all, outfile)
         return(tree_list_all)
     }
 
@@ -1301,13 +1320,18 @@ run_tree_mcmc_batch = function(
             function(s) {
 
                 chain_list = tree_list_all[[s]]
-                max_iter_i = min(batch_size, max_iter - length(chain_list) + 1)
+                
+                n_remaining = max(0, max_iter - length(chain_list) + 1)
+                if (n_remaining == 0) {
+                    return(chain_list)
+                }
+                max_iter_i = min(batch_size, n_remaining)
 
                 # Starting tree for this batch: last of existing chain
                 start_phy = chain_list[[length(chain_list)]]
 
-                # Generate max_iter_i steps from the current start tree
-                elist = tree_mcmc_cpp(start_phy$edge, logP_list, logA_vec, max_iter = max_iter_i, seed = s)
+                seed_batch = as.integer(1000003L * (i - 1L) + s)
+                elist = tree_mcmc_cpp(start_phy$edge, logP_list, logA_vec, max_iter = max_iter_i, seed = seed_batch)
 
                 tree_list = lapply(
                     elist,
@@ -1315,8 +1339,10 @@ run_tree_mcmc_batch = function(
                         attach_edges(start_phy, edges)
                 })
 
-                # Drop the first tree for all subsequent batches
-                if (i > 0) {
+                class(tree_list) = 'multiPhylo'
+
+                # Drop the duplicated start tree for every batch
+                if (length(tree_list) > 0) {
                     tree_list = tree_list[-1]
                 }
 

@@ -1,6 +1,6 @@
 #' @export 
 plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = TRUE, dot_size = 1, ylim = NULL,
-    tip_annot = NULL, annot_scale = NULL, feature_mat = NULL, feature_limits = c(-2,2),
+    tip_annot = NULL, annot_scale = NULL, feature_mat = NULL, feature_limits = c(-2,2), rescale = FALSE,
     title = NULL, label_site = FALSE, cell_annot = NULL, tip_lab = FALSE, node_lab = FALSE, layered = FALSE, annot_bar_height = 0.1, clade_bar_height = 1,
     het_max = 0.1, conf_min = 0, conf_max = 1, conf_label = FALSE, branch_length = TRUE, node_conf = FALSE, annot_pal = NULL, annot_legend = FALSE, label_group = FALSE,
     annot_legend_title = '', text_size = 3, label_size = 1, mut = NULL, mark_low_cov = FALSE, facet_by_group = FALSE, flip = TRUE) {
@@ -186,14 +186,16 @@ plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = T
 
     if (!is.null(feature_mat)) {
 
-        p_feature = feature_mat %>%
+        df_feature = feature_mat %>%
             as.data.frame() %>%
             tibble::rownames_to_column('feature') %>%
             mutate(feature = factor(feature, rev(rownames(feature_mat)))) %>%
             reshape2::melt(id.vars = 'feature', variable.name = 'cell', value.name = 'value') %>%
-            mutate(cell = factor(cell, cell_order)) %>%
+            mutate(cell = factor(cell, cell_order))
+
+        p_feature = df_feature %>%
             ggplot(aes(x = cell, y = feature, fill = value)) +
-            geom_raster() +
+            geom_raster(show.legend = TRUE) +
             theme_bw() +
             theme(axis.text.x = element_blank(), 
                 axis.text.y = element_text(size = text_size),
@@ -226,7 +228,7 @@ plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = T
     heights <- c(heights, 2)
     
     # Combine plots
-    wrap_plots(plot_components) + plot_layout(heights = heights)
+    wrap_plots(plot_components) + plot_layout(heights = heights, guides = 'collect')
 }
 
 # expect columns cell and annot
