@@ -1112,7 +1112,7 @@ run_tree_mcmc_cpp = function(phy, logP_list, logA_vec, max_iter = 100, nchains =
 
 attach_edges = function(phy, edges) {
 
-    phy_new = rlang::duplicate(phy, shallow = FALSE)
+    phy_new = phy
     E_new = matrix(edges, ncol = 2)
     phy_new$edge = E_new
 
