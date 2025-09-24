@@ -173,7 +173,7 @@ Fit tree parameters using Expectation-Maximization (EM) algorithm
   upper_bounds = c(ngen = 1000, log_eps = log(0.2), log_err = log(0.2)),
   max_iter = 10,
   epsilon = 0.001,
-  ncores = 3
+  ncores = 1
 )}\if{html}{\out{</div>}}
 }
 
@@ -244,6 +244,7 @@ Run phylogenetic MCMC sampling
   max_iter = 10000,
   nchains = 1000,
   ncores = 1,
+  batch_size = 1000,
   outfile = NULL,
   resume = FALSE,
   use_nj = FALSE
@@ -258,6 +259,8 @@ Run phylogenetic MCMC sampling
 \item{\code{nchains}}{Number of MCMC chains (default: 1000)}
 
 \item{\code{ncores}}{Number of cores to use (default: 1)}
+
+\item{\code{batch_size}}{Batch size for MCMC (default: 1000)}
 
 \item{\code{outfile}}{Output file for saving results (optional)}
 

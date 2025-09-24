@@ -121,32 +121,6 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
-// score_tree_bp_wrapper2_fast
-double score_tree_bp_wrapper2_fast(arma::Col<int> E, const std::vector< std::vector<double> >& logP_list_colmajor, const std::vector<double>& logA);
-RcppExport SEXP _mitodrift_score_tree_bp_wrapper2_fast(SEXP ESEXP, SEXP logP_list_colmajorSEXP, SEXP logASEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< arma::Col<int> >::type E(ESEXP);
-    Rcpp::traits::input_parameter< const std::vector< std::vector<double> >& >::type logP_list_colmajor(logP_list_colmajorSEXP);
-    Rcpp::traits::input_parameter< const std::vector<double>& >::type logA(logASEXP);
-    rcpp_result_gen = Rcpp::wrap(score_tree_bp_wrapper2_fast(E, logP_list_colmajor, logA));
-    return rcpp_result_gen;
-END_RCPP
-}
-// score_tree_bp_wrapper2_fast_pairs
-double score_tree_bp_wrapper2_fast_pairs(arma::Col<int> E_pairs, const std::vector< std::vector<double> >& logP_list_colmajor, const std::vector<double>& logA);
-RcppExport SEXP _mitodrift_score_tree_bp_wrapper2_fast_pairs(SEXP E_pairsSEXP, SEXP logP_list_colmajorSEXP, SEXP logASEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< arma::Col<int> >::type E_pairs(E_pairsSEXP);
-    Rcpp::traits::input_parameter< const std::vector< std::vector<double> >& >::type logP_list_colmajor(logP_list_colmajorSEXP);
-    Rcpp::traits::input_parameter< const std::vector<double>& >::type logA(logASEXP);
-    rcpp_result_gen = Rcpp::wrap(score_tree_bp_wrapper2_fast_pairs(E_pairs, logP_list_colmajor, logA));
-    return rcpp_result_gen;
-END_RCPP
-}
 // score_trees_parallel
 NumericVector score_trees_parallel(const std::vector<arma::Col<int>>& trees, const std::vector< std::vector<double> >& logP, const std::vector<double>& logA);
 RcppExport SEXP _mitodrift_score_trees_parallel(SEXP treesSEXP, SEXP logPSEXP, SEXP logASEXP) {
@@ -239,8 +213,6 @@ static const R_CallMethodDef CallEntries[] = {
     {"_mitodrift_score_tree_bp_wrapper", (DL_FUNC) &_mitodrift_score_tree_bp_wrapper, 3},
     {"_mitodrift_score_tree_bp2", (DL_FUNC) &_mitodrift_score_tree_bp2, 7},
     {"_mitodrift_score_tree_bp_wrapper2", (DL_FUNC) &_mitodrift_score_tree_bp_wrapper2, 3},
-    {"_mitodrift_score_tree_bp_wrapper2_fast", (DL_FUNC) &_mitodrift_score_tree_bp_wrapper2_fast, 3},
-    {"_mitodrift_score_tree_bp_wrapper2_fast_pairs", (DL_FUNC) &_mitodrift_score_tree_bp_wrapper2_fast_pairs, 3},
     {"_mitodrift_score_trees_parallel", (DL_FUNC) &_mitodrift_score_trees_parallel, 3},
     {"_mitodrift_score_tree_bp_wrapper_multi", (DL_FUNC) &_mitodrift_score_tree_bp_wrapper_multi, 3},
     {"_mitodrift_nni_cpp_parallel", (DL_FUNC) &_mitodrift_nni_cpp_parallel, 3},

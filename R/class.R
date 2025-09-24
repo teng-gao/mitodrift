@@ -333,6 +333,7 @@ MitoDrift <- R6::R6Class("MitoDrift",
         #' @param outfile Output file for saving results (optional)
         #' @param resume Whether to resume from existing file (default: FALSE)
         #' @param use_nj Whether to use NJ tree instead of ML tree as initial tree (default: FALSE)
+        #' @param batch_size Batch size for MCMC (default: 1000)
         #' @return MCMC result object
         run_mcmc = function(
             max_iter = 10000,
