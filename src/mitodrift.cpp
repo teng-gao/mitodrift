@@ -769,7 +769,6 @@ struct NNICache {
 
 // ---- Rcpp exported wrappers around NNICache ----
 
-// [[Rcpp::export]]
 SEXP nni_cache_create(arma::Col<int> E,
 	const std::vector< std::vector<double> >& logP,
 	const std::vector<double>& logA) {
@@ -777,13 +776,11 @@ SEXP nni_cache_create(arma::Col<int> E,
 	return ptr;
 }
 
-// [[Rcpp::export]]
 double nni_cache_loglik(SEXP xp) {
 	Rcpp::XPtr<NNICache> ptr(xp);
 	return ptr->total_loglik();
 }
 
-// [[Rcpp::export]]
 double nni_cache_delta(SEXP xp, int edge_n, int which) {
 	Rcpp::XPtr<NNICache> ptr(xp);
 	double delta = 0.0;
@@ -793,13 +790,11 @@ double nni_cache_delta(SEXP xp, int edge_n, int which) {
 	return delta;
 }
 
-// [[Rcpp::export]]
 void nni_cache_apply(SEXP xp, int edge_n, int which) {
 	Rcpp::XPtr<NNICache> ptr(xp);
 	ptr->apply_nni(edge_n, which);
 }
 
-// [[Rcpp::export]]
 arma::Col<int> nni_cache_current_E(SEXP xp) {
 	Rcpp::XPtr<NNICache> ptr(xp);
 	return ptr->E + 1; // back to 1-indexed
