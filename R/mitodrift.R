@@ -1350,35 +1350,26 @@ run_tree_mcmc_batch = function(
         }
     }
 
-    # reconstruct full phylo objects only at the end
-    tree_list_all = lapply(chains, function(s) {
-        elist = edge_list_all[[s]]
-        phylist = lapply(
-            elist,
-            function(edges){
-                attach_edges(phy_init, edges)
-            })
-        class(phylist) = 'multiPhylo'
-        phylist
-    })
+    saveRDS(edge_list_all, outfile)
 
-    saveRDS(tree_list_all, outfile)
-
-    return(tree_list_all)
+    return(edge_list_all)
 }
 
 #' @export
-collect_chains = function(res, burnin = 0, max_iter = Inf) {
+collect_chains = function(edge_list_all, phy_init, burnin = 0, max_iter = Inf) {
 
     if (max_iter < burnin) {
         stop('Max iter needs to be greater than burnin')
     }
 
-    res = res[res %>% sapply(length) > 0]
+    # drop empty chains
+    edge_list_all = edge_list_all[edge_list_all %>% sapply(length) > 0]
 
-    mcmc_trees = res %>% lapply(function(trees){
-            trees = trees[(burnin+1):min(length(trees), max_iter)]
-            lapply(trees, function(tree){
+    # reconstruct trees per chain and apply burnin/truncation
+    mcmc_trees = edge_list_all %>% lapply(function(elist){
+            elist = elist[(burnin+1):min(length(elist), max_iter)]
+            lapply(elist, function(edges){
+                tree = attach_edges(phy_init, edges)
                 tree$edge.length = NULL
                 tree$node.label = NULL
                 tree$nodes = NULL

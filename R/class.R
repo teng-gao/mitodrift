@@ -427,7 +427,7 @@ MitoDrift <- R6::R6Class("MitoDrift",
             res_mcmc <- readRDS(mcmc_trace_file)
             
             message('Collecting MCMC chains...')
-            trees_mcmc <- collect_chains(res_mcmc, burnin = burnin, max_iter = max_iter)
+            trees_mcmc <- collect_chains(res_mcmc, tree, burnin = burnin, max_iter = max_iter)
             
             message('Adding clade frequencies to tree...')
             self$tree_annot <- add_clade_freq(tree, trees_mcmc, ncores = ncores)
