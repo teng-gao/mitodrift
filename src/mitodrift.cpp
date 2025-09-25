@@ -703,15 +703,11 @@ struct NNICache {
 					// If p1 was root, combine {p2(new), cX}; else combine {prev_child(updated), its sibling}
 					std::vector<double> S(C);
 					if (prev_child == -1) {
-						for (int c = 0; c < C; ++c) S[c] = Fl[p2 * C + c] /* F_p2 stored above? see below */ + Fl[cX * C + c];
-						// We must use the freshly computed F for p2 (child->root). That's `curF` when child==p2 before moving to p1,
-						// but here we no longer have it. Recompute quickly:
-						std::vector<double> Sroot(C), temp2(C), u2(C), Fp2_again(C);
-						for (int c = 0; c < C; ++c) Sroot[c] = Fl[c1 * C + c] + Fl[cStay * C + c];
-						std::vector<double> Pnode_p2b(C); for (int k = 0; k < C; ++k) Pnode_p2b[k] = P[k * n + p2];
-						compute_F_from_sum(Sroot.data(), Pnode_p2b.data(), Fp2_again.data(), temp2, u2);
-						for (int c = 0; c < C; ++c) S[c] = Fp2_again[c] + Fl[cX * C + c];
-						std::vector<double> Pnode_root(C); for (int k = 0; k < C; ++k) Pnode_root[k] = P[k * n + v /* root == p1 */ + 0];
+						// p1 is the root: its two children after NNI are {p2(new), cX}.
+						// We already stored the freshly computed F for p2 into Fl[p2,*] above.
+						const int root_node = p1;
+						for (int c = 0; c < C; ++c) S[c] = Fl[p2 * C + c] + Fl[cX * C + c];
+						std::vector<double> Pnode_root(C); for (int k = 0; k < C; ++k) Pnode_root[k] = P[k * n + root_node];
 						for (int c = 0; c < C; ++c) temp[c] = Pnode_root[c] + S[c];
 						logZ[l] = logsumexp_array(temp.data(), C);
 						break;
