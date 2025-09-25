@@ -1328,7 +1328,7 @@ run_tree_mcmc_batch = function(
                     start_edge = chain_list[[length(chain_list)]]
 
                     seed_batch = as.integer(1000003L * (i - 1L) + s)
-                    elist = tree_mcmc_cpp(start_edge, logP_list, logA_vec, max_iter = max_iter_i, seed = seed_batch)
+                    elist = tree_mcmc_cpp_cached(start_edge, logP_list, logA_vec, max_iter = max_iter_i, seed = seed_batch)
 
                     # Drop the duplicated start state for every batch
                     if (length(elist) > 0) {

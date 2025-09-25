@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <RcppArmadillo.h>
+#include <array>
 
 using namespace Rcpp;
 using namespace RcppParallel;
@@ -420,6 +421,394 @@ double score_tree_bp_wrapper2(arma::Col<int> E,
 	return logZ;
 }
 
+/* ===========================
+ * Message-caching NNI engine
+ * ===========================
+ *
+ * We cache, for every locus ℓ and node v, the length‑C vector F_ℓ[v,·] which is the
+ * child→parent contribution added to the parent's message (i.e., the quantity we
+ * accumulate into msg_nm[parent,·] inside score_tree_bp2_core). For a parent p with two
+ * children a and b, msg_nm[p,·] = F[a,·] + F[b,·]. An NNI around edge (p1→p2) only changes
+ * the sets of children of p1 and p2, so we can recompute F at p2, then p1, and then walk
+ * upward to the root, updating F along that single path. This yields O(height × C × L)
+ * updates per proposal instead of O(n × C × L).
+ */
+
+struct NNICache {
+	// static tree info
+	int n;					// #nodes
+	int m;					// #edges
+	int C;					// #states
+	int L;					// #loci
+	int nTips;				// #tips
+	int root;				// root node id (0-indexed)
+	arma::Col<int> E;		// edge list, 0-indexed, postorder (parent col [0..m-1], child col [m..2m-1])
+
+	// topology helpers
+	std::vector<int> parent_of;					// size n
+	std::vector< std::array<int,2> > children_of;		// for internal nodes: exactly two children
+	// transition precompute
+	std::vector<double> row_maxA;				// size C
+	std::vector<double> expA_shifted;			// size C*C, row-major
+
+	// data likelihoods
+	std::vector< std::vector<double> > logP_list;	// L × (C*n), row-major per locus
+
+	// per-locus cached child→parent contributions F (n*C) and root logZ
+	std::vector< std::vector<double> > F;		// L × (n*C)
+	std::vector<double> logZ;					// L
+
+	NNICache(arma::Col<int> E_in,
+		const std::vector< std::vector<double> >& logP_in,
+		const std::vector<double>& logA_in) {
+
+		L = static_cast<int>(logP_in.size());
+		C = static_cast<int>(std::sqrt(logA_in.size()));
+		n = static_cast<int>(logP_in[0].size() / C);
+
+		// Bring E to postorder and 0-indexed
+		E_in = reorderRcpp(E_in);
+		E = E_in - 1;
+
+		m = static_cast<int>(E.n_elem / 2);
+		nTips = m / 2 + 1;
+		root = E(m - 1);
+
+		// parent/children
+		parent_of.assign(n, -1);
+		children_of.assign(n, std::array<int,2>{-1,-1});
+		for (int i = 0; i < m; ++i) {
+			const int p = E[i];
+			const int c = E[m + i];
+			parent_of[c] = p;
+			// fill two slots
+			if (children_of[p][0] == -1) children_of[p][0] = c;
+			else children_of[p][1] = c;
+		}
+
+		// A precompute
+		row_maxA.resize(C);
+		expA_shifted.resize(static_cast<size_t>(C) * C);
+		for (int r = 0; r < C; ++r) {
+			const double* Arow = logA_in.data() + static_cast<size_t>(r) * C;
+			double mr = Arow[0];
+			for (int j = 1; j < C; ++j) if (Arow[j] > mr) mr = Arow[j];
+			row_maxA[r] = mr;
+			double* out = expA_shifted.data() + static_cast<size_t>(r) * C;
+			for (int j = 0; j < C; ++j) out[j] = std::exp(Arow[j] - mr);
+		}
+
+		// copy likelihoods
+		logP_list = logP_in;
+
+		// allocate caches
+		F.assign(L, std::vector<double>(static_cast<size_t>(n) * C, 0.0));
+		logZ.assign(L, 0.0);
+
+		// initialize F and logZ per locus with one postorder pass
+		std::vector<double> msg_nm(static_cast<size_t>(n) * C, 0.0);
+		std::vector<double> temp(C), u(C);
+		for (int l = 0; l < L; ++l) {
+			std::fill(msg_nm.begin(), msg_nm.end(), 0.0);
+			double* Fl = F[l].data();
+			const double* P = logP_list[l].data();
+
+			for (int i = 0; i < m; ++i) {
+				const int par  = E[i];
+				const int node = E[m + i];
+
+				// temp[c] = logP[c*n + node] + sum_children(node)[c]
+				double max_t = -std::numeric_limits<double>::infinity();
+				int offP = node;
+				const int base_node = node * C;
+				for (int c = 0; c < C; ++c, offP += n) {
+					const double v = P[offP] + msg_nm[base_node + c];
+					temp[c] = v;
+					if (v > max_t) max_t = v;
+				}
+				for (int c = 0; c < C; ++c) u[c] = std::exp(temp[c] - max_t);
+
+				// F[node,·]
+				const double* rowA = expA_shifted.data();
+				const int base_par = par * C; // where we'll accumulate into parent
+				for (int r = 0; r < C; ++r, rowA += C) {
+					double s = 0.0;
+					for (int j = 0; j < C; ++j) s += rowA[j] * u[j];
+					const double f = row_maxA[r] + max_t + std::log(s);
+					Fl[base_node + r] = f;
+					msg_nm[base_par + r] += f; // accumulate into parent message
+				}
+			}
+			// root marginal
+			for (int c = 0, offP = root; c < C; ++c, offP += n) temp[c] = P[offP] + msg_nm[root * C + c];
+			logZ[l] = logsumexp_array(temp.data(), C);
+		}
+	}
+
+	inline int other_child(int parent, int child) const {
+		const auto &ch = children_of[parent];
+		return (ch[0] == child) ? ch[1] : ch[0];
+	}
+
+	// Compute F_new for a node given S[c] = sum over child's F[c] and P(node,·).
+	inline void compute_F_from_sum(const double* S, const double* P_node, double* outF,
+		std::vector<double>& temp, std::vector<double>& u) const {
+		double max_t = -std::numeric_limits<double>::infinity();
+		for (int c = 0; c < C; ++c) {
+			const double v = P_node[c * n] + S[c]; // P is row-major: P[c*n + node]
+			// We'll not use this form; caller will pass P offset-corrected for node.
+			(void)v;
+		}
+		// The caller passes P_node such that P_node[c] == logP[c*n + node].
+		max_t = -std::numeric_limits<double>::infinity();
+		for (int c = 0; c < C; ++c) {
+			if (P_node[c] + S[c] > max_t) max_t = P_node[c] + S[c];
+		}
+		for (int c = 0; c < C; ++c) u[c] = std::exp((P_node[c] + S[c]) - max_t);
+
+		const double* rowA = expA_shifted.data();
+		for (int r = 0; r < C; ++r, rowA += C) {
+			double s = 0.0;
+			for (int j = 0; j < C; ++j) s += rowA[j] * u[j];
+			outF[r] = row_maxA[r] + max_t + std::log(s);
+		}
+	}
+
+	// Compute new logZ for locus l if we perform the NNI "which" (0 or 1) at the nth internal edge.
+	double new_logZ_for_locus(int edge_n, int which, int l) const {
+		// Locate the nth internal edge (child > nTips)
+		int cnt = 0, ind = -1;
+		for (int i = 0; i < m; ++i) {
+			if (E[m + i] > nTips) {
+				++cnt;
+				if (cnt == edge_n) { ind = i; break; }
+			}
+		}
+		if (ind < 0) stop("edge_n out of range in new_logZ_for_locus");
+
+		const int p1 = E[ind];
+		const int p2 = E[m + ind];
+		const int c1 = other_child(p1, p2);
+		const int c2 = children_of[p2][0];
+		const int c3 = children_of[p2][1];
+
+		const int cX    = (which == 0 ? c2 : c3);   // moves to p1
+		const int cStay = (which == 0 ? c3 : c2);   // stays under p2
+
+		const double* Fl = F[l].data();
+		const double* P  = logP_list[l].data();
+
+		std::vector<double> S(C), temp(C), u(C);
+
+		// 1) Recompute F at p2 with new children {c1, cStay}
+		std::vector<double> F_p2(C);
+		for (int c = 0; c < C; ++c) S[c] = Fl[c1 * C + c] + Fl[cStay * C + c];
+		std::vector<double> Pnode_p2(C); for (int k = 0; k < C; ++k) Pnode_p2[k] = P[k * n + p2];
+		compute_F_from_sum(S.data(), Pnode_p2.data(), F_p2.data(), temp, u);
+
+		// 2) Recompute F at p1 with new children {p2(new), cX}
+		std::vector<double> F_p1(C);
+		for (int c = 0; c < C; ++c) S[c] = F_p2[c] + Fl[cX * C + c];
+		std::vector<double> Pnode_p1(C); for (int k = 0; k < C; ++k) Pnode_p1[k] = P[k * n + p1];
+		compute_F_from_sum(S.data(), Pnode_p1.data(), F_p1.data(), temp, u);
+
+		// If p1 is root, compute root logZ directly from updated children {p2(new), cX}
+		if (parent_of[p1] == -1) {
+			for (int c = 0; c < C; ++c) S[c] = F_p2[c] + Fl[cX * C + c];
+			for (int k = 0; k < C; ++k) temp[k] = P[k * n + p1] + S[k];
+			return logsumexp_array(temp.data(), C);
+		}
+
+		// Otherwise climb to root, carrying the UPDATED CHILD message
+		int child = p1;
+		std::vector<double> childF = F_p1; // message from 'child' to its parent
+		int prev_child = -1;               // the child under the next parent (root case uses this)
+		std::vector<double> prev_childF;   // its updated message to that parent
+
+		while (true) {
+			const int v = parent_of[child];
+			if (v == -1) {
+				// child is root; combine UPDATED message from prev_child with its sibling at root
+				const int root_node = child;
+				const int sib = other_child(root_node, prev_child);
+				for (int c = 0; c < C; ++c) S[c] = prev_childF[c] + Fl[sib * C + c];
+				std::vector<double> Pnode_root(C); for (int k = 0; k < C; ++k) Pnode_root[k] = P[k * n + root_node];
+				for (int c = 0; c < C; ++c) temp[c] = Pnode_root[c] + S[c];
+				return logsumexp_array(temp.data(), C);
+			}
+
+			const int sib = other_child(v, child);
+			for (int c = 0; c < C; ++c) S[c] = childF[c] + Fl[sib * C + c];
+			std::vector<double> Pnode_v(C); for (int k = 0; k < C; ++k) Pnode_v[k] = P[k * n + v];
+
+			std::vector<double> F_v(C);
+			compute_F_from_sum(S.data(), Pnode_v.data(), F_v.data(), temp, u);
+
+			prev_child = child;
+			prev_childF = childF; // copy small C-vector
+			child = v;
+			childF.swap(F_v);
+		}
+	}
+
+	// Commit the NNI: update topology and cached F/logZ across loci.
+	void apply_nni(int edge_n, int which) {
+		// Identify key nodes from current topology
+		int cnt = 0, ind = -1;
+		for (int i = 0; i < m; ++i) {
+			if (E[m + i] > nTips) {
+				++cnt;
+				if (cnt == edge_n) { ind = i; break; }
+			}
+		}
+		if (ind < 0) stop("edge_n out of range in apply_nni");
+
+		const int p1 = E[ind];
+		const int p2 = E[m + ind];
+		const int c1 = other_child(p1, p2);
+		const int c2 = children_of[p2][0];
+		const int c3 = children_of[p2][1];
+
+		const int cX    = (which == 0 ? c2 : c3);	// moves to p1
+		const int cStay = (which == 0 ? c3 : c2);	// stays under p2
+
+		// Update cached F along the path for every locus
+		std::vector<double> S(C), curF(C), temp(C), u(C);
+		for (int l = 0; l < L; ++l) {
+			double* Fl = F[l].data();
+			const double* P  = logP_list[l].data();
+
+			// p2 new F
+			for (int c = 0; c < C; ++c) S[c] = Fl[c1 * C + c] + Fl[cStay * C + c];
+			std::vector<double> Pnode(C);
+			for (int k = 0; k < C; ++k) Pnode[k] = P[k * n + p2];
+			compute_F_from_sum(S.data(), Pnode.data(), curF.data(), temp, u);
+			for (int r = 0; r < C; ++r) Fl[p2 * C + r] = curF[r];
+
+			// p1 new F
+			for (int c = 0; c < C; ++c) S[c] = curF[c] + Fl[cX * C + c];
+			for (int k = 0; k < C; ++k) Pnode[k] = P[k * n + p1];
+			compute_F_from_sum(S.data(), Pnode.data(), curF.data(), temp, u);
+			for (int r = 0; r < C; ++r) Fl[p1 * C + r] = curF[r];
+
+			// Climb to root, carrying the UPDATED child's message
+			int child = p1;
+			std::vector<double> childF = curF; // message from 'child' to its parent
+			int prev_child = -1;
+			std::vector<double> prev_childF;
+
+			while (true) {
+				const int v = parent_of[child];
+				if (v == -1) {
+					// If p1 was root, combine {p2(new), cX}; else combine {prev_child(updated), its sibling}
+					std::vector<double> S(C);
+					if (prev_child == -1) {
+						for (int c = 0; c < C; ++c) S[c] = Fl[p2 * C + c] /* F_p2 stored above? see below */ + Fl[cX * C + c];
+						// We must use the freshly computed F for p2 (child->root). That's `curF` when child==p2 before moving to p1,
+						// but here we no longer have it. Recompute quickly:
+						std::vector<double> Sroot(C), temp2(C), u2(C), Fp2_again(C);
+						for (int c = 0; c < C; ++c) Sroot[c] = Fl[c1 * C + c] + Fl[cStay * C + c];
+						std::vector<double> Pnode_p2b(C); for (int k = 0; k < C; ++k) Pnode_p2b[k] = P[k * n + p2];
+						compute_F_from_sum(Sroot.data(), Pnode_p2b.data(), Fp2_again.data(), temp2, u2);
+						for (int c = 0; c < C; ++c) S[c] = Fp2_again[c] + Fl[cX * C + c];
+						std::vector<double> Pnode_root(C); for (int k = 0; k < C; ++k) Pnode_root[k] = P[k * n + v /* root == p1 */ + 0];
+						for (int c = 0; c < C; ++c) temp[c] = Pnode_root[c] + S[c];
+						logZ[l] = logsumexp_array(temp.data(), C);
+						break;
+					}
+
+					const int root_node = child; // child == root here
+					const int sib = other_child(root_node, prev_child);
+					for (int c = 0; c < C; ++c) S[c] = prev_childF[c] + Fl[sib * C + c];
+					std::vector<double> Pnode_root(C); for (int k = 0; k < C; ++k) Pnode_root[k] = P[k * n + root_node];
+					for (int c = 0; c < C; ++c) temp[c] = Pnode_root[c] + S[c];
+					logZ[l] = logsumexp_array(temp.data(), C);
+					break;
+				}
+
+				const int sib = other_child(v, child);
+				for (int c = 0; c < C; ++c) S[c] = childF[c] + Fl[sib * C + c];
+				std::vector<double> Pnode_v(C); for (int k = 0; k < C; ++k) Pnode_v[k] = P[k * n + v];
+
+				std::vector<double> F_v(C);
+				compute_F_from_sum(S.data(), Pnode_v.data(), F_v.data(), temp, u);
+				for (int r = 0; r < C; ++r) Fl[v * C + r] = F_v[r];
+
+				prev_child = child;
+				prev_childF = childF;
+				child = v;
+				childF.swap(F_v);
+			}
+		}
+
+		// Update adjacency: p1:{p2,cX}, p2:{c1,cStay}; parent_of for c1,cX
+		auto &ch1 = children_of[p1];
+		if (ch1[0] == c1) ch1[0] = cX; else ch1[1] = cX;
+		auto &ch2 = children_of[p2];
+		if (ch2[0] == cX) ch2[0] = c1; else ch2[1] = c1;
+		parent_of[c1] = p2;
+		parent_of[cX] = p1;
+
+		// Update E's child column for the two affected edges
+		for (int i = 0; i < m; ++i) {
+			if (E[i] == p1 && E[m + i] == c1) { E[m + i] = cX; break; }
+		}
+		for (int i = 0; i < m; ++i) {
+			if (E[i] == p2 && E[m + i] == cX) { E[m + i] = c1; break; }
+		}
+
+		// Keep E in postorder so the nth internal edge ordering matches nnin_cpp
+		{
+			arma::Col<int> E1 = E + 1;            // back to 1-indexed for reorderRcpp
+			E1 = reorderRcpp(E1);
+			E = E1 - 1;                            // return to 0-indexed
+			root = E(m - 1);
+		}
+	}
+
+	double total_loglik() const {
+		double s = 0.0; for (int l = 0; l < L; ++l) s += logZ[l]; return s;
+	}
+};
+
+// ---- Rcpp exported wrappers around NNICache ----
+
+// [[Rcpp::export]]
+SEXP nni_cache_create(arma::Col<int> E,
+	const std::vector< std::vector<double> >& logP,
+	const std::vector<double>& logA) {
+	Rcpp::XPtr<NNICache> ptr(new NNICache(E, logP, logA), true);
+	return ptr;
+}
+
+// [[Rcpp::export]]
+double nni_cache_loglik(SEXP xp) {
+	Rcpp::XPtr<NNICache> ptr(xp);
+	return ptr->total_loglik();
+}
+
+// [[Rcpp::export]]
+double nni_cache_delta(SEXP xp, int edge_n, int which) {
+	Rcpp::XPtr<NNICache> ptr(xp);
+	double delta = 0.0;
+	for (int l = 0; l < ptr->L; ++l) {
+		delta += ptr->new_logZ_for_locus(edge_n, which, l) - ptr->logZ[l];
+	}
+	return delta;
+}
+
+// [[Rcpp::export]]
+void nni_cache_apply(SEXP xp, int edge_n, int which) {
+	Rcpp::XPtr<NNICache> ptr(xp);
+	ptr->apply_nni(edge_n, which);
+}
+
+// [[Rcpp::export]]
+arma::Col<int> nni_cache_current_E(SEXP xp) {
+	Rcpp::XPtr<NNICache> ptr(xp);
+	return ptr->E + 1; // back to 1-indexed
+}
+
 // --------------------------------------------------------------------------
 // Worker struct that scores multiple trees in parallel.
 // Each worker processes a subset of trees from the input list.
@@ -602,11 +991,9 @@ std::vector<arma::Col<int>> tree_mcmc_cpp(
     E = reorderRcpp(E);
 
     std::vector<arma::Col<int>> tree_list(max_iter + 1);
-    std::vector<double> score_list(max_iter + 1);
 
     double l_0 = score_tree_bp_wrapper2(E, logP, logA);
     tree_list[0] = E;
-    score_list[0] = l_0;
 
     // random number generators
     std::mt19937 gen;
@@ -634,17 +1021,72 @@ std::vector<arma::Col<int>> tree_mcmc_cpp(
         double probab = exp(l_1 - l_0);
         double r3 = dis3(gen);
 
+        // double dl = l_1 - l_0;
+        // Rcpp::Rcout << "dl: " << dl << std::endl;
+
         if (r3 < probab) {
             l_0 = l_1;
             E = std::move(E_new);
         }
 
-        score_list[i+1] = l_0;
         tree_list[i+1] = E;
 
     }
 
     return(tree_list);
+}
+
+// [[Rcpp::export]]
+std::vector<arma::Col<int>> tree_mcmc_cpp_cached(
+	arma::Col<int> E,
+	const std::vector< std::vector<double> >& logP,
+	const std::vector<double>& logA,
+	int max_iter = 100, int seed = -1) {
+
+	// Number of internal edges (unchanged by reordering)
+	int n = E.n_elem / 4 - 1;
+
+	// Build message cache (handles reorder + 0-indexing internally)
+	SEXP xp = nni_cache_create(E, logP, logA);
+
+	std::vector<arma::Col<int>> tree_list(max_iter + 1);
+
+	// Starting log-likelihood and tree
+	double l_0 = nni_cache_loglik(xp);
+	tree_list[0] = nni_cache_current_E(xp);
+
+	// RNG
+	std::mt19937 gen;
+	if (seed == -1) {
+		std::random_device rd;
+		gen.seed(rd());
+	} else {
+		gen.seed(seed);
+	}
+	std::uniform_int_distribution<> dis1(1, n);
+	std::uniform_int_distribution<> dis2(0, 1);
+	std::uniform_real_distribution<> dis3(0.0, 1.0);
+
+	for (int i = 0; i < max_iter; i++) {
+		// propose: pick internal edge and which swap (0/1)
+		int r1 = dis1(gen);
+		int r2 = dis2(gen);
+
+		// local log-likelihood delta using cached messages
+		double dl = nni_cache_delta(xp, r1, r2);
+
+		// accept using log form (stable, avoids exp)
+		double r3 = dis3(gen);
+		if (std::log(r3) < dl) {
+			nni_cache_apply(xp, r1, r2);
+			l_0 += dl;
+		}
+
+		// store current tree (1-indexed)
+		tree_list[i + 1] = nni_cache_current_E(xp);
+	}
+
+	return tree_list;
 }
 
 // --------------------------------------------------------------------------

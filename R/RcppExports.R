@@ -41,6 +41,26 @@ score_tree_bp_wrapper2 <- function(E, logP_list, logA) {
     .Call('_mitodrift_score_tree_bp_wrapper2', PACKAGE = 'mitodrift', E, logP_list, logA)
 }
 
+nni_cache_create <- function(E, logP, logA) {
+    .Call('_mitodrift_nni_cache_create', PACKAGE = 'mitodrift', E, logP, logA)
+}
+
+nni_cache_loglik <- function(xp) {
+    .Call('_mitodrift_nni_cache_loglik', PACKAGE = 'mitodrift', xp)
+}
+
+nni_cache_delta <- function(xp, edge_n, which) {
+    .Call('_mitodrift_nni_cache_delta', PACKAGE = 'mitodrift', xp, edge_n, which)
+}
+
+nni_cache_apply <- function(xp, edge_n, which) {
+    invisible(.Call('_mitodrift_nni_cache_apply', PACKAGE = 'mitodrift', xp, edge_n, which))
+}
+
+nni_cache_current_E <- function(xp) {
+    .Call('_mitodrift_nni_cache_current_E', PACKAGE = 'mitodrift', xp)
+}
+
 score_trees_parallel <- function(trees, logP, logA) {
     .Call('_mitodrift_score_trees_parallel', PACKAGE = 'mitodrift', trees, logP, logA)
 }
@@ -59,6 +79,10 @@ nni_cpp_parallel_multi <- function(E, logP, logA) {
 
 tree_mcmc_cpp <- function(E, logP, logA, max_iter = 100L, seed = -1L) {
     .Call('_mitodrift_tree_mcmc_cpp', PACKAGE = 'mitodrift', E, logP, logA, max_iter, seed)
+}
+
+tree_mcmc_cpp_cached <- function(E, logP, logA, max_iter = 100L, seed = -1L) {
+    .Call('_mitodrift_tree_mcmc_cpp_cached', PACKAGE = 'mitodrift', E, logP, logA, max_iter, seed)
 }
 
 tree_mcmc_parallel <- function(E, logP, logA, max_iter, nchains) {
