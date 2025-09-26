@@ -26,7 +26,7 @@ optimize_tree_cpp = function(
         nni_func = nni_cpp_parallel_multi
     } else {
         score_tree_func = score_tree_bp_wrapper2
-        nni_func = nni_cpp_parallel
+        nni_func = nni_cpp_parallel_cached
     }
 
     if (resume) {
@@ -1755,138 +1755,6 @@ fit_params_mcmc = function(
     }
 
     return(res_df_all)
-}
-
-#' Fit tree parameters using EM algorithm in parallel
-#' @param tree_fit phylogenetic tree
-#' @param amat alternative allele count matrix
-#' @param dmat total depth matrix
-#' @param initial_params initial parameter values (ngen, log_eps, log_err)
-#' @param lower_bounds lower bounds for parameters in transformed space
-#' @param upper_bounds upper bounds for parameters in transformed space
-#' @param max_iter maximum number of iterations
-#' @param k number of clusters for likelihood computation
-#' @param npop population size for likelihood computation
-#' @param ncores number of cores to use
-#' @param epsilon convergence threshold
-#' @param trace whether to return trace of parameter values
-#' @return parameter values or list of parameter values and trace
-#' @export
-fit_params_em_par = function(tree_fit, amat, dmat, 
-    initial_params = c('ngen' = 100, 'log_eps' = log(1e-3), 'log_err' = log(1e-3)),
-    lower_bounds = c('ngen' = 1, 'log_eps' = log(1e-12), 'log_err' = log(1e-12)),
-    upper_bounds = c('ngen' = 1000, 'log_eps' = log(0.2), 'log_err' = log(0.2)),
-    max_iter = 10, k = 20, npop = 600, ncores = 3, epsilon = 1e-3, trace = TRUE
-    ) {
-
-    # always renumber tree otherwise results are different
-    tree_fit = TreeTools::Renumber(tree_fit)
-
-    par = initial_params
-
-    cl <- makeCluster(min(ncores, 3))
-
-    msg = clusterEvalQ(cl, {
-        library(mitodrift)
-        library(parallel)
-        library(dplyr)
-    })
-
-    clusterExport(cl, c("amat", "dmat"), envir = environment())
-
-    setDefaultCluster(cl=cl)
-
-    if (trace) {
-        trace_df = data.frame(
-            iter = integer(),
-            ngen = numeric(),
-            log_eps = numeric(),
-            log_err = numeric(),
-            logL = numeric()
-        )
-    }
-
-    for (i in 1:max_iter) {
-        
-        ngen = par[1]
-        eps = exp(par[2])
-        err = exp(par[3])
-        
-        liks = get_leaf_liks_mat_cpp(amat, dmat, vafs = get_vaf_bins(k), eps = err)
-        A = get_transition_mat_wf_hmm(k = k, eps = eps, N = npop, ngen = ngen, safe = TRUE)
-        
-        res = decode_tree(tree_fit, A, liks, store_bels = TRUE, debug = TRUE, score_only = TRUE)
-        nbels = res$nbels
-        ebels = res$ebels
-
-        logL = sum(res$gtree$logZ)
-        
-        message(glue("Iteration {i} E step: logL = {logL}"))
-
-        if (trace) {
-            trace_df = rbind(trace_df, data.frame(
-                iter = i,
-                ngen = par[1],
-                log_eps = par[2],
-                log_err = par[3], 
-                logL = logL
-            ))
-        }
-        
-        fit = optimParallel(
-                fn = function(x) {
-        
-                    ngen = x[1]
-                    eps = exp(x[2])
-                    err = exp(x[3])
-
-                    get_q_vec = function(nbels, ebels, logliks, logA) {
-                        sapply(seq_along(nbels), function(i) {
-                            leafs = colnames(logliks[[i]])
-                            l_leaf = sum(nbels[[i]][leafs,] * t(logliks[[i]]))
-                            l_trans = sum(Reduce('+', ebels[[i]]) * logA)
-                            l_trans + l_leaf
-                        }) %>% sum
-                    }
-                    
-                    logliks = mitodrift:::get_leaf_liks_mat_cpp(amat, dmat, vafs = get_vaf_bins(k), eps = err, log = TRUE)
-                    A = get_transition_mat_wf_hmm_wrapper(k = k, eps = eps, N = npop, ngen = ngen, safe = TRUE)
-                    -get_q_vec(nbels, ebels, logliks, log(A))
-
-                },
-                method = 'L-BFGS-B',
-                par = par,
-                lower = lower_bounds,
-                upper = upper_bounds
-            )
-
-        if (i > 1) {
-
-            log_eps_diff = abs(par[2] - fit$par[2])
-            log_err_diff = abs(par[3] - fit$par[3])
-            ngen_diff = abs(par[1] - fit$par[1])
-            
-            if (log_eps_diff < epsilon && log_err_diff < epsilon && ngen_diff < epsilon) {
-                message(glue("Converged at iteration {i}"))
-                par <- fit$par
-                break
-            }
-        }
-
-        par = fit$par
-        message(glue("Iteration {i} M step: ngen = {par[1]}, log_eps = {par[2]}, log_err = {par[3]}"))
-    }
-
-    stopCluster(cl)
-
-    par_final = c('ngen' = par[['ngen']], 'eps' = exp(par[['log_eps']]), 'err' = exp(par[['log_err']]))
-
-    if (trace) {
-        return(list(par = par_final, trace = trace_df))
-    } else {
-        return(par_final)
-    }
-
 }
 
 #' Add "Node<n>" labels to the internal nodes of a phylo tree

@@ -911,6 +911,30 @@ struct score_neighbours: public Worker {
     }
 };
 
+// Cached variant: efficiently scores NNI neighbours using NNICache deltas.
+struct score_neighbours_cached: public Worker {
+	const NNICache* cache; // read-only cache (shared across threads)
+	double base_ll;        // current total log-likelihood
+	RVector<double> scores;
+
+	score_neighbours_cached(const NNICache* cache, NumericVector scores)
+		: cache(cache), base_ll(cache->total_loglik()), scores(scores) {}
+
+	void operator()(std::size_t begin, std::size_t end) {
+		const int L = cache->L;
+		for (std::size_t i = begin; i < end; ++i) {
+			double s0 = 0.0, s1 = 0.0;
+			const int edge_n = static_cast<int>(i) + 1; // 1-indexed internal-edge id
+			for (int l = 0; l < L; ++l) {
+				s0 += cache->new_logZ_for_locus(edge_n, 0, l);
+				s1 += cache->new_logZ_for_locus(edge_n, 1, l);
+			}
+			scores[2*i]   = s0;
+			scores[2*i+1] = s1;
+		}
+	}
+};
+
 // [[Rcpp::export]]
 NumericVector nni_cpp_parallel(arma::Col<int> E, const std::vector<std::vector<double>> logP, const std::vector<double> logA) {
 
@@ -925,7 +949,23 @@ NumericVector nni_cpp_parallel(arma::Col<int> E, const std::vector<std::vector<d
     parallelFor(0, n, score_neighbours);
 
     return scores;
+}
 
+// [[Rcpp::export]]
+NumericVector nni_cpp_parallel_cached(arma::Col<int> E,
+	const std::vector<std::vector<double>>& logP,
+	const std::vector<double>& logA) {
+	// Build a fresh cache for this tree
+	NNICache cache(E, logP, logA);
+
+	// Number of internal edges (same formula as the original function)
+	int n = E.n_elem / 4 - 1;
+	NumericVector scores(2 * n);
+
+	// Parallel evaluation of all 2*n neighbors using cached deltas
+	score_neighbours_cached worker(&cache, scores);
+	parallelFor(0, n, worker);
+	return scores;
 }
 
 struct score_neighbours_multi: public Worker {
