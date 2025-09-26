@@ -231,6 +231,42 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// bipartition2
+std::vector< std::vector<int> > bipartition2(IntegerMatrix orig, int nTips);
+RcppExport SEXP _mitodrift_bipartition2(SEXP origSEXP, SEXP nTipsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< IntegerMatrix >::type orig(origSEXP);
+    Rcpp::traits::input_parameter< int >::type nTips(nTipsSEXP);
+    rcpp_result_gen = Rcpp::wrap(bipartition2(orig, nTips));
+    return rcpp_result_gen;
+END_RCPP
+}
+// prop_part2
+List prop_part2(SEXP trees, int nTips);
+RcppExport SEXP _mitodrift_prop_part2(SEXP treesSEXP, SEXP nTipsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type trees(treesSEXP);
+    Rcpp::traits::input_parameter< int >::type nTips(nTipsSEXP);
+    rcpp_result_gen = Rcpp::wrap(prop_part2(trees, nTips));
+    return rcpp_result_gen;
+END_RCPP
+}
+// prop_part2_parallel
+List prop_part2_parallel(SEXP trees, int nTips);
+RcppExport SEXP _mitodrift_prop_part2_parallel(SEXP treesSEXP, SEXP nTipsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type trees(treesSEXP);
+    Rcpp::traits::input_parameter< int >::type nTips(nTipsSEXP);
+    rcpp_result_gen = Rcpp::wrap(prop_part2_parallel(trees, nTips));
+    return rcpp_result_gen;
+END_RCPP
+}
 
 static const R_CallMethodDef CallEntries[] = {
     {"_mitodrift_get_leaf_liks_mat_cpp", (DL_FUNC) &_mitodrift_get_leaf_liks_mat_cpp, 6},
@@ -249,6 +285,9 @@ static const R_CallMethodDef CallEntries[] = {
     {"_mitodrift_tree_mcmc_cpp", (DL_FUNC) &_mitodrift_tree_mcmc_cpp, 5},
     {"_mitodrift_tree_mcmc_cpp_cached", (DL_FUNC) &_mitodrift_tree_mcmc_cpp_cached, 5},
     {"_mitodrift_tree_mcmc_parallel", (DL_FUNC) &_mitodrift_tree_mcmc_parallel, 5},
+    {"_mitodrift_bipartition2", (DL_FUNC) &_mitodrift_bipartition2, 2},
+    {"_mitodrift_prop_part2", (DL_FUNC) &_mitodrift_prop_part2, 2},
+    {"_mitodrift_prop_part2_parallel", (DL_FUNC) &_mitodrift_prop_part2_parallel, 2},
     {NULL, NULL, 0}
 };
 

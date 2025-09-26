@@ -73,3 +73,15 @@ tree_mcmc_parallel <- function(E, logP, logA, max_iter, nchains) {
     .Call('_mitodrift_tree_mcmc_parallel', PACKAGE = 'mitodrift', E, logP, logA, max_iter, nchains)
 }
 
+bipartition2 <- function(orig, nTips) {
+    .Call('_mitodrift_bipartition2', PACKAGE = 'mitodrift', orig, nTips)
+}
+
+prop_part2 <- function(trees, nTips) {
+    .Call('_mitodrift_prop_part2', PACKAGE = 'mitodrift', trees, nTips)
+}
+
+prop_part2_parallel <- function(trees, nTips) {
+    .Call('_mitodrift_prop_part2_parallel', PACKAGE = 'mitodrift', trees, nTips)
+}
+

@@ -1329,6 +1329,7 @@ run_tree_mcmc_batch = function(
 
                     seed_batch = as.integer(1000003L * (i - 1L) + s)
                     elist = tree_mcmc_cpp_cached(start_edge, logP_list, logA_vec, max_iter = max_iter_i, seed = seed_batch)
+                    elist = restore_elist(elist)
 
                     # Drop the duplicated start state for every batch
                     if (length(elist) > 0) {
@@ -1353,6 +1354,10 @@ run_tree_mcmc_batch = function(
     saveRDS(edge_list_all, outfile)
 
     return(edge_list_all)
+}
+
+restore_elist = function(elist) {
+    lapply(elist, function(edges){matrix(edges, ncol = 2)})
 }
 
 #' @export
