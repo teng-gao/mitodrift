@@ -85,3 +85,7 @@ prop_part2_parallel <- function(trees, nTips) {
     .Call('_mitodrift_prop_part2_parallel', PACKAGE = 'mitodrift', trees, nTips)
 }
 
+prop_part2_edges_par <- function(parents, children, nTips) {
+    .Call('_mitodrift_prop_part2_edges_par', PACKAGE = 'mitodrift', parents, children, nTips)
+}
+

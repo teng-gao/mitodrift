@@ -267,6 +267,19 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// prop_part2_edges_par
+List prop_part2_edges_par(List parents, List children, int nTips);
+RcppExport SEXP _mitodrift_prop_part2_edges_par(SEXP parentsSEXP, SEXP childrenSEXP, SEXP nTipsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< List >::type parents(parentsSEXP);
+    Rcpp::traits::input_parameter< List >::type children(childrenSEXP);
+    Rcpp::traits::input_parameter< int >::type nTips(nTipsSEXP);
+    rcpp_result_gen = Rcpp::wrap(prop_part2_edges_par(parents, children, nTips));
+    return rcpp_result_gen;
+END_RCPP
+}
 
 static const R_CallMethodDef CallEntries[] = {
     {"_mitodrift_get_leaf_liks_mat_cpp", (DL_FUNC) &_mitodrift_get_leaf_liks_mat_cpp, 6},
@@ -288,6 +301,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_mitodrift_bipartition2", (DL_FUNC) &_mitodrift_bipartition2, 2},
     {"_mitodrift_prop_part2", (DL_FUNC) &_mitodrift_prop_part2, 2},
     {"_mitodrift_prop_part2_parallel", (DL_FUNC) &_mitodrift_prop_part2_parallel, 2},
+    {"_mitodrift_prop_part2_edges_par", (DL_FUNC) &_mitodrift_prop_part2_edges_par, 3},
     {NULL, NULL, 0}
 };
 

@@ -1504,7 +1504,7 @@ prop.clades.par <- function(phy, phy_list, rooted = FALSE,
 #' @return A phylo object with clade frequencies added as node labels.
 #' @export
 add_clade_freq = function(phy, phys, rooted = TRUE, ncores = 1) {
-    freqs = prop_clades_par(phy, phys, rooted = rooted, normalize = TRUE, ncores = ncores)
+    freqs = prop.clades.par(phy, phys, rooted = rooted, normalize = TRUE, ncores = ncores)
     phy$node.label = freqs
     return(phy)
 }
@@ -1835,34 +1835,60 @@ map_cell_to_tree = function(tree, cell, logliks, logA_vec, leaf_only = FALSE, nc
     return(res)
 }
 
-prop_part_par = function(obj, ncores = 1) {
-    RhpcBLASctl::blas_set_num_threads(1)
-    RhpcBLASctl::omp_set_num_threads(1)
-    RcppParallel::setThreadOptions(numThreads = ncores)
-    
-    ntree <- length(obj)
-    class(obj) <- "multiPhylo"
-    obj <- reorder(obj, "postorder")
-    nTips <- length(obj[[1]]$tip.label)
-    clades <- prop_part2_parallel(obj, nTips)
-    attr(clades, "labels") <- obj[[1]]$tip.label
-    clades
+prop_part_par = function(parents_list, children_list, ncores = 1) {
+	RhpcBLASctl::blas_set_num_threads(1)
+	RhpcBLASctl::omp_set_num_threads(1)
+	RcppParallel::setThreadOptions(numThreads = ncores)
+
+	if (length(parents_list) != length(children_list)) {
+		stop("parents_list and children_list must have the same length")
+	}
+	if (length(parents_list) == 0L) {
+		res <- structure(list(), class = "prop.part")
+		attr(res, "number") <- integer(0)
+		return(res)
+	}
+	# Infer nTips from first tree: in ape, internal nodes start at nTips+1, and
+	# parents refer only to internal nodes. Works if edges are in ape numbering.
+	p1 <- parents_list[[1]]
+	nTips <- as.integer(min(p1) - 1L)
+	if (!is.finite(nTips) || nTips < 2L) stop("Cannot infer nTips from parents_list[[1]]")
+
+	clades <- prop_part2_edges_par(parents_list, children_list, nTips)
+	return(clades)
 }
 
 prop_clades_par = function(phy, obj, rooted = TRUE, ncores = 1, normalize = TRUE) {
-	part <- prop_part_par(obj, ncores = ncores)
-    LABS <- attr(part, "labels")
-    if (!identical(phy$tip.label, LABS)) {
-        stop("Tip labels do not match")
-    }
-	bp <- prop_part_par(list(phy), ncores = ncores)
-    pos <- match(bp, part)
-    tmp <- which(!is.na(pos))
-    n <- rep(NA_real_, phy$Nnode)
-    n[tmp] <- attr(part, "number")[pos[tmp]]
-    if (normalize) {
-        n <- n / length(obj)
-    }
-    n[is.na(n)] <- 0
-    n
+	# Ensure consistent postorder edge traversal for deterministic bipartitions
+	phy <- reorder(phy, "postorder")
+	obj <- lapply(obj, function(tr) reorder(tr, "postorder"))
+
+	# Build edge lists (parents/children) from the tree list
+	parents_list <- lapply(obj, function(x) x$edge[, 1])
+	children_list <- lapply(obj, function(x) x$edge[, 2])
+
+	# Compute clade partitions across the tree set (no labels set here)
+	part <- prop_part_par(parents_list, children_list, ncores = ncores)
+	# Attach tip labels from the reference tree for consistent mapping
+	attr(part, "labels") <- phy$tip.label
+
+	LABS <- attr(part, "labels")
+	if (!identical(phy$tip.label, LABS)) {
+		stop("Tip labels do not match")
+	}
+
+	# Partitions of the reference tree itself (as a single-tree list)
+	nTips <- length(phy$tip.label)
+	bp <- prop_part2_edges_par(list(phy$edge[, 1]), list(phy$edge[, 2]), nTips)
+
+	# Map each internal split of phy into the pooled partitions
+	pos <- match(bp, part)
+	tmp <- which(!is.na(pos))
+	n <- rep(NA_real_, phy$Nnode)
+	n[tmp] <- attr(part, "number")[pos[tmp]]
+	if (normalize) {
+		n <- n / length(obj)
+	}
+	n[is.na(n)] <- 0
+	return(n)
 }

@@ -123,6 +123,31 @@ struct VecEq {
 	}
 };
 
+// Build partitions from RcppParallel views (no edge copying)
+static inline std::vector< std::vector<int> > bipartition2_rvec(
+	const RcppParallel::RVector<int>& parent,
+	const RcppParallel::RVector<int>& child,
+	int nTips,
+	int max_parent
+){
+	int nnode = max_parent - nTips;
+	std::vector< std::vector<int> > out(nnode);
+	const std::size_t nr = parent.length();
+	for(std::size_t i = 0; i < nr; ++i){
+		int j = parent[i] - nTips - 1;
+		if(child[i] > nTips){
+			auto &y = out[child[i] - nTips - 1];
+			out[j].insert(out[j].end(), y.begin(), y.end());
+		}else{
+			out[j].push_back(child[i]);
+		}
+	}
+	for(int i = 0; i < nnode; ++i){
+		std::sort(out[i].begin(), out[i].end());
+	}
+	return out;
+}
+
 // ---- Parallel reducer: aggregate counts and first-appearance order ----
 struct PartReduce : public Worker {
 	List trees;
@@ -158,6 +183,47 @@ struct PartReduce : public Worker {
 			if(it == map.end()){
 				map.emplace(kv.first, kv.second);
 			} else {
+				it->second.first += kv.second.first;
+				if(kv.second.second < it->second.second) it->second.second = kv.second.second;
+			}
+		}
+	}
+};
+
+// New reducer that works on lists of parent/child vectors using RVector views (zero-copy)
+struct PartReduceVec : public Worker {
+	const std::vector<RcppParallel::RVector<int>> &parents;
+	const std::vector<RcppParallel::RVector<int>> &children;
+	const std::vector<int> &maxp;
+	int nTips;
+	std::unordered_map< std::vector<int>, std::pair<int, uint64_t>, VecHash, VecEq > map;
+
+	PartReduceVec(const std::vector<RcppParallel::RVector<int>> &P,
+	             const std::vector<RcppParallel::RVector<int>> &C,
+	             const std::vector<int> &MP,
+	             int nTips_) : parents(P), children(C), maxp(MP), nTips(nTips_) {}
+	PartReduceVec(PartReduceVec &o, Split)
+		: parents(o.parents), children(o.children), maxp(o.maxp), nTips(o.nTips) {}
+
+	void operator()(std::size_t begin, std::size_t end){
+		for(std::size_t i = begin; i < end; ++i){
+			auto bp = bipartition2_rvec(parents[i], children[i], nTips, maxp[i]);
+			for(std::size_t j = 1; j < bp.size(); ++j){ // skip root
+				uint64_t first = (static_cast<uint64_t>(i) << 32) | static_cast<uint64_t>(j);
+				auto pr = map.emplace(std::move(bp[j]), std::make_pair(1, first));
+				if(!pr.second){
+					auto &rec = pr.first->second;
+					rec.first += 1;
+					if(first < rec.second) rec.second = first;
+				}
+			}
+		}
+	}
+	void join(const PartReduceVec &rhs){
+		for(const auto &kv : rhs.map){
+			auto it = map.find(kv.first);
+			if(it == map.end()) map.emplace(kv.first, kv.second);
+			else {
 				it->second.first += kv.second.first;
 				if(kv.second.second < it->second.second) it->second.second = kv.second.second;
 			}
@@ -246,4 +312,64 @@ List prop_part2_parallel(SEXP trees, int nTips){
 	output.attr("number") = no;
 	output.attr("class") = "prop.part";
 	return output;
+}
+
+// [[Rcpp::export]]
+List prop_part2_edges_par(List parents, List children, int nTips){
+	const int nbtree = parents.size();
+	if(nbtree == 0){
+		List out = List::create();
+		out.attr("number") = IntegerVector(0);
+		out.attr("class") = "prop.part";
+		return out;
+	}
+	if(children.size() != nbtree) stop("parents and children must have the same length");
+
+	// Create zero-copy views over R integer vectors
+	std::vector<RcppParallel::RVector<int>> P; P.reserve(nbtree);
+	std::vector<RcppParallel::RVector<int>> C; C.reserve(nbtree);
+	std::vector<int> MP(nbtree);
+	for(int i = 0; i < nbtree; ++i){
+		P.emplace_back( IntegerVector(parents[i]) );
+		C.emplace_back( IntegerVector(children[i]) );
+		if(P.back().length() != C.back().length()) stop("parent/child length mismatch at tree %d", i+1);
+		// compute max parent once per tree (no copies)
+		int mp = 0; auto &pv = P.back();
+		for(std::size_t k = 0, n = pv.length(); k < n; ++k) if(pv[k] > mp) mp = pv[k];
+		MP[i] = mp;
+	}
+
+	// First tree decides canonical ordering prefix
+	auto bp0 = bipartition2_rvec(P[0], C[0], nTips, MP[0]);
+
+	// Parallel reduce across all trees
+	PartReduceVec reducer(P, C, MP, nTips);
+	parallelReduce(0, static_cast<std::size_t>(nbtree), reducer, static_cast<std::size_t>(64));
+
+	// Seed answer with first tree's order (including root)
+	std::vector< std::vector<int> > ans = bp0;
+	std::vector<int> no(ans.size(), 1);
+	if(!no.empty()) no[0] = nbtree;
+	std::unordered_map< std::vector<int>, int, VecHash, VecEq > indexMap;
+	indexMap.reserve(ans.size() * 2);
+	for(std::size_t j = 1; j < ans.size(); ++j){
+		auto it = reducer.map.find(ans[j]);
+		no[j] = (it == reducer.map.end()) ? 1 : it->second.first;
+		indexMap.emplace(ans[j], static_cast<int>(j));
+	}
+	// Append new splits by first appearance
+	struct Pending { uint64_t pos; std::vector<int> part; int cnt; };
+	std::vector<Pending> pending; pending.reserve(reducer.map.size());
+	for(const auto &kv : reducer.map){
+		if(indexMap.find(kv.first) == indexMap.end()) pending.push_back(Pending{kv.second.second, kv.first, kv.second.first});
+	}
+	std::sort(pending.begin(), pending.end(), [](const Pending &a, const Pending &b){ return a.pos < b.pos; });
+	ans.reserve(ans.size() + pending.size());
+	no.reserve(no.size() + pending.size());
+	for(const auto &p : pending){ ans.push_back(p.part); no.push_back(p.cnt); }
+
+	List out = wrap(ans);
+	out.attr("number") = no;
+	out.attr("class") = "prop.part";
+	return out;
 }
