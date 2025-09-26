@@ -1504,7 +1504,7 @@ prop.clades.par <- function(phy, phy_list, rooted = FALSE,
 #' @return A phylo object with clade frequencies added as node labels.
 #' @export
 add_clade_freq = function(phy, phys, rooted = TRUE, ncores = 1) {
-    freqs = prop.clades.par(phy, phys, rooted = rooted, normalize = TRUE, ncores = ncores)
+    freqs = prop_clades_par(phy, phys, rooted = rooted, normalize = TRUE, ncores = ncores)
     phy$node.label = freqs
     return(phy)
 }
@@ -1833,4 +1833,36 @@ map_cell_to_tree = function(tree, cell, logliks, logA_vec, leaf_only = FALSE, nc
     res = data.frame(guide_node = labels, cell_map = cell, probs = probs, scores = scores)
 
     return(res)
+}
+
+prop_part_par = function(obj, ncores = 1) {
+    RhpcBLASctl::blas_set_num_threads(1)
+    RhpcBLASctl::omp_set_num_threads(1)
+    RcppParallel::setThreadOptions(numThreads = ncores)
+    
+    ntree <- length(obj)
+    class(obj) <- "multiPhylo"
+    obj <- reorder(obj, "postorder")
+    nTips <- length(obj[[1]]$tip.label)
+    clades <- prop_part2_parallel(obj, nTips)
+    attr(clades, "labels") <- obj[[1]]$tip.label
+    clades
+}
+
+prop_clades_par = function(phy, obj, rooted = TRUE, ncores = 1, normalize = TRUE) {
+	part <- prop_part_par(obj, ncores = ncores)
+    LABS <- attr(part, "labels")
+    if (!identical(phy$tip.label, LABS)) {
+        stop("Tip labels do not match")
+    }
+	bp <- prop_part_par(list(phy), ncores = ncores)
+    pos <- match(bp, part)
+    tmp <- which(!is.na(pos))
+    n <- rep(NA_real_, phy$Nnode)
+    n[tmp] <- attr(part, "number")[pos[tmp]]
+    if (normalize) {
+        n <- n / length(obj)
+    }
+    n[is.na(n)] <- 0
+    n
 }

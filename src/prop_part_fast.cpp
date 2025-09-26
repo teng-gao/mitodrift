@@ -8,6 +8,9 @@ using namespace Rcpp;
 #include <unordered_set>
 #include <string>
 #include <sstream>
+#include <algorithm>
+#include <functional>
+#include <cstdint>
 using namespace RcppParallel;
 
 // --- helpers for stable keys from integer partitions ---
@@ -102,29 +105,88 @@ List prop_part2(SEXP trees, int nTips){
     return output;
 }
 
-// ---- Parallel wrapper for prop_part2 using RcppParallel ----
-struct PartitionCollector : public Worker {
+// --- fast hashing & equality for integer partitions (avoid string keys) ---
+struct VecHash {
+	std::size_t operator()(const std::vector<int>& v) const noexcept {
+		// FNV-1a style mix with size-seeding; fast & stable
+		std::size_t h = v.size();
+		for(int x : v){
+			std::size_t k = static_cast<std::size_t>(x);
+			h ^= k + 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2);
+		}
+		return h;
+	}
+};
+struct VecEq {
+	bool operator()(const std::vector<int>& a, const std::vector<int>& b) const noexcept {
+		return a.size() == b.size() && std::equal(a.begin(), a.end(), b.begin());
+	}
+};
+
+// ---- Parallel reducer: aggregate counts and first-appearance order ----
+struct PartReduce : public Worker {
 	List trees;
 	int nTips;
-	std::vector< std::vector<std::string> >& perTreeKeys;
+	// map: partition -> {count, firstpos}
+	// firstpos encodes (tree_index << 32) | within_tree_index
+	std::unordered_map< std::vector<int>, std::pair<int, uint64_t>, VecHash, VecEq > map;
 
-	PartitionCollector(List trees_, int nTips_, std::vector< std::vector<std::string> >& perTreeKeys_)
-		: trees(trees_), nTips(nTips_), perTreeKeys(perTreeKeys_) {}
+	PartReduce(List trees_, int nTips_) : trees(trees_), nTips(nTips_) {}
+	PartReduce(PartReduce& other, Split) : trees(other.trees), nTips(other.nTips) {}
+
+	void operator()(std::size_t begin, std::size_t end){
+		for(std::size_t i = begin; i < end; ++i){
+			List M = trees[i];
+			IntegerMatrix E = M["edge"];
+			auto bp = bipartition2(E, nTips);
+			for(std::size_t j = 1; j < bp.size(); ++j){ // skip root
+				uint64_t first = (static_cast<uint64_t>(i) << 32) | static_cast<uint64_t>(j);
+				auto it = map.find(bp[j]);
+				if(it == map.end()){
+					map.emplace(bp[j], std::make_pair(1, first));
+				} else {
+					it->second.first += 1;
+					if(first < it->second.second) it->second.second = first;
+				}
+			}
+		}
+	}
+
+	void join(const PartReduce& rhs){
+		for(const auto& kv : rhs.map){
+			auto it = map.find(kv.first);
+			if(it == map.end()){
+				map.emplace(kv.first, kv.second);
+			} else {
+				it->second.first += kv.second.first;
+				if(kv.second.second < it->second.second) it->second.second = kv.second.second;
+			}
+		}
+	}
+};
+
+// ---- Parallel collector: compute per-tree (non-root) partitions as integer vectors ----
+struct BPCollector : public Worker {
+	List trees;
+	int nTips;
+	std::vector< std::vector< std::vector<int> > >& perTreeParts; // per tree -> list of partitions (skip root)
+
+	BPCollector(List trees_, int nTips_, std::vector< std::vector< std::vector<int> > >& perTreeParts_)
+		: trees(trees_), nTips(nTips_), perTreeParts(perTreeParts_) {}
 
 	void operator()(std::size_t begin, std::size_t end){
 		for(std::size_t i = begin; i < end; ++i){
 			List M = trees[i];
 			IntegerMatrix E = M["edge"];
 			std::vector< std::vector<int> > bp = bipartition2(E, nTips);
-
-			std::vector<std::string> keys;
+			std::vector< std::vector<int> > parts;
 			if(bp.size() > 1){
-				keys.reserve(bp.size() - 1);
-				for(std::size_t j = 1; j < bp.size(); ++j){ // skip root (index 0)
-					keys.push_back(vec_to_key(bp[j]));
+				parts.reserve(bp.size() - 1);
+				for(std::size_t j = 1; j < bp.size(); ++j){ // skip root at index 0
+					parts.push_back(std::move(bp[j]));
 				}
 			}
-			perTreeKeys[i].swap(keys);
+			perTreeParts[i].swap(parts);
 		}
 	}
 };
@@ -140,54 +202,44 @@ List prop_part2_parallel(SEXP trees, int nTips){
 		return out;
 	}
 
-	// 1) Collect per-tree (non-root) partitions in parallel as stable string keys
-	std::vector< std::vector<std::string> > perTreeKeys(nbtree);
-	PartitionCollector worker(tr, nTips, perTreeKeys);
-	parallelFor(0, static_cast<std::size_t>(nbtree), worker);
-
-	// 2) Merge counts across trees
-	std::unordered_map<std::string,int> countMap;
-	countMap.reserve(static_cast<std::size_t>(nbtree) * 8);
-	for(int i = 0; i < nbtree; ++i){
-		for(const std::string& key : perTreeKeys[i]){
-			++countMap[key];
-		}
-	}
-
-	// 3) Start from the first tree to mimic original ordering for existing splits
+	// Compute first tree bipartitions to lock in canonical ordering prefix
 	List M0 = tr(0);
 	IntegerMatrix E0 = M0["edge"];
-	std::vector< std::vector<int> > bp0 = bipartition2(E0, nTips);
+	auto bp0 = bipartition2(E0, nTips); // includes root at index 0
 
-	std::vector< std::vector<int> > ans = bp0;           // includes root at index 0
-	std::vector<int> no(ans.size(), 0);
+	// Parallel reduce over all trees to aggregate counts and first appearance
+	PartReduce reducer(tr, nTips);
+	parallelReduce(0, static_cast<std::size_t>(nbtree), reducer);
 
-	// root bipartition (index 0) appears in every tree by definition
-	if(!no.empty()) no[0] = nbtree;
+	// Seed answer with first tree's order (including root at index 0)
+	std::vector< std::vector<int> > ans = bp0;
+	std::vector<int> no(ans.size(), 1);
+	if(!no.empty()) no[0] = nbtree; // root appears in every tree
 
-	// existing (first-tree) splits: fill counts from the map, skipping root
-	std::unordered_set<std::string> seen;
-	seen.reserve(ans.size());
+	// Quick lookup for partitions already in ans (skip root)
+	std::unordered_map< std::vector<int>, int, VecHash, VecEq > indexMap;
+	indexMap.reserve(ans.size() * 2);
 	for(std::size_t j = 1; j < ans.size(); ++j){
-		std::string key = vec_to_key(ans[j]);
-		seen.insert(key);
-		auto it = countMap.find(key);
-		no[j] = (it == countMap.end()) ? 0 : it->second;
+		auto it = reducer.map.find(ans[j]);
+		no[j] = (it == reducer.map.end()) ? 1 : it->second.first; // if present beyond tree0, use aggregated count
+		indexMap.emplace(ans[j], static_cast<int>(j));
 	}
 
-	// 4) Append any new splits observed in other trees, preserving original ordering:
-	// iterate trees in increasing index (1..nbtree-1) and, within each tree,
-	// iterate partitions in their original order; append only when first seen.
-	for(int k = 1; k < nbtree; ++k){
-		const std::vector<std::string>& keys = perTreeKeys[k];
-		for(const std::string& key : keys){
-			if(seen.find(key) == seen.end()){
-				ans.push_back(key_to_vec(key));
-				auto it = countMap.find(key);
-				no.push_back(it == countMap.end() ? 0 : it->second);
-				seen.insert(key);
-			}
+	// Collect remaining unique partitions not in the first tree, along with their first-appearance order
+	struct Pending { uint64_t pos; std::vector<int> part; int cnt; };
+	std::vector<Pending> pending;
+	pending.reserve(reducer.map.size());
+	for(const auto& kv : reducer.map){
+		if(indexMap.find(kv.first) == indexMap.end()){
+			pending.push_back(Pending{kv.second.second, kv.first, kv.second.first});
 		}
+	}
+	std::sort(pending.begin(), pending.end(), [](const Pending& a, const Pending& b){ return a.pos < b.pos; });
+
+	// Append in strict first-appearance order (tree_index, within_index) to match sequential behavior
+	for(const auto& p : pending){
+		ans.push_back(p.part);
+		no.push_back(p.cnt);
 	}
 
 	List output = wrap(ans);
