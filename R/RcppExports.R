@@ -5,16 +5,8 @@ bipartition2 <- function(orig, nTips) {
     .Call('_mitodrift_bipartition2', PACKAGE = 'mitodrift', orig, nTips)
 }
 
-prop_part2 <- function(trees, nTips) {
-    .Call('_mitodrift_prop_part2', PACKAGE = 'mitodrift', trees, nTips)
-}
-
-prop_part2_targeted <- function(trees, E_target, nTips, rooted = TRUE, normalize = TRUE) {
-    .Call('_mitodrift_prop_part2_targeted', PACKAGE = 'mitodrift', trees, E_target, nTips, rooted, normalize)
-}
-
-prop_part2_targeted_edges <- function(edges, E_target, nTips, rooted = TRUE, normalize = TRUE) {
-    .Call('_mitodrift_prop_part2_targeted_edges', PACKAGE = 'mitodrift', edges, E_target, nTips, rooted, normalize)
+prop_clades_par <- function(E_target, edges, rooted = TRUE, normalize = TRUE) {
+    .Call('_mitodrift_prop_clades_par', PACKAGE = 'mitodrift', E_target, edges, rooted, normalize)
 }
 
 get_leaf_liks_mat_cpp <- function(amat, dmat, vafs, eps = 0.0, ncores = 1L, log = FALSE) {

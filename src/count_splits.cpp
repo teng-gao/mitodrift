@@ -1,6 +1,9 @@
 #include <Rcpp.h>
 #include <unordered_map>
+#include <RcppParallel.h>
 using namespace Rcpp;
+#include <tbb/spin_mutex.h>
+using namespace RcppParallel;
 
 // --- fast hashing utils (deterministic, no RNG state) ----------------------
 static inline uint64_t splitmix64(uint64_t x) {
@@ -15,23 +18,14 @@ struct KeyHS {
 	uint32_t s;
 	bool operator==(const KeyHS& o) const noexcept { return h == o.h && s == o.s; }
 };
-struct KeyHSHasher {
-	size_t operator()(const KeyHS& k) const noexcept {
-		uint64_t x = k.h ^ (uint64_t)k.s * 0x9e3779b97f4a7c15ULL;
-		// one more avalanche
-		x ^= (x >> 33);
-		x *= 0xff51afd7ed558ccdULL;
-		x ^= (x >> 33);
-		return (size_t)x;
-	}
-};
+
 static inline bool keyhs_lt(const KeyHS& a, const KeyHS& b) {
 	if (a.s != b.s) return a.s < b.s;
 	return a.h < b.h;
 }
 
 // [[Rcpp::export]]
-std::vector< std::vector<int> > bipartition2(IntegerMatrix orig, int nTips) {
+std::vector< std::vector<int> > bipartition2(Rcpp::IntegerMatrix orig, int nTips) {
     IntegerVector parent = orig( _, 0);
     IntegerVector children = orig( _, 1);
     int m = max(parent), j=0;
@@ -54,56 +48,6 @@ std::vector< std::vector<int> > bipartition2(IntegerMatrix orig, int nTips) {
 }
 
 // ---- helpers for targeted counting ---------------------------------------
-
-// build complement (1..nTips) \ v; assumes v is sorted ascending
-static inline std::vector<int> complement_vec(const std::vector<int>& v, int nTips) {
-	std::vector<int> comp;
-	comp.reserve(nTips - (int)v.size());
-	int j = 0;
-	for (int t = 1; t <= nTips; ++t) {
-		if (j < (int)v.size() && v[j] == t) {
-			++j;
-		} else {
-			comp.push_back(t);
-		}
-	}
-	return comp;
-}
-
-// [[Rcpp::export]]
-List prop_part2(SEXP trees, int nTips){
-    List tr(trees);
-    int nbtree = tr.size();//, KeepPartition=1; // unused (EP 2020-05-02)
-    List M = tr(0);
-    IntegerMatrix E = M["edge"];
-    std::vector< std::vector<int> > ans = bipartition2(E, nTips);
-    std::vector<int> no;
-    for(unsigned int i=0; i<ans.size();++i) no.push_back(1);
-    no[0] = nbtree;
-    for(int k=1; k<nbtree; ++k){
-        List tmpTree = tr(k);
-        IntegerMatrix tmpE = tmpTree["edge"];
-        std::vector< std::vector<int> > bp = bipartition2(tmpE, nTips);
-        for (unsigned int i = 1; i < bp.size(); i++) {
-            unsigned int j = 1;
-            next_j:
-                if (bp[i] == ans[j]) {
-                    no[j]++;
-                    continue;
-                }
-                j++;
-                if (j < ans.size()) goto next_j;
-                else  {   //if(KeepPartition)
-                    ans.push_back(bp[i]);
-                    no.push_back(1);
-                }
-        }
-    }
-    List output = wrap(ans);
-    output.attr("number") = no;
-    output.attr("class") = "prop.part";
-    return output;
-}
 
 // compute per-tip 64-bit hashes 1..nTips
 static inline std::vector<uint64_t> make_tip_hashes(int nTips) {
@@ -157,17 +101,101 @@ static inline void build_children_and_root(const Rcpp::IntegerMatrix& E,
 	root_out = root;
 }
 
+struct TargetEdgesWorker : public RcppParallel::Worker {
+	// inputs
+	const std::vector< Rcpp::IntegerMatrix >& mats;   // edge matrices for all trees
+	const std::vector<KeyHS>& keys_sorted;            // sorted (hash,size) keys
+	const std::vector<int>&   pos;                    // map from sorted index -> target index
+	const int K;
+	const int nTips;
+	const std::vector<uint64_t>& tipH;
+
+	// shared output
+	RcppParallel::RVector<double> counts;
+	tbb::spin_mutex* mtx;
+
+	TargetEdgesWorker(const std::vector<Rcpp::IntegerMatrix>& mats_,
+	                  const std::vector<KeyHS>& keys_sorted_,
+	                  const std::vector<int>& pos_,
+	                  int K_, int nTips_,
+	                  const std::vector<uint64_t>& tipH_,
+	                  Rcpp::NumericVector& counts_,
+	                  tbb::spin_mutex* mtx_)
+		: mats(mats_), keys_sorted(keys_sorted_), pos(pos_), K(K_), nTips(nTips_), tipH(tipH_),
+		  counts(counts_), mtx(mtx_) {}
+
+	void operator()(std::size_t begin, std::size_t end) {
+		std::vector<double> local((size_t)K, 0.0);
+
+		// thread-local reusable buffers
+		std::vector< std::vector<int> > ch;
+		std::vector<uint64_t> H;
+		std::vector<uint32_t> SZ;
+
+		for (std::size_t k = begin; k < end; ++k) {
+			const Rcpp::IntegerMatrix& E = mats[k];
+
+			// build children and root
+			int root = 0;
+			build_children_and_root(E, nTips, ch, root);
+			const int N = (int)ch.size() - 1;
+
+			// per-node (hash,size)
+			H.assign((size_t)N + 1, 0);
+			SZ.assign((size_t)N + 1, 0);
+			dfs_hash_size(root, ch, tipH, nTips, H, SZ);
+
+			// iterate internal child edges
+			const int nEdge = E.nrow();
+			for (int e = 0; e < nEdge; ++e) {
+				const int child = E(e,1);
+				if (child <= nTips) continue;
+				KeyHS key{ H[(size_t)child], SZ[(size_t)child] };
+
+				// binary search on keys_sorted
+				int lo = 0, hi = K;
+				while (lo < hi) {
+					int mid = (lo + hi) >> 1;
+					const KeyHS& km = keys_sorted[(size_t)mid];
+					if (keyhs_lt(km, key)) lo = mid + 1;
+					else hi = mid;
+				}
+				if (lo < K) {
+					const KeyHS& km = keys_sorted[(size_t)lo];
+					if (km.h == key.h && km.s == key.s) {
+						const int tgt = pos[(size_t)lo];
+						local[(size_t)tgt] += 1.0;
+					}
+				}
+			}
+		}
+
+		// reduce into shared counts
+		tbb::spin_mutex::scoped_lock lock(*mtx);
+		for (int i = 0; i < K; ++i) counts[i] += local[(size_t)i];
+	}
+};
+
+static inline int infer_nTips_binary(const Rcpp::IntegerMatrix& E) {
+	const int m = E.nrow();
+	if ((m & 1) != 0) Rcpp::stop("infer_nTips_binary: edge count is odd (%d). Not a fully binary rooted tree.", m);
+	// In a rooted full binary tree: edges m = 2 * Nnode, tips = Nnode + 1 = m/2 + 1
+	return (m >> 1) + 1;
+}
+
 // [[Rcpp::export]]
-Rcpp::NumericVector prop_part2_targeted_edges(SEXP edges,
-                                              Rcpp::IntegerMatrix E_target,
-                                              int nTips,
-                                              bool rooted = true,
-                                              bool normalize = true)
+Rcpp::NumericVector prop_clades_par(Rcpp::IntegerMatrix E_target,
+    SEXP edges,
+    bool rooted = true,
+    bool normalize = true)
 {
 	Rcpp::List el(edges);
 	const int nbtree = el.size();
 	if (nbtree <= 0) Rcpp::stop("edge_list is empty");
-	if (!rooted) Rcpp::warning("prop_part2_targeted_edges assumes rooted; proceeding as rooted.");
+	if (!rooted) Rcpp::warning("prop_clades_par assumes rooted; proceeding as rooted.");
+
+	// infer nTips from target (assumes fully binary rooted tree)
+	const int nTips = infer_nTips_binary(E_target);
 
 	// tip hashes
 	std::vector<uint64_t> tipH = make_tip_hashes(nTips);
@@ -197,55 +225,24 @@ Rcpp::NumericVector prop_part2_targeted_edges(SEXP edges,
 		pos[(size_t)r] = i;
 	}
 
-	// counts aligned with target order
-	std::vector<double> counts((size_t)K, 0.0);
-	if (K > 0) counts[0] = (double)nbtree; // ape parity
-
-	// reusable buffers
-	std::vector< std::vector<int> > ch;
-	std::vector<uint64_t> H;
-	std::vector<uint32_t> SZ;
-
-	// 2) Scan each edge matrix directly
+	// 2) Materialize IntegerMatrix views once to avoid R access in threads
+	std::vector<Rcpp::IntegerMatrix> mats((size_t)nbtree);
 	for (int k = 0; k < nbtree; ++k) {
-		Rcpp::IntegerMatrix E = el[k];
-
-		// children and root
-		int root = 0;
-		build_children_and_root(E, nTips, ch, root);
-		const int N = (int)ch.size() - 1;
-
-		// per-node (hash,size)
-		H.assign((size_t)N + 1, 0);
-		SZ.assign((size_t)N + 1, 0);
-		dfs_hash_size(root, ch, tipH, nTips, H, SZ);
-
-		// iterate internal child edges
-		const int nEdge = E.nrow();
-		for (int e = 0; e < nEdge; ++e) {
-			const int child = E(e,1);
-			if (child <= nTips) continue;
-			KeyHS key{ H[(size_t)child], SZ[(size_t)child] };
-			// binary search in keys_sorted
-			int lo = 0, hi = K;
-			while (lo < hi) {
-				int mid = (lo + hi) >> 1;
-				if (keyhs_lt(keys_sorted[(size_t)mid], key)) lo = mid + 1;
-				else hi = mid;
-			}
-			if (lo < K && keys_sorted[(size_t)lo].h == key.h && keys_sorted[(size_t)lo].s == key.s) {
-				const int tgt = pos[(size_t)lo];
-				counts[(size_t)tgt] += 1.0;
-			}
-		}
+		mats[(size_t)k] = Rcpp::IntegerMatrix(el[k]);
 	}
 
-	// 3) return
-	Rcpp::NumericVector out(K);
+	// 3) parallel scan
+	Rcpp::NumericVector counts(K); // zero-initialized
+	tbb::spin_mutex mtx;
+	TargetEdgesWorker worker(mats, keys_sorted, pos, K, nTips, tipH, counts, &mtx);
+	RcppParallel::parallelFor(0, (size_t)nbtree, worker);
+
+	// ape parity for the first split
+	if (K > 0) counts[0] = counts[0] + (double)nbtree;
+
+	// 4) return
 	if (normalize) {
-		for (int i = 0; i < K; ++i) out[i] = counts[(size_t)i] / (double)nbtree;
-	} else {
-		for (int i = 0; i < K; ++i) out[i] = counts[(size_t)i];
+		for (int i = 0; i < K; ++i) counts[i] /= (double)nbtree;
 	}
-	return out;
+	return counts;
 }

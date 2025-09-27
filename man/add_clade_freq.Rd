@@ -4,16 +4,16 @@
 \alias{add_clade_freq}
 \title{Add clade frequencies to a phylogenetic tree}
 \usage{
-add_clade_freq(phy, phys, rooted = TRUE, ncores = 1)
+add_clade_freq(phy, edge_list, rooted = TRUE, ncores = 1)
 }
 \arguments{
 \item{phy}{A reference phylogeny of class \code{phylo}.}
 
-\item{phys}{A list of phylogenetic trees (of class \code{phylo}) to compare against the reference tree.}
-
 \item{rooted}{Logical; whether to treat the trees as rooted. Default is \code{TRUE}.}
 
 \item{ncores}{Integer; number of cores to use for parallel computation. Default is \code{1} (no parallelization).}
+
+\item{phys}{A list of phylogenetic trees (of class \code{phylo}) to compare against the reference tree.}
 }
 \value{
 A phylo object with clade frequencies added as node labels.
