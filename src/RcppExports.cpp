@@ -11,6 +11,60 @@ Rcpp::Rostream<true>&  Rcpp::Rcout = Rcpp::Rcpp_cout_get();
 Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
+// bipartition2
+std::vector< std::vector<int> > bipartition2(IntegerMatrix orig, int nTips);
+RcppExport SEXP _mitodrift_bipartition2(SEXP origSEXP, SEXP nTipsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< IntegerMatrix >::type orig(origSEXP);
+    Rcpp::traits::input_parameter< int >::type nTips(nTipsSEXP);
+    rcpp_result_gen = Rcpp::wrap(bipartition2(orig, nTips));
+    return rcpp_result_gen;
+END_RCPP
+}
+// prop_part2
+List prop_part2(SEXP trees, int nTips);
+RcppExport SEXP _mitodrift_prop_part2(SEXP treesSEXP, SEXP nTipsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type trees(treesSEXP);
+    Rcpp::traits::input_parameter< int >::type nTips(nTipsSEXP);
+    rcpp_result_gen = Rcpp::wrap(prop_part2(trees, nTips));
+    return rcpp_result_gen;
+END_RCPP
+}
+// prop_part2_targeted
+Rcpp::NumericVector prop_part2_targeted(SEXP trees, Rcpp::IntegerMatrix E_target, int nTips, bool rooted, bool normalize);
+RcppExport SEXP _mitodrift_prop_part2_targeted(SEXP treesSEXP, SEXP E_targetSEXP, SEXP nTipsSEXP, SEXP rootedSEXP, SEXP normalizeSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type trees(treesSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerMatrix >::type E_target(E_targetSEXP);
+    Rcpp::traits::input_parameter< int >::type nTips(nTipsSEXP);
+    Rcpp::traits::input_parameter< bool >::type rooted(rootedSEXP);
+    Rcpp::traits::input_parameter< bool >::type normalize(normalizeSEXP);
+    rcpp_result_gen = Rcpp::wrap(prop_part2_targeted(trees, E_target, nTips, rooted, normalize));
+    return rcpp_result_gen;
+END_RCPP
+}
+// prop_part2_targeted_edges
+Rcpp::NumericVector prop_part2_targeted_edges(SEXP edges, Rcpp::IntegerMatrix E_target, int nTips, bool rooted, bool normalize);
+RcppExport SEXP _mitodrift_prop_part2_targeted_edges(SEXP edgesSEXP, SEXP E_targetSEXP, SEXP nTipsSEXP, SEXP rootedSEXP, SEXP normalizeSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type edges(edgesSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerMatrix >::type E_target(E_targetSEXP);
+    Rcpp::traits::input_parameter< int >::type nTips(nTipsSEXP);
+    Rcpp::traits::input_parameter< bool >::type rooted(rootedSEXP);
+    Rcpp::traits::input_parameter< bool >::type normalize(normalizeSEXP);
+    rcpp_result_gen = Rcpp::wrap(prop_part2_targeted_edges(edges, E_target, nTips, rooted, normalize));
+    return rcpp_result_gen;
+END_RCPP
+}
 // get_leaf_liks_mat_cpp
 List get_leaf_liks_mat_cpp(const IntegerMatrix& amat, const IntegerMatrix& dmat, const NumericVector& vafs, double eps, int ncores, bool log);
 RcppExport SEXP _mitodrift_get_leaf_liks_mat_cpp(SEXP amatSEXP, SEXP dmatSEXP, SEXP vafsSEXP, SEXP epsSEXP, SEXP ncoresSEXP, SEXP logSEXP) {
@@ -231,57 +285,12 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
-// bipartition2
-std::vector< std::vector<int> > bipartition2(IntegerMatrix orig, int nTips);
-RcppExport SEXP _mitodrift_bipartition2(SEXP origSEXP, SEXP nTipsSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< IntegerMatrix >::type orig(origSEXP);
-    Rcpp::traits::input_parameter< int >::type nTips(nTipsSEXP);
-    rcpp_result_gen = Rcpp::wrap(bipartition2(orig, nTips));
-    return rcpp_result_gen;
-END_RCPP
-}
-// prop_part2
-List prop_part2(SEXP trees, int nTips);
-RcppExport SEXP _mitodrift_prop_part2(SEXP treesSEXP, SEXP nTipsSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< SEXP >::type trees(treesSEXP);
-    Rcpp::traits::input_parameter< int >::type nTips(nTipsSEXP);
-    rcpp_result_gen = Rcpp::wrap(prop_part2(trees, nTips));
-    return rcpp_result_gen;
-END_RCPP
-}
-// prop_part2_parallel
-List prop_part2_parallel(SEXP trees, int nTips);
-RcppExport SEXP _mitodrift_prop_part2_parallel(SEXP treesSEXP, SEXP nTipsSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< SEXP >::type trees(treesSEXP);
-    Rcpp::traits::input_parameter< int >::type nTips(nTipsSEXP);
-    rcpp_result_gen = Rcpp::wrap(prop_part2_parallel(trees, nTips));
-    return rcpp_result_gen;
-END_RCPP
-}
-// prop_part2_edges_par
-List prop_part2_edges_par(List parents, List children, int nTips);
-RcppExport SEXP _mitodrift_prop_part2_edges_par(SEXP parentsSEXP, SEXP childrenSEXP, SEXP nTipsSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< List >::type parents(parentsSEXP);
-    Rcpp::traits::input_parameter< List >::type children(childrenSEXP);
-    Rcpp::traits::input_parameter< int >::type nTips(nTipsSEXP);
-    rcpp_result_gen = Rcpp::wrap(prop_part2_edges_par(parents, children, nTips));
-    return rcpp_result_gen;
-END_RCPP
-}
 
 static const R_CallMethodDef CallEntries[] = {
+    {"_mitodrift_bipartition2", (DL_FUNC) &_mitodrift_bipartition2, 2},
+    {"_mitodrift_prop_part2", (DL_FUNC) &_mitodrift_prop_part2, 2},
+    {"_mitodrift_prop_part2_targeted", (DL_FUNC) &_mitodrift_prop_part2_targeted, 5},
+    {"_mitodrift_prop_part2_targeted_edges", (DL_FUNC) &_mitodrift_prop_part2_targeted_edges, 5},
     {"_mitodrift_get_leaf_liks_mat_cpp", (DL_FUNC) &_mitodrift_get_leaf_liks_mat_cpp, 6},
     {"_mitodrift_reorderRcpp", (DL_FUNC) &_mitodrift_reorderRcpp, 1},
     {"_mitodrift_nnin_cpp", (DL_FUNC) &_mitodrift_nnin_cpp, 2},
@@ -298,10 +307,6 @@ static const R_CallMethodDef CallEntries[] = {
     {"_mitodrift_tree_mcmc_cpp", (DL_FUNC) &_mitodrift_tree_mcmc_cpp, 5},
     {"_mitodrift_tree_mcmc_cpp_cached", (DL_FUNC) &_mitodrift_tree_mcmc_cpp_cached, 5},
     {"_mitodrift_tree_mcmc_parallel", (DL_FUNC) &_mitodrift_tree_mcmc_parallel, 5},
-    {"_mitodrift_bipartition2", (DL_FUNC) &_mitodrift_bipartition2, 2},
-    {"_mitodrift_prop_part2", (DL_FUNC) &_mitodrift_prop_part2, 2},
-    {"_mitodrift_prop_part2_parallel", (DL_FUNC) &_mitodrift_prop_part2_parallel, 2},
-    {"_mitodrift_prop_part2_edges_par", (DL_FUNC) &_mitodrift_prop_part2_edges_par, 3},
     {NULL, NULL, 0}
 };
 
