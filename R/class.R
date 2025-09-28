@@ -241,6 +241,7 @@ MitoDrift <- R6::R6Class("MitoDrift",
         #' @param trace Whether to return trace of parameter values (default: TRUE)
         #' @return Fitted parameters or list of parameters and trace
         fit_params_em = function(
+            tree_fit,
             initial_params = c('ngen' = 100, 'log_eps' = log(1e-3), 'log_err' = log(1e-3)),
             lower_bounds = c('ngen' = 1, 'log_eps' = log(1e-12), 'log_err' = log(1e-12)),
             upper_bounds = c('ngen' = 1000, 'log_eps' = log(0.2), 'log_err' = log(0.2)),
@@ -253,7 +254,7 @@ MitoDrift <- R6::R6Class("MitoDrift",
             
             # Run EM parameter fitting using the existing function
             params_est <- fit_params_em(
-                tree_fit = self$tree_init,
+                tree_fit = tree_fit,
                 amat = self$amat,
                 dmat = self$dmat,
                 initial_params = initial_params,
@@ -324,6 +325,126 @@ MitoDrift <- R6::R6Class("MitoDrift",
             if (!is.null(self$ml_trace_file)) {
                 message("Results saved to ", self$ml_trace_file)
             }
+        },
+
+		#' @description Alternating ML optimization and EM parameter updates until convergence
+		#' @param total_iter Upper bound for ML iterations per optimization phase (default: 100)
+		#' @param ncores Number of cores for ML optimization (default: 1)
+		#' @param outfile Output file for ML optimization trace (optional)
+		#' @param resume Whether to resume ML optimization from existing trace (default: FALSE)
+		#' @param trace_interval Interval for saving ML trace (default: 5)
+		#' @param em_max_iter EM iterations per EM step (default: 5)
+		#' @param em_epsilon Convergence tolerance for EM (default: 1e-3)
+		#' @param em_ncores Number of cores for EM E-step (default: 1)
+		#' @param em_lower_bounds Lower bounds for EM parameters in transformed space
+		#' @param em_upper_bounds Upper bounds for EM parameters in transformed space
+		optimize_tree_em = function(
+			total_iter = 100,
+			ncores = 1,
+			outfile = NULL,
+			resume = FALSE,
+			trace_interval = 5,
+			em_max_iter = 100,
+			em_epsilon = 1e-3,
+			em_ncores = 1,
+			em_lower_bounds = c('ngen' = 1, 'log_eps' = log(1e-12), 'log_err' = log(1e-12)),
+			em_upper_bounds = c('ngen' = 1000, 'log_eps' = log(0.2), 'log_err' = log(0.2))
+		) {
+
+            # Ensure model components are available
+            if (is.null(self$model_params) || is.null(self$amat) || is.null(self$dmat)) {
+                stop("Object not initialized correctly. Provide data and call make_model() first.")
+            }
+
+            # Initialize or keep existing outputs
+            if (!is.null(outfile)) {
+                self$ml_trace_file <- normalizePath(outfile, mustWork = FALSE)
+            } else if (resume && is.null(self$ml_trace_file)) {
+                stop("Cannot resume without an ML trace file. Provide 'outfile'.")
+            }
+
+            # Ensure output directory exists if provided
+            if (!is.null(self$ml_trace_file)) {
+                outdir <- dirname(self$ml_trace_file)
+                if (!dir.exists(outdir)) dir.create(outdir, recursive = TRUE)
+            }
+
+            # Helper: get how many ML iterations already completed
+            get_completed <- function(path) {
+                if (is.null(path) || !file.exists(path)) return(0L)
+                tl <- tryCatch(readRDS(path), error = function(e) NULL)
+                if (is.null(tl)) return(0L)
+                # tree_list length includes the initial tree at position 1
+                max(0L, length(tl) - 1L)
+            }
+
+			completed <- if (resume) get_completed(self$ml_trace_file) else 0L
+			message('Starting alternating ML/EM until convergence: completed=', completed, ', max_iter=', total_iter)
+
+			# Phase 1: run ML optimization to termination (or until reaching total_iter cap)
+			message('Running initial ML optimization to termination...')
+			resume_batch <- if (completed == 0L && !resume) FALSE else TRUE
+			tree_list <- optimize_tree_cpp(
+				tree_init = self$tree_init,
+				logP = self$logP,
+				logA = self$logA,
+				max_iter = total_iter,
+				ncores = ncores,
+				resume = resume_batch,
+				outfile = self$ml_trace_file,
+				trace_interval = trace_interval
+			)
+			pre_em_completed <- max(0L, length(tree_list) - 1L)
+			self$tree_ml <- tree_list[[length(tree_list)]]
+
+			# Alternation: EM update then resume ML; stop if ML does not move after EM
+			repeat {
+				message('Running EM parameter update...')
+				init_params <- c(
+					'ngen' = as.numeric(self$model_params['ngen']),
+					'log_eps' = log(as.numeric(self$model_params['eps'])),
+					'log_err' = log(as.numeric(self$model_params['err']))
+				)
+
+				params_est <- self$fit_params_em(
+					tree_fit = self$tree_ml,
+					initial_params = init_params,
+					lower_bounds = em_lower_bounds,
+					upper_bounds = em_upper_bounds,
+					max_iter = em_max_iter,
+					ncores = em_ncores,
+					epsilon = em_epsilon
+				)
+
+				message('Refreshing model components with EM-updated parameters...')
+				self$make_model(ncores = em_ncores)
+
+				message('Resuming ML optimization after EM...')
+				resume_after <- !is.null(self$ml_trace_file)
+				# If we have a trace file, resume from it. Otherwise, start from current ML tree
+				tree_list <- optimize_tree_cpp(
+					tree_init = if (resume_after) self$tree_init else self$tree_ml,
+					logP = self$logP,
+					logA = self$logA,
+					max_iter = total_iter,
+					ncores = ncores,
+					resume = resume_after,
+					outfile = self$ml_trace_file,
+					trace_interval = trace_interval
+				)
+				post_em_completed <- max(0L, length(tree_list) - 1L)
+				self$tree_ml <- tree_list[[length(tree_list)]]
+
+				if (post_em_completed <= pre_em_completed) {
+					message('No topology improvement after EM; terminating alternating ML/EM.')
+					break
+				}
+
+				pre_em_completed <- post_em_completed
+				message('Progress: completed=', pre_em_completed, '/', total_iter)
+			}
+
+			message('Alternating ML/EM optimization completed!')
         },
         
         #' @description Run phylogenetic MCMC sampling

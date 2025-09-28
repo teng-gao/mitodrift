@@ -208,3 +208,151 @@ decode_tree_em = function(
 
     return(list('logZ' = sum(logZ), 'ebels' = ebels, 'nbels' = nbels))
 }
+
+
+
+#' Compute the likelihood of a tree given model parameters
+#' @param tree_fit phylogenetic tree
+#' @param ngen number of generations
+#' @param err error rate
+#' @param eps mutation rate
+#' @param npop population size
+#' @return log-likelihood
+#' @export
+get_param_lik_cpp = function(tree_fit, amat, dmat, ngen, err, eps, npop = 600, k = 20) {
+    
+    A = get_transition_mat_wf_hmm(k = k, eps = eps, N = npop, ngen = ngen)
+    logA_vec = t(log(A))
+    
+    logliks = get_leaf_liks_mat(amat, dmat, get_vaf_bins(k = k), eps = err, log = TRUE)
+    logP_list = convert_logliks_to_logP_list(logliks, tree_fit)
+
+    l = mitodrift:::score_tree_bp_wrapper2(tree_fit$edge, logP_list = logP_list, logA = logA_vec)
+
+    return(l)
+}
+
+
+
+#' Fit tree parameters using MCMC
+#' 
+#' Estimates tree parameters (number of generations, error rates) using MCMC sampling
+#' with the fmcmc package.
+#' 
+#' @param tree_fit phylogenetic tree
+#' @param amat alternative allele count matrix
+#' @param dmat total depth matrix
+#' @param initial_params initial parameter values (ngen, log_eps, log_err)
+#' @param lower_bounds lower bounds for parameters in transformed space
+#' @param upper_bounds upper bounds for parameters in transformed space
+#' @param nsteps number of MCMC steps
+#' @param nchains number of MCMC chains
+#' @param npop population size for likelihood computation
+#' @param k number of clusters for likelihood computation
+#' @param ncores number of cores to use
+#' @param keep number of MCMC steps to keep at the end of each chain
+#' @param outfile file to save MCMC result
+#' @param check_conv whether to check convergence of parameter fitting
+#' @return MCMC result object from fmcmc
+#' @export
+fit_params_mcmc = function(
+    tree_fit, amat, dmat,
+    initial_params = c('ngen' = 100, 'log_eps' = log(1e-3), 'log_err' = log(1e-3)),
+    lower_bounds = c('ngen' = 1, 'log_eps' = log(1e-18), 'log_err' = log(1e-18)),
+    upper_bounds = c('ngen' = 1000, 'log_eps' = log(0.2), 'log_err' = log(0.2)),
+    nsteps = 500, nchains = 1, outfile = NULL,
+    npop = 600, k = 20, ncores = 1, keep = 100, check_conv = FALSE) {
+    
+    # Ensure tree is properly formatted
+    tree_fit = reorder_phylo(tree_fit)
+    tree_fit$edge.length = NULL
+    
+    # All three parameters will be estimated
+    param_names = c('ngen', 'log_eps', 'log_err')
+    
+    message(glue("Estimating all 3 parameters using MCMC: {paste(param_names, collapse=', ')}"))
+    
+    # Create log-likelihood function for MCMC
+    # This function takes parameters in transformed space and converts them back
+    log_likelihood = function(p, tree_fit., amat., dmat., npop., k.) {
+        # Convert parameters back to original scale
+        params_orig = p
+        
+        # Convert log-scale parameters back to original scale
+        params_orig['log_eps'] = exp(p['log_eps'])
+        names(params_orig)[names(params_orig) == 'log_eps'] = 'eps'
+        params_orig['log_err'] = exp(p['log_err'])
+        names(params_orig)[names(params_orig) == 'log_err'] = 'err'
+        
+        # Compute likelihood
+        ll = get_param_lik_cpp(tree_fit., amat., dmat., 
+            ngen = params_orig['ngen'],
+            eps = params_orig['eps'], 
+            err = params_orig['err'],
+            npop = npop., k = k.)
+        
+        return(ll)
+    }
+        
+    # Run MCMC
+    ncores = min(ncores, nchains)
+    message("Starting MCMC sampling using ", ncores, " cores")
+
+    cl <- makeCluster(ncores)
+
+    msg = clusterEvalQ(cl, {
+        library(mitodrift)
+        library(parallel)
+    })
+
+    if (check_conv) {
+        checker = fmcmc::convergence_gelman(freq = 50, threshold = 1)
+    } else {
+        checker = NULL
+    }
+
+    kernel = fmcmc::kernel_normal_reflective(
+        scale = c(5, 0.1, 0.1),
+        scheme = "joint",
+        lb = lower_bounds,
+        ub = upper_bounds
+    )
+
+    mcmc_result = fmcmc::MCMC(
+        log_likelihood,
+        initial = initial_params,
+        nsteps = nsteps,
+        nchains = nchains,
+        kernel = kernel,
+        tree_fit. = tree_fit,
+        amat. = amat,
+        dmat. = dmat,
+        npop. = npop,
+        k. = k,
+        cl = cl,
+        multicore = TRUE,
+        conv_checker = checker
+    )
+
+    stopCluster(cl)
+
+    res_df_all = lapply(
+        seq_len(nchains),
+        function(i) {
+            data.frame(mcmc_result[[i]]) %>% 
+                tibble::rowid_to_column('iter') %>%
+                mutate(chain = i)
+        }) %>%
+        bind_rows() %>%
+        mutate(
+            err = exp(log_err),
+            eps = exp(log_eps),
+        ) %>%
+        reshape2::melt(id.var = c('iter', 'chain'))
+
+    if (!is.null(outfile)) {
+        fwrite(res_df_all, outfile)
+    }
+
+    return(res_df_all)
+}

@@ -108,7 +108,7 @@ option_list <- list(
         c("-t", "--fit_param_max_iter"),
         type = "integer",
         default = 10,
-        help = "Maximum EM iterations for parameter fitting",
+        help = "Maximum EM iterations for EM (initial fit and alternating ML/EM)",
         metavar = "INTEGER"
     ),
     make_option(
@@ -239,12 +239,15 @@ if (opts$resume) {
     saveRDS(md, mitodrift_object_file)
 }
 
-message("\n=== Optimizing tree ===")
-md$optimize_tree(
-    max_iter = opts$ml_iter,
+message("\n=== Alternating ML/EM tree optimization ===")
+md$optimize_tree_em(
+    total_iter = opts$ml_iter,
     ncores = opts$ncores,
     outfile = ml_trace_file,
-    resume = opts$resume
+    resume = opts$resume,
+    em_max_iter = opts$fit_param_max_iter,
+    em_epsilon = opts$fit_param_epsilon,
+    em_ncores = opts$ncores_em
 )
 
 saveRDS(md, mitodrift_object_file)

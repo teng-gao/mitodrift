@@ -9,15 +9,16 @@ add_clade_freq(phy, edge_list, rooted = TRUE, ncores = 1)
 \arguments{
 \item{phy}{A reference phylogeny of class \code{phylo}.}
 
+\item{edge_list}{A list of edge matrices (or phylogenetic trees) to compare against the reference tree.}
+
 \item{rooted}{Logical; whether to treat the trees as rooted. Default is \code{TRUE}.}
 
 \item{ncores}{Integer; number of cores to use for parallel computation. Default is \code{1} (no parallelization).}
-
-\item{phys}{A list of phylogenetic trees (of class \code{phylo}) to compare against the reference tree.}
 }
 \value{
 A phylo object with clade frequencies added as node labels.
 }
 \description{
-Add clade frequencies to a phylogenetic tree
+Computes the frequency (support) of each clade in a reference phylogeny (\code{phy}) across a list of phylogenetic trees (\code{edge_list}),
+and adds these frequencies as node labels to the reference tree.
 }
