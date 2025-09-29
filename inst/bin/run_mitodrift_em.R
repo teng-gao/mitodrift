@@ -35,6 +35,18 @@ option_list <- list(
         metavar = "CHARACTER"
     ),
     make_option(
+        c("-A", "--amat"),
+        type = "character",
+        help = "Alternative allele count matrix (CSV; first column = variant)",
+        metavar = "CHARACTER"
+    ),
+    make_option(
+        c("-D", "--dmat"),
+        type = "character",
+        help = "Total depth matrix (CSV; first column = variant)",
+        metavar = "CHARACTER"
+    ),
+    make_option(
         c("-o", "--outdir"),
         type = "character",
         default = "mitodrift_results",
@@ -182,8 +194,14 @@ if (opts$resume) {
 }
 
 # Check required parameters
-if (is.null(opts$mut_dat)) {
-    stop("Mutation data file must be provided with -m/--mut_dat")
+if (!is.null(opts$mut_dat)) {
+    if (!is.null(opts$amat) || !is.null(opts$dmat)) {
+        stop("Provide either --mut_dat or both --amat and --dmat, not both")
+    }
+} else {
+    if (is.null(opts$amat) || is.null(opts$dmat)) {
+        stop("Must provide --mut_dat or both --amat and --dmat")
+    }
 }
 
 # Create output directory
@@ -198,14 +216,47 @@ mcmc_trace_file <- file.path(opts$outdir, "tree_mcmc_trace.qs2")
 annot_tree_file <- file.path(opts$outdir, "tree_annotated.newick")
 mitodrift_object_file <- file.path(opts$outdir, "mitodrift_object.rds")
 
-# Step 1: Load mutation data
+# Step 1: Load mutation data / matrices
 message("\n=== Creating MitoDrift object ===")
-mut_dat <- fread(opts$mut_dat) %>% 
-    group_by(variant) %>%
-    filter(sum(a > 0) > 1) %>%
-    ungroup()
-message("Number of unique variants: ", length(unique(mut_dat$variant)))
-message("Number of unique cells: ", length(unique(mut_dat$cell)))
+
+load_matrix_file <- function(path) {
+    dt <- fread(path)
+    if (ncol(dt) < 2) {
+        stop(glue("Matrix file '{path}' must include a row identifier column plus data columns"))
+    }
+    mat <- as.matrix(dt[, -1, with = FALSE])
+    rownames(mat) <- dt[[1]]
+    storage.mode(mat) <- "numeric"
+    mat
+}
+
+if (!is.null(opts$mut_dat)) {
+    mut_dat <- fread(opts$mut_dat) %>% 
+        group_by(variant) %>%
+        filter(sum(a > 0) > 1) %>%
+        ungroup()
+    message("Input mode: long-format mutation table")
+    message("Number of unique variants: ", length(unique(mut_dat$variant)))
+    message("Number of unique cells: ", length(unique(mut_dat$cell)))
+} else {
+    amat <- load_matrix_file(opts$amat)
+    dmat <- load_matrix_file(opts$dmat)
+    if (!identical(dim(amat), dim(dmat))) {
+        stop("amat and dmat must have identical dimensions")
+    }
+    keep_variants <- rowSums(amat > 0) > 1
+    if (!any(keep_variants)) {
+        stop("No variants remain in amat after filtering for >1 non-zero counts")
+    }
+    n_removed <- nrow(amat) - sum(keep_variants)
+    if (n_removed > 0) {
+        message("Filtered ", n_removed, " variants with <= 1 non-zero count")
+    }
+    amat <- amat[keep_variants, , drop = FALSE]
+    dmat <- dmat[keep_variants, , drop = FALSE]
+    message("Input mode: matrix pair")
+    message("Matrix dimensions: ", nrow(amat), " variants x ", ncol(amat), " cells")
+}
 
 # Step 2: Create MitoDrift object
 if (opts$resume) {
@@ -217,16 +268,26 @@ if (opts$resume) {
         stop("Model components not initialized")
     }
 } else {
-    md <- MitoDrift$new(
-        mut_dat = mut_dat,
-        model_params = c(
-            eps = opts$eps,
-            err = opts$err,
-            npop = opts$npop,
-            ngen = opts$ngen,
-            k = opts$k
-        )
+    model_params <- c(
+        eps = opts$eps,
+        err = opts$err,
+        npop = opts$npop,
+        ngen = opts$ngen,
+        k = opts$k
     )
+
+    if (!is.null(opts$mut_dat)) {
+        md <- MitoDrift$new(
+            mut_dat = mut_dat,
+            model_params = model_params
+        )
+    } else {
+        md <- MitoDrift$new(
+            amat = amat,
+            dmat = dmat,
+            model_params = model_params
+        )
+    }
     saveRDS(md, mitodrift_object_file)
 
     if (opts$fit_params) {
