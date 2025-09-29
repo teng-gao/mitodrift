@@ -64,12 +64,7 @@ compute_target_tree_asdsf <- function(phy_target,
         asdsf <- mean(per_clade_sd[keep_mask])
     }
 
-    list(
-        asdsf = asdsf,
-        per_clade_sd = per_clade_sd,
-        keep_mask = keep_mask,
-        freq_matrix = freq_matrix
-    )
+    return(asdsf)
 }
 
 #' Sliding-window ASDSF for a target tree
@@ -94,9 +89,8 @@ compute_target_tree_asdsf <- function(phy_target,
 #' @param min_chains Minimum number of chains required after filtering.
 #'
 #' @return A data.frame with one row per window containing the ASDSF value, the
-#'   window bounds (1-indexed, post-burnin), and a list column `details` holding
-#'   the full result from `compute_target_tree_asdsf` for that window. Attributes
-#'   `window_size`, `step`, and `burnin` are attached.
+#'   window bounds (1-indexed, post-burnin), and attributes `window_size`, `step`,
+#'   and `burnin`.
 #'
 #' @seealso [compute_target_tree_asdsf]
 #' @export
@@ -150,11 +144,11 @@ compute_target_tree_asdsf_sliding <- function(phy_target,
 
     starts <- pmax(1L, ends - window_size + 1L)
 
-    res_list <- vector('list', length(ends))
+    asdsf_vals <- numeric(length(ends))
     for (idx in seq_along(ends)) {
         end <- ends[idx]
         window_chains <- lapply(chains_trim, function(chain) chain[seq_len(end)])
-        res_list[[idx]] <- compute_target_tree_asdsf(
+        asdsf_vals[idx] <- compute_target_tree_asdsf(
             phy_target = phy_target,
             edge_list_chains = window_chains,
             rooted = rooted,
@@ -164,7 +158,6 @@ compute_target_tree_asdsf_sliding <- function(phy_target,
         )
     }
 
-    asdsf_vals <- vapply(res_list, function(x) x$asdsf, numeric(1))
     summary_df <- data.frame(
         window = seq_along(ends),
         window_start = starts + burnin,

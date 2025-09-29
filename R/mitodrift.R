@@ -1350,14 +1350,14 @@ run_tree_mcmc_batch = function(
             invisible(gc())
 
             if (diag) {
-                asdsf_res <- compute_target_tree_asdsf(
+                asdsf <- compute_target_tree_asdsf(
                     phy_target = phy_init,
                     edge_list_chains = edge_list_all,
                     min_freq = 0,
                     rooted = TRUE,
                     ncores = ncores
                 )
-                message('ASDSF (target clades) after batch ', i, ': ', signif(asdsf_res$asdsf, 4))
+                message('ASDSF (target clades) after batch ', i, ': ', signif(asdsf, 4))
             }
         }
     }
