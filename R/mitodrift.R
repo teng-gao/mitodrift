@@ -1310,14 +1310,13 @@ run_tree_mcmc_batch = function(
 
             message('Running batch ', i, ' of ', n_batches)
 
-            # Run one batch for all chains simultaneously
-            edge_list_all = mclapply(
-                chains,
-                mc.cores = ncores,
-                function(s) {
+            # Run one batch for all chains simultaneously without capturing the full list per worker
+            edge_list_all = parallel::mcmapply(
+                chain_list = edge_list_all,
+                chain_id = chains,
+                FUN = function(chain_list, chain_id, batch_id, logP_list, 
+                    logA_vec, max_iter, batch_size, outdir, fname) {
 
-                    chain_list = edge_list_all[[s]]
-                    
                     n_remaining = max(0, max_iter - length(chain_list) + 1)
                     if (n_remaining == 0) {
                         return(chain_list)
@@ -1327,8 +1326,14 @@ run_tree_mcmc_batch = function(
                     # Starting edge for this batch: last of existing chain
                     start_edge = chain_list[[length(chain_list)]]
 
-                    seed_batch = as.integer(1000003L * (i - 1L) + s)
-                    elist = tree_mcmc_cpp_cached(start_edge, logP_list, logA_vec, max_iter = max_iter_i, seed = seed_batch)
+                    seed_batch = as.integer(1000003L * (batch_id - 1L) + chain_id)
+                    elist = tree_mcmc_cpp_cached(
+                        start_edge,
+                        logP_list,
+                        logA_vec,
+                        max_iter = max_iter_i,
+                        seed = seed_batch
+                    )
                     elist = restore_elist(elist)
 
                     # Drop the duplicated start state for every batch
@@ -1338,16 +1343,23 @@ run_tree_mcmc_batch = function(
 
                     new_list = c(chain_list, elist)
 
-                    qs2::qd_save(new_list, glue('{outdir}/chain{s}_{fname}'))
-
-                    # Free large intermediates
-                    rm(elist)
-                    invisible(gc())
+                    qs2::qd_save(new_list, glue('{outdir}/chain{chain_id}_{fname}'))
 
                     return(new_list)
-                })
-            # Encourage cleanup between batches
-            invisible(gc())
+                },
+                MoreArgs = list(
+                    batch_id = i,
+                    logP_list = logP_list,
+                    logA_vec = logA_vec,
+                    max_iter = max_iter,
+                    batch_size = batch_size,
+                    outdir = outdir,
+                    fname = fname
+                ),
+                SIMPLIFY = FALSE,
+                mc.cores = ncores,
+                mc.preschedule = FALSE
+            )
 
             if (diag) {
                 asdsf <- compute_target_tree_asdsf(

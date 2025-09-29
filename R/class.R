@@ -158,13 +158,12 @@ MitoDrift <- R6::R6Class("MitoDrift",
             )
             
             # Get leaf likelihoods
-            self$leaf_likelihoods <- get_leaf_liks_mat(
+            self$leaf_likelihoods <- get_leaf_liks_mat_cpp(
                 self$amat, 
                 self$dmat, 
                 get_vaf_bins(k = self$model_params["k"]), 
                 eps = self$model_params["err"], 
-                log = TRUE,
-                ncores = ncores
+                log = TRUE
             )
             
             # Convert to log probabilities
