@@ -34,7 +34,7 @@ optimize_tree_cpp = function(
         if (is.null(outfile)) {
             stop("outfile must be provided when resume is TRUE")
         }
-        tree_list = readRDS(outfile)
+        tree_list = safe_read_chain(outfile)
         tree_current = tree_list %>% .[[length(.)]]
         max_current = tree_current$logZ
         start_iter = length(tree_list)
@@ -56,7 +56,7 @@ optimize_tree_cpp = function(
     if (start_iter > max_iter) {
         message(paste0("Already completed ", start_iter - 1, " iterations. No new iterations to run for max_iter = ", max_iter, "."))
         if (!is.null(outfile)) {
-            saveRDS(tree_list, outfile)
+            qs2::qd_save(tree_list, outfile)
         }
         return(tree_list)
     }
@@ -82,7 +82,7 @@ optimize_tree_cpp = function(
 
         if (!is.null(outfile)) {
             if (i == 1 | i %% trace_interval == 0) {
-                saveRDS(tree_list, outfile)
+                qs2::qd_save(tree_list, outfile)
             }
         }
 
@@ -91,7 +91,7 @@ optimize_tree_cpp = function(
     }
     
     if (!is.null(outfile)) {
-        saveRDS(tree_list, outfile)
+        qs2::qd_save(tree_list, outfile)
     }
 
     return(tree_list)
@@ -130,7 +130,7 @@ optimize_tree = function(
             tree_list = c(tree_list, list(gtree))
             if (!is.null(outfile)) {
                 if (i == 1 | i %% trace_interval == 0) {
-                    saveRDS(tree_list, outfile)
+                    qs2::qd_save(tree_list, outfile)
                 }
             }
         }
@@ -1252,7 +1252,7 @@ safe_read_chain = function(path) {
     if (!file.exists(path)) return(NULL)
     fi = file.info(path)
     if (is.na(fi$size) || fi$size <= 0) return(NULL)
-    tryCatch(readRDS(path), error = function(e) NULL)
+    tryCatch(qs2::qd_read(path), error = function(e) NULL)
 }
 
 # to fix: apparently the init tree has to be rooted otherwise to_phylo_reoder won't work. 
@@ -1288,7 +1288,7 @@ run_tree_mcmc_batch = function(
             max_len = max_iter + 1
             if (length(chain_list) > max_len) {
                 chain_list = chain_list[1:max_len]
-                saveRDS(chain_list, chain_path)
+                qs2::qd_save(chain_list, chain_path)
             }
             chain_list
         })
@@ -1338,7 +1338,7 @@ run_tree_mcmc_batch = function(
 
                     new_list = c(chain_list, elist)
 
-                    saveRDS(new_list, glue('{outdir}/chain{s}_{fname}'))
+                    qs2::qd_save(new_list, glue('{outdir}/chain{s}_{fname}'))
 
                     # Free large intermediates
                     rm(elist)
@@ -1362,7 +1362,7 @@ run_tree_mcmc_batch = function(
         }
     }
 
-    saveRDS(edge_list_all, outfile)
+    qs2::qd_save(edge_list_all, outfile)
 
     return(edge_list_all)
 }

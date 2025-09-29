@@ -6,6 +6,9 @@
 #include <cmath>
 #include <RcppArmadillo.h>
 #include <array>
+#include <string>
+#include <vector>
+#include <sstream>
 
 using namespace Rcpp;
 using namespace RcppParallel;
@@ -1009,6 +1012,49 @@ NumericVector nni_cpp_parallel_multi(arma::Col<int> E, const std::vector<std::ve
 /////////////////////////////////////// MCMC ////////////////////////////////////////
 
 
+namespace {
+
+static arma::Col<int> r_matrix_to_edge(const Rcpp::RObject& obj) {
+	Rcpp::IntegerMatrix mat = Rcpp::as<Rcpp::IntegerMatrix>(obj);
+	arma::Mat<int> arma_mat = Rcpp::as<arma::Mat<int>>(mat);
+	return arma::vectorise(arma_mat);
+}
+
+static Rcpp::IntegerMatrix edge_to_r_matrix(const arma::Col<int>& edge) {
+	int n_edges = static_cast<int>(edge.n_elem / 2);
+	Rcpp::IntegerMatrix mat(n_edges, 2);
+	std::copy(edge.begin(), edge.end(), mat.begin());
+	return mat;
+}
+
+static std::vector<arma::Col<int>> r_list_to_chain(const Rcpp::List& lst) {
+	std::vector<arma::Col<int>> chain;
+	chain.reserve(lst.size());
+	for (R_xlen_t i = 0; i < lst.size(); ++i) {
+		chain.emplace_back(r_matrix_to_edge(lst[i]));
+	}
+	return chain;
+}
+
+static Rcpp::List chain_to_r_list(const std::vector<arma::Col<int>>& chain) {
+	Rcpp::List out(chain.size());
+	for (std::size_t i = 0; i < chain.size(); ++i) {
+		out[i] = edge_to_r_matrix(chain[i]);
+	}
+	return out;
+}
+
+static Rcpp::List chains_to_r_list(const std::vector<std::vector<arma::Col<int>>>& chains) {
+	Rcpp::List out(chains.size());
+	for (std::size_t i = 0; i < chains.size(); ++i) {
+		out[i] = chain_to_r_list(chains[i]);
+	}
+	return out;
+}
+
+} // namespace
+
+
 // [[Rcpp::export]]
 std::vector<arma::Col<int>> tree_mcmc_cpp(
     arma::Col<int> E,
@@ -1182,4 +1228,160 @@ std::vector< std::vector<arma::Col<int>> > tree_mcmc_parallel(arma::Col<int> E,
     parallelFor(0, nchains, worker);
     
     return chain_results;
+}
+
+// [[Rcpp::export]]
+Rcpp::List tree_mcmc_cpp_cached_parallel(
+	Rcpp::List phy_init,
+	const std::vector< std::vector<double> >& logP_list,
+	const std::vector<double>& logA_vec,
+	const std::string& outfile,
+	int max_iter = 100,
+	int nchains = 1,
+	int ncores = 1,
+	int batch_size = 1000,
+	bool diag = true,
+	bool resume = false) {
+
+	if (max_iter < 0) {
+		Rcpp::stop("`max_iter` must be non-negative");
+	}
+	if (nchains < 0) {
+		Rcpp::stop("`nchains` must be non-negative");
+	}
+	if (batch_size <= 0) {
+		Rcpp::stop("`batch_size` must be positive");
+	}
+	if (ncores <= 0) {
+		ncores = 1;
+	}
+
+	Rcpp::Function dir_exists_fn("dir.exists");
+	Rcpp::Function dir_create_fn("dir.create");
+	Rcpp::Function saveRDS_fn("saveRDS");
+	Rcpp::Function message_fn("message");
+	Rcpp::Function gc_fn("gc");
+	Rcpp::Function compute_asdsf_fn("compute_target_tree_asdsf");
+	Rcpp::Function signif_fn("signif");
+	Rcpp::Function safe_read_chain_fn("safe_read_chain");
+	Rcpp::Function dirname_fn("dirname");
+	Rcpp::Function basename_fn("basename");
+
+	std::string outdir = Rcpp::as<std::string>(dirname_fn(outfile));
+	std::string fname = Rcpp::as<std::string>(basename_fn(outfile));
+
+	bool dir_exists = Rcpp::as<bool>(dir_exists_fn(outdir));
+	if (!dir_exists) {
+		dir_create_fn(outdir, Rcpp::Named("recursive", true));
+	}
+
+	if (nchains == 0) {
+		Rcpp::List empty(0);
+		saveRDS_fn(empty, outfile);
+		return empty;
+	}
+
+	arma::Col<int> init_edge = r_matrix_to_edge(phy_init["edge"]);
+	int max_len = max_iter + 1;
+
+	std::vector< std::vector<arma::Col<int>> > edge_list_all(static_cast<std::size_t>(nchains));
+
+	for (int chain_id = 1; chain_id <= nchains; ++chain_id) {
+		int idx = chain_id - 1;
+		std::string chain_path = outdir + "/chain" + std::to_string(chain_id) + "_" + fname;
+		std::vector<arma::Col<int>> chain_list;
+
+		if (resume) {
+			Rcpp::RObject existing = safe_read_chain_fn(chain_path);
+			if (!existing.isNULL()) {
+				chain_list = r_list_to_chain(Rcpp::as<Rcpp::List>(existing));
+			}
+		}
+
+		if (chain_list.empty()) {
+			chain_list.push_back(init_edge);
+		}
+
+		if (static_cast<int>(chain_list.size()) > max_len) {
+			chain_list.resize(max_len);
+			Rcpp::List chain_r_trim = chain_to_r_list(chain_list);
+			saveRDS_fn(chain_r_trim, chain_path);
+		}
+
+		edge_list_all[idx] = std::move(chain_list);
+	}
+
+	bool all_done = true;
+	for (const auto& chain_list : edge_list_all) {
+		if (static_cast<int>(chain_list.size()) < max_len) {
+			all_done = false;
+			break;
+		}
+	}
+
+	if (all_done) {
+		message_fn("All chains have completed the requested iterations.");
+	} else {
+		std::ostringstream msg;
+		msg << "Running MCMC with " << nchains << " chains in batches of " << batch_size;
+		message_fn(msg.str());
+		int n_batches = (max_iter + batch_size - 1) / batch_size;
+		for (int batch = 1; batch <= n_batches; ++batch) {
+			std::ostringstream msg_batch;
+			msg_batch << "Running batch " << batch << " of " << n_batches;
+			message_fn(msg_batch.str());
+
+			for (int chain_id = 1; chain_id <= nchains; ++chain_id) {
+				int idx = chain_id - 1;
+				auto& chain_list = edge_list_all[idx];
+				int current_len = static_cast<int>(chain_list.size());
+				int n_remaining = std::max(0, max_iter - current_len + 1);
+				if (n_remaining == 0) {
+					continue;
+				}
+
+				int max_iter_i = std::min(batch_size, n_remaining);
+				const arma::Col<int>& start_edge = chain_list.back();
+				int seed_batch = static_cast<int>(1000003LL * (batch - 1) + chain_id);
+				auto elist = tree_mcmc_cpp_cached(start_edge, logP_list, logA_vec, max_iter_i, seed_batch);
+				if (!elist.empty()) {
+					elist.erase(elist.begin());
+					for (auto& edge : elist) {
+						if (static_cast<int>(chain_list.size()) >= max_len) break;
+						chain_list.push_back(std::move(edge));
+					}
+				}
+
+				if (static_cast<int>(chain_list.size()) > max_len) {
+					chain_list.resize(max_len);
+				}
+
+				std::string chain_path = outdir + "/chain" + std::to_string(chain_id) + "_" + fname;
+				Rcpp::List chain_r = chain_to_r_list(chain_list);
+				saveRDS_fn(chain_r, chain_path);
+			}
+
+			gc_fn();
+
+			if (diag) {
+				Rcpp::List chains_r = chains_to_r_list(edge_list_all);
+				Rcpp::RObject asdsf_obj = compute_asdsf_fn(
+					Rcpp::Named("phy_target", phy_init),
+					Rcpp::Named("edge_list_chains", chains_r),
+					Rcpp::Named("min_freq", 0),
+					Rcpp::Named("rooted", true),
+					Rcpp::Named("ncores", ncores));
+				double asdsf_val = Rcpp::as<double>(asdsf_obj);
+				Rcpp::NumericVector sig = signif_fn(Rcpp::wrap(asdsf_val), Rcpp::Named("digits", 4));
+				std::ostringstream msg_diag;
+				msg_diag << "ASDSF (target clades) after batch " << batch << ": " << sig[0];
+				message_fn(msg_diag.str());
+			}
+		}
+	}
+
+	Rcpp::List edge_list_all_r = chains_to_r_list(edge_list_all);
+	saveRDS_fn(edge_list_all_r, outfile);
+
+	return edge_list_all_r;
 }

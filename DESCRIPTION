@@ -16,6 +16,7 @@ Imports:
     igraph,
     ggplot2,
     dplyr,
+    qs2,
     tidygraph,
     tidyr,
     TreeTools,

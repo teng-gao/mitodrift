@@ -193,8 +193,8 @@ if (!dir.exists(opts$outdir)) {
 }
 
 # Define output file paths
-ml_trace_file <- file.path(opts$outdir, "tree_ml_trace.rds")
-mcmc_trace_file <- file.path(opts$outdir, "tree_mcmc_trace.rds")
+ml_trace_file <- file.path(opts$outdir, "tree_ml_trace.qs2")
+mcmc_trace_file <- file.path(opts$outdir, "tree_mcmc_trace.qs2")
 annot_tree_file <- file.path(opts$outdir, "tree_annotated.newick")
 mitodrift_object_file <- file.path(opts$outdir, "mitodrift_object.rds")
 

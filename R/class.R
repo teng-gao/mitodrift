@@ -547,7 +547,7 @@ MitoDrift <- R6::R6Class("MitoDrift",
             }
             
             message('Loading MCMC results from ', mcmc_trace_file)
-            res_mcmc <- readRDS(mcmc_trace_file)
+            res_mcmc <- qs2::qd_read(mcmc_trace_file)
             
             message('Collecting MCMC chains...')
             edges_mcmc <- collect_edges(res_mcmc, burnin = burnin, max_iter = max_iter)
