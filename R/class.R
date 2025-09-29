@@ -463,6 +463,7 @@ MitoDrift <- R6::R6Class("MitoDrift",
             batch_size = 1000,
             outfile = NULL,
             resume = FALSE,
+            diag = TRUE,
             use_nj = FALSE
         ) {
 
@@ -500,6 +501,7 @@ MitoDrift <- R6::R6Class("MitoDrift",
                 ncores = ncores,
                 outfile = self$mcmc_trace_file,
                 resume = resume,
+                diag = diag,
                 batch_size = batch_size
             )
             

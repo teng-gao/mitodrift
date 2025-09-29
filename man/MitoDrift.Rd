@@ -240,16 +240,15 @@ Optimization result object
 \if{html}{\out{<a id="method-MitoDrift-optimize_tree_em"></a>}}
 \if{latex}{\out{\hypertarget{method-MitoDrift-optimize_tree_em}{}}}
 \subsection{Method \code{optimize_tree_em()}}{
-Alternating ML tree optimization with periodic EM parameter updates
+Alternating ML optimization and EM parameter updates until convergence
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{MitoDrift$optimize_tree_em(
   total_iter = 100,
-  step_iter = 10,
   ncores = 1,
   outfile = NULL,
   resume = FALSE,
   trace_interval = 5,
-  em_max_iter = 5,
+  em_max_iter = 100,
   em_epsilon = 0.001,
   em_ncores = 1,
   em_lower_bounds = c(ngen = 1, log_eps = log(1e-12), log_err = log(1e-12)),
@@ -260,9 +259,7 @@ Alternating ML tree optimization with periodic EM parameter updates
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{total_iter}}{Total number of ML optimization iterations (default: 100)}
-
-\item{\code{step_iter}}{Number of ML iterations between EM updates (default: 10)}
+\item{\code{total_iter}}{Upper bound for ML iterations per optimization phase (default: 100)}
 
 \item{\code{ncores}}{Number of cores for ML optimization (default: 1)}
 
@@ -298,6 +295,7 @@ Run phylogenetic MCMC sampling
   batch_size = 1000,
   outfile = NULL,
   resume = FALSE,
+  diag = TRUE,
   use_nj = FALSE
 )}\if{html}{\out{</div>}}
 }

@@ -1259,7 +1259,7 @@ safe_read_chain = function(path) {
 #' @export
 run_tree_mcmc_batch = function(
     phy_init, logP_list, logA_vec, outfile, max_iter = 100, nchains = 1, ncores = 1,
-    batch_size = 1000, resume = FALSE
+    batch_size = 1000, diag = TRUE, resume = FALSE
 ) {
 
     chains = 1:nchains
@@ -1348,6 +1348,17 @@ run_tree_mcmc_batch = function(
                 })
             # Encourage cleanup between batches
             invisible(gc())
+
+            if (diag) {
+                asdsf_res <- compute_target_tree_asdsf(
+                    phy_target = phy_init,
+                    edge_list_chains = edge_list_all,
+                    min_freq = 0,
+                    rooted = TRUE,
+                    ncores = ncores
+                )
+                message('ASDSF (target clades) after batch ', i, ': ', signif(asdsf_res$asdsf, 4))
+            }
         }
     }
 

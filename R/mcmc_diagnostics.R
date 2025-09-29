@@ -1,3 +1,189 @@
+## -----------------------------------------------------------------------------
+#' Compute ASDSF across chains using clades from a target tree
+#'
+#' @param phy_target A rooted `phylo` object defining the reference clades.
+#' @param edge_list_chains List of chains, each a list of edge matrices (2-column integer matrices).
+#' @param rooted Logical; treat trees as rooted when matching clades. Default `TRUE`.
+#' @param normalize Logical; pass through to `prop_clades_par` (default `TRUE`).
+#' @param min_freq Minimum clade frequency threshold used when averaging SDs. Default `0.1`.
+#'
+#' @return A list with elements `asdsf`, `per_clade_sd`, `keep_mask`, and `freq_matrix`.
+#' @export
+compute_target_tree_asdsf <- function(phy_target,
+                                      edge_list_chains,
+                                      rooted = TRUE,
+                                      normalize = TRUE,
+									  ncores = 1,
+                                      min_freq = 0) {
+
+    if (!inherits(phy_target, "phylo")) {
+        stop('`phy_target` must be a phylo object')
+    }
+    if (!is.list(edge_list_chains) || length(edge_list_chains) == 0) {
+        stop('`edge_list_chains` must be a non-empty list of chains')
+    }
+
+	RhpcBLASctl::blas_set_num_threads(1)
+    RhpcBLASctl::omp_set_num_threads(1)
+    RcppParallel::setThreadOptions(numThreads = ncores)
+
+    # Compute clade frequencies per chain relative to the target tree
+    freqs <- lapply(edge_list_chains, function(chain_edges) {
+        if (!length(chain_edges)) {
+            # No samples yet: return zeros for all target clades
+            return(rep(0, phy_target$Nnode))
+        }
+        prop_clades_par(
+            E_target = phy_target$edge,
+            edges = chain_edges,
+            rooted = rooted,
+            normalize = normalize
+        )
+    })
+
+    # Ensure all chains yield vectors of identical length
+    K <- length(freqs[[1]])
+    freq_matrix <- do.call(rbind, freqs)
+
+    if (ncol(freq_matrix) != K) {
+        stop('Mismatch in clade count across chains when computing ASDSF')
+    }
+
+    # Standard deviation per clade across chains (handle single-chain case)
+    if (nrow(freq_matrix) <= 1L) {
+        per_clade_sd <- rep(0, K)
+    } else {
+        per_clade_sd <- apply(freq_matrix, 2, stats::sd)
+        per_clade_sd[is.na(per_clade_sd)] <- 0
+    }
+
+    keep_mask <- apply(freq_matrix, 2, function(vals) any(vals > min_freq))
+    if (!any(keep_mask)) {
+        asdsf <- 0
+    } else {
+        asdsf <- mean(per_clade_sd[keep_mask])
+    }
+
+    list(
+        asdsf = asdsf,
+        per_clade_sd = per_clade_sd,
+        keep_mask = keep_mask,
+        freq_matrix = freq_matrix
+    )
+}
+
+#' Sliding-window ASDSF for a target tree
+#'
+#' Applies `compute_target_tree_asdsf()` to sequential, fixed-width windows of
+#' each MCMC chain and returns an ASDSF trajectory where each point uses all
+#' samples up to the end of the corresponding window (cumulative windows, akin to
+#' `get_asdsfs`).
+#'
+#' @param phy_target A rooted `phylo` object defining the reference clades.
+#' @param edge_list_chains List of chains, each a list of edge matrices (2-column
+#'   integer matrices) ordered by iteration.
+#' @param window_size Positive integer; number of successive samples in the base
+#'   window. Cumulative estimates are computed at multiples of this size.
+#' @param burnin Non-negative integer; number of initial samples to discard from
+#'   each chain before windowing.
+#' @param rooted Logical; treat trees as rooted when matching clades (passed to
+#'   `compute_target_tree_asdsf`).
+#' @param normalize Logical; passed to `compute_target_tree_asdsf`.
+#' @param min_freq Minimum clade frequency threshold when averaging SDs. Passed
+#'   to `compute_target_tree_asdsf`.
+#' @param min_chains Minimum number of chains required after filtering.
+#'
+#' @return A data.frame with one row per window containing the ASDSF value, the
+#'   window bounds (1-indexed, post-burnin), and a list column `details` holding
+#'   the full result from `compute_target_tree_asdsf` for that window. Attributes
+#'   `window_size`, `step`, and `burnin` are attached.
+#'
+#' @seealso [compute_target_tree_asdsf]
+#' @export
+compute_target_tree_asdsf_sliding <- function(phy_target,
+                                             edge_list_chains,
+                                             window_size = 50L,
+                                             burnin = 0L,
+                                             rooted = TRUE,
+                                             normalize = TRUE,
+                                             min_freq = 0,
+											 ncores = 1,
+                                             min_chains = 1L) {
+
+    window_size <- as.integer(window_size)
+    burnin <- as.integer(burnin)
+    min_chains <- as.integer(min_chains)
+
+    # Drop burn-in samples from each chain
+    chains_trim <- lapply(edge_list_chains, function(chain) {
+        if (!length(chain)) return(list())
+        n <- length(chain)
+        if (burnin >= n) {
+            list()
+        } else {
+            chain[(burnin + 1L):n]
+        }
+    })
+
+    len_vec <- vapply(chains_trim, length, integer(1))
+    keep_idx <- which(len_vec >= window_size)
+    if (!length(keep_idx)) {
+        warning('No chains have at least `window_size` samples after burn-in; returning empty result.')
+        return(data.frame())
+    }
+    if (length(keep_idx) < length(chains_trim)) {
+        chains_trim <- chains_trim[keep_idx]
+        len_vec <- len_vec[keep_idx]
+    }
+
+    min_len <- min(len_vec)
+    if (min_len < window_size) {
+        warning('Minimum chain length is smaller than `window_size`; returning empty result.')
+        return(data.frame())
+    }
+
+    ends <- seq.int(window_size, min_len, by = window_size)
+    if (!length(ends)) {
+        warning('No windows available with the requested parameters; returning empty result.')
+        return(data.frame())
+    }
+
+    starts <- pmax(1L, ends - window_size + 1L)
+
+    res_list <- vector('list', length(ends))
+    for (idx in seq_along(ends)) {
+        end <- ends[idx]
+        window_chains <- lapply(chains_trim, function(chain) chain[seq_len(end)])
+        res_list[[idx]] <- compute_target_tree_asdsf(
+            phy_target = phy_target,
+            edge_list_chains = window_chains,
+            rooted = rooted,
+            normalize = normalize,
+			ncores = ncores,
+            min_freq = min_freq
+        )
+    }
+
+    asdsf_vals <- vapply(res_list, function(x) x$asdsf, numeric(1))
+    summary_df <- data.frame(
+        window = seq_along(ends),
+        window_start = starts + burnin,
+        window_end = ends + burnin,
+        cumulative_samples = ends,
+        n_chains = length(chains_trim),
+        window_size = window_size,
+        asdsf = asdsf_vals,
+        stringsAsFactors = FALSE
+    )
+
+    attr(summary_df, 'window_size') <- window_size
+    attr(summary_df, 'burnin') <- burnin
+
+    summary_df
+}
+
+
+#' Optimized version of `get_slide_freq_table` from rwty
 get_slide_freq_table = function(tree.list, burnin = 0, window.size = 20, gens.per.tree = 1) {
 	# Optimized: avoid per-window merges; build a dense matrix of clade frequencies.
 	# Keeps original behavior: uses only FULL windows after burnin; if none, returns empty data.frame.
@@ -11,7 +197,7 @@ get_slide_freq_table = function(tree.list, burnin = 0, window.size = 20, gens.pe
 	idx <- seq_len(n.windows * window.size)
 	tree.windows <- split(tree.list[idx], ceiling(seq_along(idx) / window.size))
 	# compute clade frequencies per window using existing clade.freq()
-	clade.freq.list <- lapply(tree.windows, clade.freq, start = 1, end = window.size)
+	clade.freq.list <- lapply(tree.windows, rwty::clade.freq, start = 1, end = window.size)
 	win_names <- prettyNum(seq((burnin + 1L), (burnin + length(clade.freq.list) * window.size), by = window.size) * gens.per.tree, sci = TRUE)
 	names(clade.freq.list) <- win_names
 	# union of clades across windows; fill a dense matrix (rows = clades, cols = windows)
@@ -37,7 +223,7 @@ get_slide_freq_table = function(tree.list, burnin = 0, window.size = 20, gens.pe
 	df
 }
 
-
+#' Optimized version of `get_asdsfs` from rwty
 get_asdsfs = function(slide.freq.list, min.freq = 0.1){
 	# Fast ASDSF over cumulative windows.
 	# slide.freq.list: list of slide.freq.tables (data.frames) with window columns + trailing 'sd','mean'.
@@ -215,3 +401,5 @@ get_slide_freq_table_edges <- function(edge.chain, burnin = 0, window.size = 20,
 	df$mean <- rowMeans(as.matrix(df[, win_names, drop = FALSE]))
 	df[order(df$sd, decreasing = TRUE), , drop = FALSE]
 }
+
+

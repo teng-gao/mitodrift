@@ -154,6 +154,13 @@ option_list <- list(
         metavar = "INTEGER"
     ),
     make_option(
+        c("-y", "--tree_mcmc_diag"),
+        type = "logical",
+        default = TRUE,
+        help = "Whether to run diagnostics (e.g., ASDSF) after each MCMC batch",
+        metavar = "LOGICAL"
+    ),
+    make_option(
         c("-r", "--resume"),
         type = "logical",
         default = FALSE,
@@ -255,6 +262,7 @@ md$run_mcmc(
     nchains = opts$tree_mcmc_chains,
     ncores = opts$ncores,
     batch_size = opts$tree_mcmc_batch_size,
+    diag = opts$tree_mcmc_diag,
     outfile = mcmc_trace_file,
     resume = opts$resume
 )
