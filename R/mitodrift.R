@@ -1349,17 +1349,20 @@ run_tree_mcmc_batch = function(
                     edge_list_all[[chain_id]] = new_list
                 }
                 qs2::qd_save(edge_list_all, outfile)
-            }
 
-            if (diag) {
-                asdsf <- compute_target_tree_asdsf(
-                    phy_target = phy_init,
-                    edge_list_chains = edge_list_all,
-                    min_freq = 0,
-                    rooted = TRUE,
-                    ncores = ncores
-                )
-                message('ASDSF (target clades) after batch ', i, ': ', signif(asdsf, 4))
+                if (diag) {
+                    asdsf <- compute_target_tree_asdsf(
+                        phy_target = phy_init,
+                        edge_list_chains = edge_list_all,
+                        min_freq = 0,
+                        rooted = TRUE,
+                        ncores = ncores
+                    )
+                    message('ASDSF (target clades) after batch ', i, ': ', signif(asdsf, 4))
+                }
+            } else {
+                message('All chains have completed the requested iterations.')
+                break
             }
         }
     }
