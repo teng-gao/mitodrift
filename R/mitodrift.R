@@ -1262,36 +1262,41 @@ run_tree_mcmc_batch = function(
     batch_size = 1000, diag = TRUE, resume = FALSE
 ) {
 
+
+    RhpcBLASctl::blas_set_num_threads(1)
+    RhpcBLASctl::omp_set_num_threads(1)
+    RcppParallel::setThreadOptions(numThreads = ncores)
+
     chains = 1:nchains
 
     outdir = dirname(outfile)
-    fname = basename(outfile)
 
     if (!dir.exists(outdir)) {
         dir.create(outdir, recursive = TRUE)
     }
 
-    # load existing chains (store as edge lists only to reduce IO/memory)
-    edge_list_all = mclapply(
-        chains,
-        mc.cores = ncores,
-        function(s) {
-            chain_path = glue('{outdir}/chain{s}_{fname}')
-            if (resume) {
-                chain_list = safe_read_chain(chain_path)
-                if (is.null(chain_list)) {
-                    chain_list = list(phy_init$edge)
-                }
-            } else {
-                chain_list = list(phy_init$edge)
-            }
-            max_len = max_iter + 1
-            if (length(chain_list) > max_len) {
-                chain_list = chain_list[1:max_len]
-                qs2::qd_save(chain_list, chain_path)
-            }
-            chain_list
-        })
+    if (resume) {
+        edge_list_all = safe_read_chain(outfile)
+    } else {
+        edge_list_all = NULL
+    }
+
+    if (is.null(edge_list_all)) {
+        edge_list_all = vector('list', length = nchains)
+    }
+
+    length(edge_list_all) = nchains
+    max_len = max_iter + 1
+    edge_list_all = lapply(edge_list_all, function(chain_list) {
+        if (is.null(chain_list) || length(chain_list) == 0) {
+            chain_list = list(phy_init$edge)
+        }
+        if (length(chain_list) > max_len) {
+            chain_list = chain_list[1:max_len]
+        }
+        chain_list
+    })
+    names(edge_list_all) = as.character(chains)
 
     # If all chains have finished, stop early
     all_done = all(sapply(chains, function(s) {
@@ -1310,56 +1315,41 @@ run_tree_mcmc_batch = function(
 
             message('Running batch ', i, ' of ', n_batches)
 
-            # Run one batch for all chains simultaneously without capturing the full list per worker
-            edge_list_all = parallel::mcmapply(
-                chain_list = edge_list_all,
-                chain_id = chains,
-                FUN = function(chain_list, chain_id, batch_id, logP_list, 
-                    logA_vec, max_iter, batch_size, outdir, fname) {
+            chain_lengths = vapply(edge_list_all, length, integer(1L))
+            n_remaining_vec = pmax(0L, max_iter - chain_lengths + 1L)
+            max_iter_vec = pmin(batch_size, n_remaining_vec)
+            seed_vec = as.integer(1000003L * (i - 1L) + chains)
+            start_edges = lapply(edge_list_all, function(chain_list) {
+                chain_list[[length(chain_list)]]
+            })
 
-                    n_remaining = max(0, max_iter - length(chain_list) + 1)
-                    if (n_remaining == 0) {
-                        return(chain_list)
-                    }
-                    max_iter_i = min(batch_size, n_remaining)
+            active_idx = which(n_remaining_vec > 0L)
 
-                    # Starting edge for this batch: last of existing chain
-                    start_edge = chain_list[[length(chain_list)]]
+            if (length(active_idx) > 0L) {
+                start_edges_active = start_edges[active_idx]
+                max_iter_active = max_iter_vec[active_idx]
+                seed_active = seed_vec[active_idx]
 
-                    seed_batch = as.integer(1000003L * (batch_id - 1L) + chain_id)
-                    elist = tree_mcmc_cpp_cached(
-                        start_edge,
-                        logP_list,
-                        logA_vec,
-                        max_iter = max_iter_i,
-                        seed = seed_batch
-                    )
+                elist_active = tree_mcmc_parallel_seeded(
+                    start_edges_active,
+                    logP_list,
+                    logA_vec,
+                    max_iter_active,
+                    seed_active
+                )
+
+                for (idx_pos in seq_along(active_idx)) {
+                    chain_id = active_idx[idx_pos]
+                    elist = elist_active[[idx_pos]]
                     elist = restore_elist(elist)
-
-                    # Drop the duplicated start state for every batch
                     if (length(elist) > 0) {
                         elist = elist[-1]
                     }
-
-                    new_list = c(chain_list, elist)
-
-                    qs2::qd_save(new_list, glue('{outdir}/chain{chain_id}_{fname}'))
-
-                    return(new_list)
-                },
-                MoreArgs = list(
-                    batch_id = i,
-                    logP_list = logP_list,
-                    logA_vec = logA_vec,
-                    max_iter = max_iter,
-                    batch_size = batch_size,
-                    outdir = outdir,
-                    fname = fname
-                ),
-                SIMPLIFY = FALSE,
-                mc.cores = ncores,
-                mc.preschedule = FALSE
-            )
+                    new_list = c(edge_list_all[[chain_id]], elist)
+                    edge_list_all[[chain_id]] = new_list
+                }
+                qs2::qd_save(edge_list_all, outfile)
+            }
 
             if (diag) {
                 asdsf <- compute_target_tree_asdsf(
