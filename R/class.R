@@ -231,6 +231,7 @@ MitoDrift <- R6::R6Class("MitoDrift",
         },
         
         #' @description Fit tree parameters using Expectation-Maximization (EM) algorithm
+        #' @param tree_fit Tree to fit parameters to
         #' @param initial_params Initial parameter values (ngen, log_eps, log_err)
         #' @param lower_bounds Lower bounds for parameters in transformed space
         #' @param upper_bounds Upper bounds for parameters in transformed space
@@ -454,6 +455,7 @@ MitoDrift <- R6::R6Class("MitoDrift",
         #' @param resume Whether to resume from existing file (default: FALSE)
         #' @param use_nj Whether to use NJ tree instead of ML tree as initial tree (default: FALSE)
         #' @param batch_size Batch size for MCMC (default: 1000)
+        #' @param diag Whether to compute ASDSF diagnostics (default: TRUE)
         #' @return MCMC result object
         run_mcmc = function(
             max_iter = 10000,

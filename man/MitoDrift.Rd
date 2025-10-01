@@ -182,6 +182,8 @@ Fit tree parameters using Expectation-Maximization (EM) algorithm
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
+\item{\code{tree_fit}}{Tree to fit parameters to}
+
 \item{\code{initial_params}}{Initial parameter values (ngen, log_eps, log_err)}
 
 \item{\code{lower_bounds}}{Lower bounds for parameters in transformed space}
@@ -314,6 +316,8 @@ Run phylogenetic MCMC sampling
 \item{\code{outfile}}{Output file for saving results (optional)}
 
 \item{\code{resume}}{Whether to resume from existing file (default: FALSE)}
+
+\item{\code{diag}}{Whether to compute ASDSF diagnostics (default: TRUE)}
 
 \item{\code{use_nj}}{Whether to use NJ tree instead of ML tree as initial tree (default: FALSE)}
 }

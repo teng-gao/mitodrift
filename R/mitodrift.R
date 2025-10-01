@@ -1275,95 +1275,90 @@ run_tree_mcmc_batch = function(
         dir.create(outdir, recursive = TRUE)
     }
 
-    if (resume) {
-        edge_list_all = safe_read_chain(outfile)
-    } else {
-        edge_list_all = NULL
-    }
-
+    edge_list_all = if (resume) safe_read_chain(outfile) else NULL
     if (is.null(edge_list_all)) {
-        edge_list_all = vector('list', length = nchains)
+        edge_list_all = vector('list', nchains)
+    } else {
+        length(edge_list_all) = nchains
     }
 
-    length(edge_list_all) = nchains
     max_len = max_iter + 1
-    edge_list_all = lapply(edge_list_all, function(chain_list) {
+    for (i in seq_along(edge_list_all)) {
+        chain_list = edge_list_all[[i]]
         if (is.null(chain_list) || length(chain_list) == 0) {
-            chain_list = list(phy_init$edge)
+            edge_list_all[[i]] = list(phy_init$edge)
+            next
         }
         if (length(chain_list) > max_len) {
-            chain_list = chain_list[1:max_len]
+            edge_list_all[[i]] = chain_list[seq_len(max_len)]
         }
-        chain_list
-    })
+    }
     names(edge_list_all) = as.character(chains)
 
-    # If all chains have finished, stop early
-    all_done = all(sapply(chains, function(s) {
-        chain_list = edge_list_all[[s]]
-        length(chain_list) >= (max_iter + 1)
-    }))
+    chain_lengths = sapply(edge_list_all, length)
+    remaining_vec = pmax(0L, max_iter - chain_lengths + 1L)
 
-    if (all_done) {
+    message('Remaining iterations per chain: ', paste(remaining_vec, collapse = ', '))
+
+    if (all(remaining_vec == 0L)) {
         message('All chains have completed the requested iterations.')
-    } else {
-        message('Running MCMC with ', length(chains), ' chains in batches of ', batch_size)
+        qs2::qd_save(edge_list_all, outfile)
+        return(edge_list_all)
+    }
 
-        n_batches = ceiling(max_iter / batch_size)
+    n_batches = ceiling(max(remaining_vec) / batch_size)
 
-        for (i in 1:n_batches) {
+    message('Running MCMC with ', length(chains), ' chains in up to ', n_batches, ' batches of ', batch_size)
 
-            message('Running batch ', i, ' of ', n_batches)
+    for (i in seq_len(n_batches)) {
 
-            chain_lengths = vapply(edge_list_all, length, integer(1L))
-            n_remaining_vec = pmax(0L, max_iter - chain_lengths + 1L)
-            max_iter_vec = pmin(batch_size, n_remaining_vec)
-            seed_vec = as.integer(1000003L * (i - 1L) + chains)
-            start_edges = lapply(edge_list_all, function(chain_list) {
-                chain_list[[length(chain_list)]]
-            })
+        chain_lengths = sapply(edge_list_all, length)
+        remaining_vec = pmax(0L, max_iter - chain_lengths + 1L)
+        active_idx = which(remaining_vec > 0L)
 
-            active_idx = which(n_remaining_vec > 0L)
+        if (length(active_idx) == 0L) {
+            message('All chains have completed the requested iterations.')
+            break
+        }
 
-            if (length(active_idx) > 0L) {
-                start_edges_active = start_edges[active_idx]
-                max_iter_active = max_iter_vec[active_idx]
-                seed_active = seed_vec[active_idx]
+        message('Running batch ', i, ' of ', n_batches)
 
-                elist_active = tree_mcmc_parallel_seeded(
-                    start_edges_active,
-                    logP_list,
-                    logA_vec,
-                    max_iter_active,
-                    seed_active
-                )
+        iter_vec = pmin(batch_size, remaining_vec[active_idx])
+        start_edges = lapply(edge_list_all, function(chain_list) {
+            chain_list[[length(chain_list)]]
+        })[active_idx]
+        seed_vec = as.integer(1000003L * (i - 1L) + chains)[active_idx]
 
-                for (idx_pos in seq_along(active_idx)) {
-                    chain_id = active_idx[idx_pos]
-                    elist = elist_active[[idx_pos]]
-                    elist = restore_elist(elist)
-                    if (length(elist) > 0) {
-                        elist = elist[-1]
-                    }
-                    new_list = c(edge_list_all[[chain_id]], elist)
-                    edge_list_all[[chain_id]] = new_list
-                }
-                qs2::qd_save(edge_list_all, outfile)
+        elist_active = tree_mcmc_parallel_seeded(
+            start_edges,
+            logP_list,
+            logA_vec,
+            iter_vec,
+            seed_vec
+        )
 
-                if (diag) {
-                    asdsf <- compute_target_tree_asdsf(
-                        phy_target = phy_init,
-                        edge_list_chains = edge_list_all,
-                        min_freq = 0,
-                        rooted = TRUE,
-                        ncores = ncores
-                    )
-                    message('ASDSF (target clades) after batch ', i, ': ', signif(asdsf, 4))
-                }
-            } else {
-                message('All chains have completed the requested iterations.')
-                break
+        for (idx_pos in seq_along(active_idx)) {
+            chain_id = active_idx[idx_pos]
+            elist = elist_active[[idx_pos]]
+            elist = restore_elist(elist)
+            if (length(elist) > 0) {
+                elist = elist[-1]
             }
+            new_list = c(edge_list_all[[chain_id]], elist)
+            edge_list_all[[chain_id]] = new_list
+        }
+
+        qs2::qd_save(edge_list_all, outfile)
+
+        if (diag) {
+            asdsf <- compute_target_tree_asdsf(
+                phy_target = phy_init,
+                edge_list_chains = edge_list_all,
+                min_freq = 0,
+                rooted = TRUE,
+                ncores = ncores
+            )
+            message('ASDSF (target clades) after batch ', i, ': ', signif(asdsf, 4))
         }
     }
 
