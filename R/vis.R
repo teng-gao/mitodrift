@@ -3,7 +3,7 @@ plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = T
     tip_annot = NULL, annot_scale = NULL, feature_mat = NULL, feature_limits = c(-2,2), rescale = FALSE,
     title = NULL, label_site = FALSE, cell_annot = NULL, tip_lab = FALSE, node_lab = FALSE, layered = FALSE, annot_bar_height = 0.1, clade_bar_height = 1,
     het_max = 0.1, conf_min = 0, conf_max = 1, conf_label = FALSE, branch_length = TRUE, node_conf = FALSE, annot_pal = NULL, annot_legend = FALSE, label_group = FALSE,
-    annot_legend_title = '', text_size = 3, label_size = 1, mut = NULL, mark_low_cov = FALSE, facet_by_group = FALSE, flip = TRUE) {
+    annot_legend_title = '', text_size = 3, node_label_size = 1, mut = NULL, mark_low_cov = FALSE, facet_by_group = FALSE, flip = TRUE) {
 
     if (inherits(gtree, 'tbl_graph')) {
         phylo = to_phylo_reorder(gtree)
@@ -85,7 +85,7 @@ plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = T
     }
 
     if (tip_lab) {
-        p_tree = p_tree + geom_tiplab(size = label_size, vjust = 0.5, hjust = 1.2, angle = 90) +
+        p_tree = p_tree + geom_tiplab(size = node_label_size, vjust = 0.5, hjust = 1.2, angle = 90) +
             scale_x_reverse(expand = expansion(mult = c(0.15, 0.05)))
     }
 
@@ -93,7 +93,7 @@ plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = T
         p_tree = p_tree + 
             geom_text2(
                 aes(label = label, subset = !isTip, x = branch),
-                size = label_size, vjust = 0.5, hjust = 0.5
+                size = node_label_size, vjust = 0.5, hjust = 0.5
             )
     }
 
@@ -155,7 +155,7 @@ plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = T
         if (!is.list(cell_annot) || is.data.frame(cell_annot)) {
             cell_annot <- list(cell_annot)
         }
-        
+
         # Handle annot_pal - if single value, replicate for all annotations
         if (!is.null(annot_pal)) {
             if (!is.list(annot_pal)) {
@@ -164,23 +164,28 @@ plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = T
         } else {
             annot_pal <- rep(list(NULL), length(cell_annot))
         }
-        
+
         # Filter each annotation to only include cells in the tree
         cell_annot <- lapply(cell_annot, function(annot) {
             annot %>% filter(cell %in% phylo$tip.label)
         })
-        
+
+        # Determine titles for each annotation bar
+        annot_titles <- names(cell_annot)
+
         # Create separate bars for each annotation with its own palette
-        p_bars <- mapply(function(annot, pal) {
+        p_bars <- mapply(function(annot, pal, bar_title) {
             annot %>%
                 mutate(cell = factor(cell, cell_order)) %>%  
-                annot_bar(legend = annot_legend, label_group = label_group, 
-                    label_size = text_size/2,
+                annot_bar(
+                    legend = annot_legend, 
+                    label_group = label_group, 
+                    label_size = text_size,
                     annot_pal = pal,
                     annot_scale = annot_scale,
-                    legend_title = annot_legend_title, 
+                    legend_title = bar_title, 
                     layered = layered)
-        }, cell_annot, annot_pal, SIMPLIFY = FALSE)
+        }, cell_annot, annot_pal, annot_titles, SIMPLIFY = FALSE)
 
     }
 
@@ -257,8 +262,9 @@ annot_bar = function(
             strip.background = element_blank(),
             strip.text = element_blank(),
             # axis.text = element_text(size = 8),
-            axis.text.y = element_blank(),
+            axis.text.y = element_text(size = label_size, hjust = 0.5, vjust = 0.5),
             axis.text.x = element_blank(),
+            axis.title.y = element_blank(),
             plot.margin = margin(0.1,0,0.1,0, unit = 'mm')
         )
 

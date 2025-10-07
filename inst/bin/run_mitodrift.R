@@ -47,13 +47,6 @@ option_list <- list(
         metavar = "INTEGER"
     ),
     make_option(
-        c("-q", "--ncores_annot"),
-        type = "integer",
-        default = 1,
-        help = "Number of cores to use for branch confidence annotation",
-        metavar = "INTEGER"
-    ),
-    make_option(
         c("-k", "--k"),
         type = "integer",
         default = 20,
@@ -264,7 +257,7 @@ saveRDS(md, mitodrift_object_file)
 message("\n=== Annotating tree with clade frequencies ===")
 md$annotate_tree(
     burnin = opts$tree_mcmc_burnin,
-    ncores = opts$ncores_annot
+    ncores = opts$ncores
 )
 
 write.tree(md$tree_annot, annot_tree_file)

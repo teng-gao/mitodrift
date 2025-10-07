@@ -287,6 +287,21 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// save_qd_cpp
+SEXP save_qd_cpp(const Rcpp::List& objects, const Rcpp::CharacterVector& paths, int compress_level, bool shuffle, std::size_t grain_size);
+RcppExport SEXP _mitodrift_save_qd_cpp(SEXP objectsSEXP, SEXP pathsSEXP, SEXP compress_levelSEXP, SEXP shuffleSEXP, SEXP grain_sizeSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Rcpp::List& >::type objects(objectsSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::CharacterVector& >::type paths(pathsSEXP);
+    Rcpp::traits::input_parameter< int >::type compress_level(compress_levelSEXP);
+    Rcpp::traits::input_parameter< bool >::type shuffle(shuffleSEXP);
+    Rcpp::traits::input_parameter< std::size_t >::type grain_size(grain_sizeSEXP);
+    rcpp_result_gen = Rcpp::wrap(save_qd_cpp(objects, paths, compress_level, shuffle, grain_size));
+    return rcpp_result_gen;
+END_RCPP
+}
 
 static const R_CallMethodDef CallEntries[] = {
     {"_mitodrift_bipartition2", (DL_FUNC) &_mitodrift_bipartition2, 2},
@@ -309,6 +324,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_mitodrift_tree_mcmc_cpp_cached_threadsafe", (DL_FUNC) &_mitodrift_tree_mcmc_cpp_cached_threadsafe, 5},
     {"_mitodrift_tree_mcmc_parallel", (DL_FUNC) &_mitodrift_tree_mcmc_parallel, 5},
     {"_mitodrift_tree_mcmc_parallel_seeded", (DL_FUNC) &_mitodrift_tree_mcmc_parallel_seeded, 5},
+    {"_mitodrift_save_qd_cpp", (DL_FUNC) &_mitodrift_save_qd_cpp, 5},
     {NULL, NULL, 0}
 };
 

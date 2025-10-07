@@ -547,13 +547,14 @@ MitoDrift <- R6::R6Class("MitoDrift",
                 mcmc_trace_file <- self$mcmc_trace_file
             }
             
-            message('Loading MCMC results from ', mcmc_trace_file)
-            res_mcmc <- qs2::qd_read(mcmc_trace_file)
+            qs_ncores <- if (isTRUE(qs2:::check_TBB())) ncores else 1L
+            message('Loading MCMC results from ', mcmc_trace_file, ' using ', qs_ncores, ' cores')
+            res_mcmc <- qs2::qd_read(mcmc_trace_file, nthreads = qs_ncores)
             
-            message('Collecting MCMC chains...')
+            message('Collecting MCMC chains with burnin ', burnin, ' and max_iter ', max_iter, ' using ', ncores, ' cores...')
             edges_mcmc <- collect_edges(res_mcmc, burnin = burnin, max_iter = max_iter)
             
-            message('Adding clade frequencies to tree...')
+            message('Adding clade frequencies to tree with ', ncores, ' cores...')
             self$tree_annot <- add_clade_freq(tree, edges_mcmc, ncores = ncores)
             
             message('Tree annotation completed!')

@@ -1248,11 +1248,11 @@ run_tree_mcmc = function(
 }
 
 # Minimal guard: safe read for possibly truncated/partial RDS
-safe_read_chain = function(path) {
+safe_read_chain = function(path, ncores = 1) {
     if (!file.exists(path)) return(NULL)
     fi = file.info(path)
     if (is.na(fi$size) || fi$size <= 0) return(NULL)
-    tryCatch(qs2::qd_read(path), error = function(e) NULL)
+    tryCatch(qs2::qd_read(path, nthreads = ncores), error = function(e) NULL)
 }
 
 # to fix: apparently the init tree has to be rooted otherwise to_phylo_reoder won't work. 
@@ -1267,6 +1267,9 @@ run_tree_mcmc_batch = function(
     RhpcBLASctl::omp_set_num_threads(1)
     RcppParallel::setThreadOptions(numThreads = ncores)
 
+    qs_ncores <- if (isTRUE(qs2:::check_TBB())) ncores else 1L
+    message('Using ', qs_ncores, ' cores for saving/writing MCMC trace')
+
     chains = 1:nchains
 
     outdir = dirname(outfile)
@@ -1275,7 +1278,7 @@ run_tree_mcmc_batch = function(
         dir.create(outdir, recursive = TRUE)
     }
 
-    edge_list_all = if (resume) safe_read_chain(outfile) else NULL
+    edge_list_all = if (resume) safe_read_chain(outfile, ncores = qs_ncores) else NULL
     if (is.null(edge_list_all)) {
         edge_list_all = vector('list', nchains)
     } else {
@@ -1302,7 +1305,7 @@ run_tree_mcmc_batch = function(
 
     if (all(remaining_vec == 0L)) {
         message('All chains have completed the requested iterations.')
-        qs2::qd_save(edge_list_all, outfile)
+        qs2::qd_save(edge_list_all, outfile, nthreads = qs_ncores)
         return(edge_list_all)
     }
 
@@ -1312,6 +1315,8 @@ run_tree_mcmc_batch = function(
 
     for (i in seq_len(n_batches)) {
 
+        ptm <- proc.time()
+ 
         chain_lengths = sapply(edge_list_all, length)
         remaining_vec = pmax(0L, max_iter - chain_lengths + 1L)
         active_idx = which(remaining_vec > 0L)
@@ -1348,7 +1353,7 @@ run_tree_mcmc_batch = function(
             edge_list_all[[chain_id]] = new_list
         }
 
-        qs2::qd_save(edge_list_all, outfile)
+        qs2::qd_save(edge_list_all, outfile, nthreads = qs_ncores)
 
         if (diag) {
             asdsf <- compute_target_tree_asdsf(
@@ -1360,9 +1365,12 @@ run_tree_mcmc_batch = function(
             )
             message('ASDSF (target clades) after batch ', i, ': ', signif(asdsf, 4))
         }
+
+        batch_time <- proc.time() - ptm
+        message(paste('Batch', i, 'completed', paste0('(', signif(batch_time[['elapsed']], 2), 's', ')')))
     }
 
-    qs2::qd_save(edge_list_all, outfile)
+    qs2::qd_save(edge_list_all, outfile, nthreads = qs_ncores)
 
     return(edge_list_all)
 }
@@ -1718,4 +1726,13 @@ map_cell_to_tree = function(tree, cell, logliks, logA_vec, leaf_only = FALSE, nc
     res = data.frame(guide_node = labels, cell_map = cell, probs = probs, scores = scores)
 
     return(res)
+}
+
+save_qd_par = function(objects, paths, ncores = 1) {
+
+    RhpcBLASctl::blas_set_num_threads(1)
+    RhpcBLASctl::omp_set_num_threads(1)
+    RcppParallel::setThreadOptions(numThreads = ncores)
+
+    save_qd_cpp(objects, paths)
 }

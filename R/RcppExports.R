@@ -89,3 +89,16 @@ tree_mcmc_parallel_seeded <- function(start_edges, logP, logA, max_iter_vec, see
     .Call('_mitodrift_tree_mcmc_parallel_seeded', PACKAGE = 'mitodrift', start_edges, logP, logA, max_iter_vec, seeds)
 }
 
+#' Parallel qdata saver
+#' 
+#' @param objects List of data-only R objects to serialize (unsupported types become NULL, mirroring `qd_save`).
+#' @param paths Character vector of output file paths (must match length of `objects`).
+#' @param compress_level Compression level passed to qdata (default 3).
+#' @param shuffle Whether to enable byte shuffling (default TRUE).
+#' @param grain_size Chunk size for parallel processing (default 1).
+#' @return NULL invisibly on success; character vector of error messages otherwise.
+#' @export
+save_qd_cpp <- function(objects, paths, compress_level = 3L, shuffle = TRUE, grain_size = 1L) {
+    .Call('_mitodrift_save_qd_cpp', PACKAGE = 'mitodrift', objects, paths, compress_level, shuffle, grain_size)
+}
+
