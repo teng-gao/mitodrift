@@ -61,13 +61,6 @@ option_list <- list(
         metavar = "INTEGER"
     ),
     make_option(
-        c("-u", "--ncores_em"),
-        type = "integer",
-        default = 1,
-        help = "Number of cores to use for EM parameter fitting",
-        metavar = "INTEGER"
-    ),
-    make_option(
         c("-k", "--k"),
         type = "integer",
         default = 20,
@@ -294,7 +287,7 @@ if (opts$resume) {
             tree_fit = md$tree_init,
             max_iter = opts$fit_param_max_iter,
             epsilon = opts$fit_param_epsilon,
-            ncores = opts$ncores_em
+            ncores = opts$ncores
         )
     } else {
         message("\n=== Skipping parameter fitting ===")

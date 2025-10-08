@@ -16,6 +16,8 @@ get_param_lik_cpp(tree_fit, amat, dmat, ngen, err, eps, npop = 600, k = 20)
 \item{eps}{mutation rate}
 
 \item{npop}{population size}
+
+\item{k}{number of clusters for likelihood computation}
 }
 \value{
 log-likelihood
