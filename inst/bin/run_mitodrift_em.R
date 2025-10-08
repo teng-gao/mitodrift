@@ -254,7 +254,12 @@ if (!is.null(opts$mut_dat)) {
 # Step 2: Create MitoDrift object
 if (opts$resume) {
     message("=== Resuming from existing MitoDrift object ===")
-    md <- readRDS(mitodrift_object_file)
+    saved_md <- readRDS(mitodrift_object_file)
+    if (is.null(saved_md$amat) || is.null(saved_md$dmat)) {
+        stop("Saved MitoDrift object lacks `amat`/`dmat`; cannot resume.")
+    }
+    md <- MitoDrift$new(amat = saved_md$amat, dmat = saved_md$dmat, model_params = saved_md$model_params, build_tree = FALSE)
+    md <- md$copy(saved_md)
     
     # Check if model components are initialized
     if (is.null(md$logP) || is.null(md$logA)) {

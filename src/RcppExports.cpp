@@ -147,6 +147,19 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// compute_node_edge_beliefs_bp2
+Rcpp::List compute_node_edge_beliefs_bp2(arma::Col<int> E, const std::vector< std::vector<double> >& logP_list, const std::vector<double>& logA);
+RcppExport SEXP _mitodrift_compute_node_edge_beliefs_bp2(SEXP ESEXP, SEXP logP_listSEXP, SEXP logASEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< arma::Col<int> >::type E(ESEXP);
+    Rcpp::traits::input_parameter< const std::vector< std::vector<double> >& >::type logP_list(logP_listSEXP);
+    Rcpp::traits::input_parameter< const std::vector<double>& >::type logA(logASEXP);
+    rcpp_result_gen = Rcpp::wrap(compute_node_edge_beliefs_bp2(E, logP_list, logA));
+    return rcpp_result_gen;
+END_RCPP
+}
 // score_trees_parallel
 NumericVector score_trees_parallel(const std::vector<arma::Col<int>>& trees, const std::vector< std::vector<double> >& logP, const std::vector<double>& logA);
 RcppExport SEXP _mitodrift_score_trees_parallel(SEXP treesSEXP, SEXP logPSEXP, SEXP logASEXP) {
@@ -314,6 +327,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_mitodrift_score_tree_bp_wrapper", (DL_FUNC) &_mitodrift_score_tree_bp_wrapper, 3},
     {"_mitodrift_score_tree_bp2", (DL_FUNC) &_mitodrift_score_tree_bp2, 7},
     {"_mitodrift_score_tree_bp_wrapper2", (DL_FUNC) &_mitodrift_score_tree_bp_wrapper2, 3},
+    {"_mitodrift_compute_node_edge_beliefs_bp2", (DL_FUNC) &_mitodrift_compute_node_edge_beliefs_bp2, 3},
     {"_mitodrift_score_trees_parallel", (DL_FUNC) &_mitodrift_score_trees_parallel, 3},
     {"_mitodrift_score_tree_bp_wrapper_multi", (DL_FUNC) &_mitodrift_score_tree_bp_wrapper_multi, 3},
     {"_mitodrift_nni_cpp_parallel", (DL_FUNC) &_mitodrift_nni_cpp_parallel, 3},

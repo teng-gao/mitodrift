@@ -49,6 +49,10 @@ score_tree_bp_wrapper2 <- function(E, logP_list, logA) {
     .Call('_mitodrift_score_tree_bp_wrapper2', PACKAGE = 'mitodrift', E, logP_list, logA)
 }
 
+compute_node_edge_beliefs_bp2 <- function(E, logP_list, logA) {
+    .Call('_mitodrift_compute_node_edge_beliefs_bp2', PACKAGE = 'mitodrift', E, logP_list, logA)
+}
+
 score_trees_parallel <- function(trees, logP, logA) {
     .Call('_mitodrift_score_trees_parallel', PACKAGE = 'mitodrift', trees, logP, logA)
 }

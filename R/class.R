@@ -47,7 +47,7 @@ MitoDrift <- R6::R6Class("MitoDrift",
         #' @param model_params Model parameters (optional)
         initialize = function(
                 mut_dat = NULL, amat = NULL, dmat = NULL, 
-                model_params = NULL
+                model_params = NULL, build_tree = TRUE
             ) {
             
             # Set model parameters if complete
@@ -92,8 +92,10 @@ MitoDrift <- R6::R6Class("MitoDrift",
                 stop('Zero cells or no shared mutations')
             }
             
-            message('Building initial tree...')
-            self$tree_init <- make_rooted_nj(self$vmat) %>% reorder_phylo()
+            if (build_tree) {
+                message('Building initial tree...')
+                self$tree_init <- make_rooted_nj(self$vmat) %>% reorder_phylo()
+            }
 
         },
         
@@ -568,13 +570,14 @@ MitoDrift <- R6::R6Class("MitoDrift",
         #' 
         #' @param old_obj The old MitoDrift object to copy from
         #' @return A new MitoDrift object with the same data
-        copy = function(old_obj) {
+        copy = function(old_obj, rebuild_tree = FALSE) {
             
             # Create new instance with same data
             new_obj <- MitoDrift$new(
                 amat = old_obj$amat,
                 dmat = old_obj$dmat,
-                model_params = old_obj$model_params
+                model_params = old_obj$model_params,
+                build_tree = FALSE
             )
             
             # List of all fields to copy
