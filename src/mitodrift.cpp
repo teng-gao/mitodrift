@@ -435,6 +435,178 @@ static inline void compute_down_msg_fast(
 	double* out,
 	double* su);
 
+struct BeliefScratch {
+	std::vector<double> Uin;
+	std::vector<double> up_to_parent;
+	std::vector<double> down_in;
+	std::vector<double> temp;
+	std::vector<double> u;
+	std::vector<double> S_parent;
+	std::vector<double> down_msg;
+	std::vector<double> a;
+	std::vector<double> b;
+	std::vector<int> stack;
+
+	BeliefScratch(int n, int C)
+		: Uin(static_cast<std::size_t>(n) * static_cast<std::size_t>(C)),
+		  up_to_parent(static_cast<std::size_t>(n) * static_cast<std::size_t>(C)),
+		  down_in(static_cast<std::size_t>(n) * static_cast<std::size_t>(C)),
+		  temp(C), u(C), S_parent(C), down_msg(C), a(C), b(C) {
+		stack.reserve(static_cast<std::size_t>(n));
+	}
+};
+
+static inline double process_belief_locus(
+	const double* P,
+	double* node_out,
+	double* edge_out,
+	BeliefScratch& scratch,
+	int m,
+	int n,
+	int C,
+	int root,
+	const int* parent_ptr,
+	const int* child_ptr,
+	const std::vector< std::array<int,2> >& children_of,
+	const double* expA_shifted_ptr,
+	const double* expA_ptr,
+	const double* row_maxA_ptr)
+{
+	const double neg_inf = -std::numeric_limits<double>::infinity();
+	const std::size_t nC = static_cast<std::size_t>(n) * static_cast<std::size_t>(C);
+
+	double* const Uin_data = scratch.Uin.data();
+	double* const up_data = scratch.up_to_parent.data();
+	double* const down_data = scratch.down_in.data();
+	double* const temp_data = scratch.temp.data();
+	double* const u_data = scratch.u.data();
+	double* const S_parent_data = scratch.S_parent.data();
+	double* const down_msg_data = scratch.down_msg.data();
+	double* const a_data = scratch.a.data();
+	double* const b_data = scratch.b.data();
+	std::vector<int>& stack = scratch.stack;
+
+	std::fill(Uin_data, Uin_data + nC, 0.0);
+	std::fill(up_data, up_data + nC, 0.0);
+	std::fill(down_data, down_data + nC, 0.0);
+
+	for (int i = 0; i < m; ++i) {
+		const int par = parent_ptr[i];
+		const int node = child_ptr[i];
+		double max_t = neg_inf;
+		int offP = node;
+		double* const Uin_node = Uin_data + static_cast<std::size_t>(node) * C;
+		double* const up_node = up_data + static_cast<std::size_t>(node) * C;
+		double* const Uin_parent = Uin_data + static_cast<std::size_t>(par) * C;
+		for (int c = 0; c < C; ++c, offP += n) {
+			const double v = P[offP] + Uin_node[c];
+			temp_data[c] = v;
+			if (v > max_t) max_t = v;
+		}
+		for (int c = 0; c < C; ++c) u_data[c] = std::exp(temp_data[c] - max_t);
+
+		const double* rowA = expA_shifted_ptr;
+		for (int r = 0; r < C; ++r, rowA += C) {
+			double s = 0.0;
+			for (int j = 0; j < C; ++j) s += rowA[j] * u_data[j];
+			const double f = row_maxA_ptr[r] + max_t + std::log(s);
+			up_node[r] = f;
+			Uin_parent[r] += f;
+		}
+	}
+
+	stack.clear();
+	stack.push_back(root);
+	while (!stack.empty()) {
+		const int u_node = stack.back();
+		stack.pop_back();
+		double* const down_parent = down_data + static_cast<std::size_t>(u_node) * C;
+		double* const Uin_parent = Uin_data + static_cast<std::size_t>(u_node) * C;
+		const auto& ch = children_of[u_node];
+		for (int t = 0; t < 2; ++t) {
+			const int v = ch[t];
+			if (v < 0) continue;
+			double* const down_child = down_data + static_cast<std::size_t>(v) * C;
+			double* const up_child = up_data + static_cast<std::size_t>(v) * C;
+			for (int r = 0; r < C; ++r) {
+				const double P_ur = (u_node == root)
+					? (r == 0 ? 0.0 : neg_inf)
+					: P[static_cast<std::size_t>(r) * n + u_node];
+				S_parent_data[r] = P_ur + down_parent[r] + Uin_parent[r] - up_child[r];
+			}
+			compute_down_msg_fast(S_parent_data, expA_ptr, C, down_msg_data, u_data);
+			for (int k = 0; k < C; ++k) down_child[k] = down_msg_data[k];
+			stack.push_back(v);
+		}
+	}
+
+	double logZ_root = 0.0;
+	for (int v = 0; v < n; ++v) {
+		double maxW = neg_inf;
+		const double* const down_v = down_data + static_cast<std::size_t>(v) * C;
+		const double* const Uin_v = Uin_data + static_cast<std::size_t>(v) * C;
+		for (int c = 0; c < C; ++c) {
+			const double P_vc = (v == root)
+				? (c == 0 ? 0.0 : neg_inf)
+				: P[static_cast<std::size_t>(c) * n + v];
+			temp_data[c] = P_vc + Uin_v[c] + down_v[c];
+			if (temp_data[c] > maxW) maxW = temp_data[c];
+		}
+		double denom = 0.0;
+		double* const node_col = node_out + static_cast<std::size_t>(v);
+		for (int c = 0; c < C; ++c) {
+			const double val = std::exp(temp_data[c] - maxW);
+			node_col[static_cast<std::size_t>(c) * n] = val;
+			denom += val;
+		}
+		const double inv = 1.0 / denom;
+		for (int c = 0; c < C; ++c) node_col[static_cast<std::size_t>(c) * n] *= inv;
+		if (v == root) logZ_root = maxW + std::log(denom);
+	}
+
+	const std::size_t stride_parent = static_cast<std::size_t>(m);
+	const std::size_t stride_child = stride_parent * static_cast<std::size_t>(C);
+	for (int i = 0; i < m; ++i) {
+		const int u_node = parent_ptr[i];
+		const int v = child_ptr[i];
+		const double* const down_u = down_data + static_cast<std::size_t>(u_node) * C;
+		const double* const Uin_u = Uin_data + static_cast<std::size_t>(u_node) * C;
+		const double* const up_v = up_data + static_cast<std::size_t>(v) * C;
+		const double* const down_v = down_data + static_cast<std::size_t>(v) * C;
+		const double* const Uin_v = Uin_data + static_cast<std::size_t>(v) * C;
+		for (int r = 0; r < C; ++r) {
+			const double P_ur = (u_node == root)
+				? (r == 0 ? 0.0 : neg_inf)
+				: P[static_cast<std::size_t>(r) * n + u_node];
+			S_parent_data[r] = P_ur + down_u[r] + Uin_u[r] - up_v[r];
+		}
+		for (int k = 0; k < C; ++k) down_msg_data[k] = P[static_cast<std::size_t>(k) * n + v] + Uin_v[k];
+		double maxWr = neg_inf;
+		for (int r = 0; r < C; ++r) if (S_parent_data[r] > maxWr) maxWr = S_parent_data[r];
+		for (int r = 0; r < C; ++r) a_data[r] = std::exp(S_parent_data[r] - maxWr);
+		double maxY = neg_inf;
+		for (int k = 0; k < C; ++k) if (down_msg_data[k] > maxY) maxY = down_msg_data[k];
+		for (int k = 0; k < C; ++k) b_data[k] = std::exp(down_msg_data[k] - maxY);
+		double denom = 0.0;
+		for (int r = 0; r < C; ++r) {
+			double s = 0.0;
+			const double* const Arow = expA_ptr + static_cast<std::size_t>(r) * C;
+			for (int k = 0; k < C; ++k) s += Arow[k] * b_data[k];
+			denom += a_data[r] * s;
+		}
+		const double inv = 1.0 / denom;
+		for (int r = 0; r < C; ++r) {
+			const double* const Arow = expA_ptr + static_cast<std::size_t>(r) * C;
+			const std::size_t base_idx_r = static_cast<std::size_t>(i) + static_cast<std::size_t>(r) * stride_parent;
+			for (int k = 0; k < C; ++k) {
+				edge_out[base_idx_r + static_cast<std::size_t>(k) * stride_child] = a_data[r] * Arow[k] * b_data[k] * inv;
+			}
+		}
+	}
+
+	return logZ_root;
+}
+
 struct ComputeNodeEdgeBeliefsWorker : public Worker {
 	const int m;
 	const int n;
@@ -471,147 +643,24 @@ struct ComputeNodeEdgeBeliefsWorker : public Worker {
 		  logZ_vals(logZ_vals_) {}
 
 	void operator()(std::size_t begin, std::size_t end) {
-		const double neg_inf = -std::numeric_limits<double>::infinity();
-		const std::size_t nC = static_cast<std::size_t>(n) * static_cast<std::size_t>(C);
-
-		std::vector<double> Uin(nC);
-		std::vector<double> up_to_parent(nC);
-		std::vector<double> down_in(nC);
-		std::vector<double> temp(C);
-		std::vector<double> u(C);
-		std::vector<double> S_parent(C);
-		std::vector<double> down_msg(C);
-		std::vector<double> a(C);
-		std::vector<double> b(C);
-		std::vector<int> stack;
-		stack.reserve(static_cast<std::size_t>(n));
+		const double* const expA_shifted_ptr = expA_shifted.data();
+		const double* const expA_ptr = expA.data();
+		const double* const row_maxA_ptr = row_maxA.data();
+		BeliefScratch scratch(n, C);
 
 		for (std::size_t idx_l = begin; idx_l < end; ++idx_l) {
-			const std::vector<double>& P_in = logP_list[idx_l];
-			std::vector<double>& node_out = node_storage[idx_l];
-			std::vector<double>& edge_out = edge_storage[idx_l];
-			double logZ_root = 0.0;
-
-			std::fill(Uin.begin(), Uin.end(), 0.0);
-			std::fill(up_to_parent.begin(), up_to_parent.end(), 0.0);
-			std::fill(down_in.begin(), down_in.end(), 0.0);
-
-			for (int i = 0; i < m; ++i) {
-				const int par = parent_ptr[i];
-				const int node = child_ptr[i];
-				double max_t = neg_inf;
-				int offP = node;
-				const int base_node = node * C;
-				for (int c = 0; c < C; ++c, offP += n) {
-					const double v = P_in[offP] + Uin[static_cast<std::size_t>(base_node) + c];
-					temp[c] = v;
-					if (v > max_t) max_t = v;
-				}
-				for (int c = 0; c < C; ++c) u[c] = std::exp(temp[c] - max_t);
-
-				const double* rowA = expA_shifted.data();
-				const int base_par = par * C;
-				for (int r = 0; r < C; ++r, rowA += C) {
-					double s = 0.0;
-					for (int j = 0; j < C; ++j) s += rowA[j] * u[j];
-					const double f = row_maxA[r] + max_t + std::log(s);
-					up_to_parent[static_cast<std::size_t>(node) * C + r] = f;
-					Uin[static_cast<std::size_t>(base_par) + r] += f;
-				}
-			}
-
-			stack.clear();
-			stack.push_back(root);
-			while (!stack.empty()) {
-				const int u_node = stack.back();
-				stack.pop_back();
-				const auto& ch = children_of[u_node];
-				for (int t = 0; t < 2; ++t) {
-					const int v = ch[t];
-					if (v < 0) continue;
-					for (int r = 0; r < C; ++r) {
-						const double P_ur = (u_node == root)
-							? (r == 0 ? 0.0 : neg_inf)
-							: P_in[static_cast<std::size_t>(r) * n + u_node];
-						S_parent[r] = P_ur
-							+ down_in[static_cast<std::size_t>(u_node) * C + r]
-							+ Uin[static_cast<std::size_t>(u_node) * C + r]
-							- up_to_parent[static_cast<std::size_t>(v) * C + r];
-					}
-					compute_down_msg_fast(S_parent.data(), expA.data(), C, down_msg.data(), u.data());
-					for (int k = 0; k < C; ++k) down_in[static_cast<std::size_t>(v) * C + k] = down_msg[k];
-					stack.push_back(v);
-				}
-			}
-
-			for (int v = 0; v < n; ++v) {
-				double maxW = neg_inf;
-				for (int c = 0; c < C; ++c) {
-					const double P_vc = (v == root)
-						? (c == 0 ? 0.0 : neg_inf)
-						: P_in[static_cast<std::size_t>(c) * n + v];
-					temp[c] = P_vc
-						+ Uin[static_cast<std::size_t>(v) * C + c]
-						+ down_in[static_cast<std::size_t>(v) * C + c];
-					if (temp[c] > maxW) maxW = temp[c];
-				}
-				double denom = 0.0;
-				for (int c = 0; c < C; ++c) {
-					const double val = std::exp(temp[c] - maxW);
-					node_out[static_cast<std::size_t>(v) + static_cast<std::size_t>(c) * n] = val;
-					denom += val;
-				}
-				const double inv = 1.0 / denom;
-				for (int c = 0; c < C; ++c) {
-					node_out[static_cast<std::size_t>(v) + static_cast<std::size_t>(c) * n] *= inv;
-				}
-				if (v == root) {
-					logZ_root = maxW + std::log(denom);
-				}
-			}
-
-			for (int i = 0; i < m; ++i) {
-				const int u_node = parent_ptr[i];
-				const int v = child_ptr[i];
-				for (int r = 0; r < C; ++r) {
-					const double P_ur = (u_node == root)
-						? (r == 0 ? 0.0 : neg_inf)
-						: P_in[static_cast<std::size_t>(r) * n + u_node];
-					S_parent[r] = P_ur
-						+ down_in[static_cast<std::size_t>(u_node) * C + r]
-						+ Uin[static_cast<std::size_t>(u_node) * C + r]
-						- up_to_parent[static_cast<std::size_t>(v) * C + r];
-				}
-				for (int k = 0; k < C; ++k) {
-					down_msg[k] = P_in[static_cast<std::size_t>(k) * n + v]
-						+ Uin[static_cast<std::size_t>(v) * C + k];
-				}
-				double maxWr = neg_inf;
-				for (int r = 0; r < C; ++r) if (S_parent[r] > maxWr) maxWr = S_parent[r];
-				for (int r = 0; r < C; ++r) a[r] = std::exp(S_parent[r] - maxWr);
-				double maxY = neg_inf;
-				for (int k = 0; k < C; ++k) if (down_msg[k] > maxY) maxY = down_msg[k];
-				for (int k = 0; k < C; ++k) b[k] = std::exp(down_msg[k] - maxY);
-				double denom = 0.0;
-				for (int r = 0; r < C; ++r) {
-					double s = 0.0;
-					const double* Arow = expA.data() + static_cast<std::size_t>(r) * C;
-					for (int k = 0; k < C; ++k) s += Arow[k] * b[k];
-					denom += a[r] * s;
-				}
-				const double inv = 1.0 / denom;
-				for (int r = 0; r < C; ++r) {
-					const double* Arow = expA.data() + static_cast<std::size_t>(r) * C;
-					for (int k = 0; k < C; ++k) {
-						const std::size_t idx = static_cast<std::size_t>(i)
-							+ static_cast<std::size_t>(r) * static_cast<std::size_t>(m)
-							+ static_cast<std::size_t>(k) * static_cast<std::size_t>(m) * static_cast<std::size_t>(C);
-						edge_out[idx] = a[r] * Arow[k] * b[k] * inv;
-					}
-				}
-			}
-
-			logZ_vals[idx_l] = logZ_root;
+			logZ_vals[idx_l] = process_belief_locus(
+				logP_list[idx_l].data(),
+				node_storage[idx_l].data(),
+				edge_storage[idx_l].data(),
+				scratch,
+				m, n, C, root,
+				parent_ptr,
+				child_ptr,
+				children_of,
+				expA_shifted_ptr,
+				expA_ptr,
+				row_maxA_ptr);
 		}
 	}
 };
