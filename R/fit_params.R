@@ -20,7 +20,7 @@ fit_params_em = function(tree_fit, amat, dmat,
 	max_iter = 10, k = 20, npop = 600, ncores = 1, epsilon = 1e-3, trace = TRUE
 ) {
 
-	# always renumber tree otherwise results are different
+	# always renumber tree otherwise edge beliefs are sometimes flipped
 	tree_fit <- TreeTools::Renumber(tree_fit)
 
 	par <- initial_params
@@ -95,11 +95,6 @@ fit_params_em = function(tree_fit, amat, dmat,
 			interval = c(lower_bounds[['log_err']], upper_bounds[['log_err']]),
 			maximum = FALSE
 		)
-
-		# Q_trans_val <- -fit_trans$value
-		# Q_leaf_val  <- -fit_err$objective
-		# Q_total     <- Q_trans_val + Q_leaf_val
-		# message(glue("Iteration {i} M step Q: trans = {round(Q_trans_val, 4)}, leaf = {round(Q_leaf_val, 4)}, total = {round(Q_total, 4)}"))
 
 		par_new <- c(
 			'ngen' = fit_trans$par[1],
@@ -392,6 +387,10 @@ fit_params_em_bp <- function(tree_fit, amat, dmat,
 	upper_bounds = c('ngen' = 1000, 'log_eps' = log(0.2), 'log_err' = log(0.2)),
 	max_iter = 10, k = 20, npop = 600, ncores = 1, epsilon = 1e-3, trace = TRUE) {
 
+    RhpcBLASctl::blas_set_num_threads(1)
+    RhpcBLASctl::omp_set_num_threads(1)
+    RcppParallel::setThreadOptions(numThreads = ncores)
+
 	# Ensure stable numeric node IDs 1..n (matches C++ expectations)
 	tree_fit <- TreeTools::Renumber(tree_fit)
 	par <- initial_params
@@ -444,6 +443,7 @@ fit_params_em_bp <- function(tree_fit, amat, dmat,
 			A_cur <- get_transition_mat_wf_hmm_wrapper(k = k, eps = exp(x[2]), N = npop, ngen = x[1], safe = TRUE)
 			-sum(E_counts * log(A_cur))
 		}
+
 		fit_trans <- optim(
 			par = c(par[['ngen']], par[['log_eps']]),
 			fn = Q_trans, method = 'L-BFGS-B',
@@ -470,11 +470,6 @@ fit_params_em_bp <- function(tree_fit, amat, dmat,
 			interval = c(lower_bounds[['log_err']], upper_bounds[['log_err']]),
 			maximum = FALSE
 		)
-
-		# Q_trans_val <- -fit_trans$value
-		# Q_leaf_val  <- -fit_err$objective
-		# Q_total     <- Q_trans_val + Q_leaf_val
-		# message(glue("Iteration {i} M step Q: trans = {round(Q_trans_val, 4)}, leaf = {round(Q_leaf_val, 4)}, total = {round(Q_total, 4)}"))
 
 		par_new <- c(
 			'ngen' = fit_trans$par[1],

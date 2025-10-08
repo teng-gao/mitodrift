@@ -428,22 +428,25 @@ double score_tree_bp_wrapper2(arma::Col<int> E,
 // Node & Edge Belief Computation (BP2)
 // ----------------------------
 
-// Compute downward message m_{u->v}(c_v) given S_parent[c_u] = logP(u,c_u) + down_in(u,c_u)
-//                                + (sum children to u) - (message from v to u)
-// We evaluate: m_{u->v}(c_v) = logsumexp_{c_u} [ S_parent[c_u] + logA[c_u, c_v] ]
-static inline void compute_down_msg_colwise(
-	const double* S_parent, const std::vector<double>& logA, int C, double* out, std::vector<double>& temp)
+// Compute downward message m_{u->v}(c_v) using fast column-wise expA and S_parent.
+// expA_rowmajor: exp(logA) in row-major order, S_parent: log domain, out: result, su: scratch (length C)
+static inline void compute_down_msg_fast(
+	const double* S_parent,          // length C
+	const double* expA_rowmajor,     // length C*C, exp(logA) row-major
+	int C,
+	double* out,                     // length C
+	double* su)                      // scratch length C (holds exp(S_parent - maxS))
 {
-	for (int c_v = 0; c_v < C; ++c_v) {
-		double maxv = -std::numeric_limits<double>::infinity();
-		for (int c_u = 0; c_u < C; ++c_u) {
-			double val = S_parent[c_u] + logA[static_cast<size_t>(c_u) * C + c_v];
-			temp[c_u] = val;
-			if (val > maxv) maxv = val;
-		}
-		double sumexp = 0.0;
-		for (int c_u = 0; c_u < C; ++c_u) sumexp += std::exp(temp[c_u] - maxv);
-		out[c_v] = maxv + std::log(sumexp);
+	// m_{u->v}(k) = logsum_u [ S_parent[u] + logA[u,k] ]
+	// = maxS + log( dot( exp(S_parent - maxS), expA[,k] ) )
+	double maxS = -std::numeric_limits<double>::infinity();
+	for (int u = 0; u < C; ++u) if (S_parent[u] > maxS) maxS = S_parent[u];
+	for (int u = 0; u < C; ++u) su[u] = std::exp(S_parent[u] - maxS);
+	for (int k = 0; k < C; ++k) {
+		double dot = 0.0;
+		// column k of row-major matrix: index (u*C + k)
+		for (int u = 0; u < C; ++u) dot += expA_rowmajor[u * C + k] * su[u];
+		out[k] = std::log(dot) + maxS;
 	}
 }
 
@@ -473,7 +476,6 @@ Rcpp::List compute_node_edge_beliefs_bp2(
 	// Ensure postorder and 0-indexing for BP core loops
 	E = reorderRcpp(E);
 	E -= 1;
-	/* m already computed above */
 	int root = E(m - 1);
 
 	// --- Topology helpers ---
@@ -497,6 +499,9 @@ Rcpp::List compute_node_edge_beliefs_bp2(
 		double* out = expA_shifted.data() + static_cast<size_t>(r) * C;
 		for (int j = 0; j < C; ++j) out[j] = std::exp(Arow[j] - mr);
 	}
+	// Also precompute exp(logA) once for fast column-wise ops (downward + edge beliefs).
+	std::vector<double> expA(static_cast<size_t>(C) * C);
+	for (size_t i = 0; i < expA.size(); ++i) expA[i] = std::exp(logA[i]);
 
 	// --- Output containers per locus ---
 	Rcpp::List node_list(L);
@@ -505,30 +510,28 @@ Rcpp::List compute_node_edge_beliefs_bp2(
 	// Scratch shared across loci where safe
 	std::vector<double> temp(C), u(C), S_parent(C), down_msg(C);
 
+	// Reusable per-locus buffers (filled each iteration)
+	std::vector<double> Uin(static_cast<size_t>(n) * C, 0.0);          // sum of child messages into node
+	std::vector<double> up_to_parent(static_cast<size_t>(n) * C, 0.0); // message each child sends to its parent
+	std::vector<double> down_in(static_cast<size_t>(n) * C, 0.0);      // parent->child messages collected at node
+
 	for (int l = 0; l < L; ++l) {
 		double logZ_root = 0.0;
 		const std::vector<double>& P_in = logP_list[l];
-		std::vector<double> P = P_in; // local copy so we can clamp the root prior
-		// Enforce root prior: root is fixed to state 0 (R's state 1);
-		// set other root-state log-likelihoods to -inf so they contribute zero.
-		for (int c = 0; c < C; ++c) {
-			if (c != 0) P[static_cast<size_t>(c) * n + root] = -std::numeric_limits<double>::infinity();
-		}
+
+		std::fill(Uin.begin(), Uin.end(), 0.0);
+		std::fill(up_to_parent.begin(), up_to_parent.end(), 0.0);
+		std::fill(down_in.begin(), down_in.end(), 0.0);
 
 		// Upward pass (child->parent messages) for this locus
-		std::vector<double> Uin(static_cast<size_t>(n) * C, 0.0);          // sum of child messages into node
-		std::vector<double> up_to_parent(static_cast<size_t>(n) * C, 0.0); // message each child sends to its parent
-
 		for (int i = 0; i < m; ++i) {
 			const int par  = E[i];
 			const int node = E[m + i];
-
-			// temp[c] = logP[c*n + node] + Uin[node*C + c]
 			double max_t = -std::numeric_limits<double>::infinity();
 			int offP = node;
 			const int base_node = node * C;
 			for (int c = 0; c < C; ++c, offP += n) {
-				const double v = P[offP] + Uin[base_node + c];
+				const double v = P_in[offP] + Uin[base_node + c];
 				temp[c] = v;
 				if (v > max_t) max_t = v;
 			}
@@ -547,7 +550,6 @@ Rcpp::List compute_node_edge_beliefs_bp2(
 		}
 
 		// Downward pass (parent->child messages) for this locus
-		std::vector<double> down_in(static_cast<size_t>(n) * C, 0.0);
 		std::vector<int> stack; stack.reserve(n);
 		stack.push_back(root);
 		while (!stack.empty()) {
@@ -558,12 +560,14 @@ Rcpp::List compute_node_edge_beliefs_bp2(
 				const int v = ch[t];
 				if (v < 0) continue;
 				for (int r = 0; r < C; ++r) {
-					S_parent[r] = P[r * n + u_node]
+					const double P_ur = (u_node == root ? (r == 0 ? 0.0 : -std::numeric_limits<double>::infinity())
+					                                    : P_in[static_cast<size_t>(r) * n + u_node]);
+					S_parent[r] = P_ur
 						+ down_in[u_node * C + r]
 						+ Uin[u_node * C + r]
 						- up_to_parent[v * C + r];
 				}
-				compute_down_msg_colwise(S_parent.data(), logA, C, down_msg.data(), temp);
+				compute_down_msg_fast(S_parent.data(), expA.data(), C, down_msg.data(), u.data());
 				for (int c = 0; c < C; ++c) down_in[v * C + c] = down_msg[c];
 				stack.push_back(v);
 			}
@@ -572,19 +576,28 @@ Rcpp::List compute_node_edge_beliefs_bp2(
 		// Node beliefs for this locus
 		Rcpp::NumericMatrix node_beliefs(n, C);
 		{
-			std::vector<double> node_log(n * C);
 			for (int v = 0; v < n; ++v) {
-				double maxv = -std::numeric_limits<double>::infinity();
+				// W[c] = logP(c,v) (+ root prior if v==root) + Uin[v,c] + down_in[v,c]
+				double maxW = -std::numeric_limits<double>::infinity();
 				for (int c = 0; c < C; ++c) {
-					double val = P[c * n + v] + Uin[v * C + c] + down_in[v * C + c];
-					node_log[static_cast<size_t>(v) * C + c] = val;
-					if (val > maxv) maxv = val;
+					const double P_vc = (v == root ? (c == 0 ? 0.0 : -std::numeric_limits<double>::infinity())
+					                                : P_in[static_cast<size_t>(c) * n + v]);
+					temp[c] = P_vc + Uin[v * C + c] + down_in[v * C + c];
+					if (temp[c] > maxW) maxW = temp[c];
 				}
-				double sumexp = 0.0;
-				for (int c = 0; c < C; ++c) sumexp += std::exp(node_log[static_cast<size_t>(v) * C + c] - maxv);
-				double logZ = maxv + std::log(sumexp);
-				if (v == root) logZ_root = logZ;
-				for (int c = 0; c < C; ++c) node_beliefs(v, c) = std::exp(node_log[static_cast<size_t>(v) * C + c] - logZ);
+				double denom = 0.0;
+				for (int c = 0; c < C; ++c) {
+					const double a = std::exp(temp[c] - maxW);
+					node_beliefs(v, c) = a;   // store unnormalized for now
+					denom += a;
+				}
+				const double inv = 1.0 / denom;
+				for (int c = 0; c < C; ++c) node_beliefs(v, c) *= inv;
+
+				// Root logZ from its normalization constant
+				if (v == root) {
+					logZ_root = maxW + std::log(denom);
+				}
 			}
 		}
 
@@ -592,50 +605,56 @@ Rcpp::List compute_node_edge_beliefs_bp2(
 		Rcpp::NumericVector edge_beliefs(static_cast<size_t>(m) * C * C);
 		Rcpp::IntegerVector dims = Rcpp::IntegerVector::create(m, C, C);
 		edge_beliefs.attr("dim") = dims;
+
+		// Scratch for factorized normalization
+		std::vector<double> a(C), b(C);
+
 		for (int i = 0; i < m; ++i) {
 			const int u_node = E[i];
 			const int v = E[m + i];
 
-			for (int r = 0; r < C; ++r) S_parent[r] = P[r * n + u_node]
-				+ down_in[u_node * C + r]
-				+ Uin[u_node * C + r]
-				- up_to_parent[v * C + r];
-			for (int k = 0; k < C; ++k) down_msg[k] = P[k * n + v] + Uin[v * C + k];
-
-			double maxv = -std::numeric_limits<double>::infinity();
+			// S_parent[r] with root prior injected if u_node==root
 			for (int r = 0; r < C; ++r) {
+				const double P_ur = (u_node == root ? (r == 0 ? 0.0 : -std::numeric_limits<double>::infinity())
+				                                    : P_in[static_cast<size_t>(r) * n + u_node]);
+				S_parent[r] = P_ur + down_in[u_node * C + r] + Uin[u_node * C + r] - up_to_parent[v * C + r];
+			}
+			// Child term Y[k] = logP(k,v) + Uin[v,k]
+			for (int k = 0; k < C; ++k) down_msg[k] = P_in[static_cast<size_t>(k) * n + v] + Uin[v * C + k];
+
+			// Factorize exp(W[r] + Y[k]) * expA[r,k]
+			double maxWr = -std::numeric_limits<double>::infinity();
+			for (int r = 0; r < C; ++r) if (S_parent[r] > maxWr) maxWr = S_parent[r];
+			for (int r = 0; r < C; ++r) a[r] = std::exp(S_parent[r] - maxWr);
+
+			double maxY = -std::numeric_limits<double>::infinity();
+			for (int k = 0; k < C; ++k) if (down_msg[k] > maxY) maxY = down_msg[k];
+			for (int k = 0; k < C; ++k) b[k] = std::exp(down_msg[k] - maxY);
+
+			// denom = sum_{r,k} a[r] * expA[r,k] * b[k]
+			double denom = 0.0;
+			for (int r = 0; r < C; ++r) {
+				double s = 0.0;
+				const double* Arow = expA.data() + static_cast<size_t>(r) * C;
+				for (int k = 0; k < C; ++k) s += Arow[k] * b[k];
+				denom += a[r] * s;
+			}
+			const double inv = 1.0 / denom;
+
+			// Fill normalized edge beliefs: p(r,k) ∝ a[r] * A[r,k] * b[k]
+			for (int r = 0; r < C; ++r) {
+				const double* Arow = expA.data() + static_cast<size_t>(r) * C;
 				for (int k = 0; k < C; ++k) {
-					double val = S_parent[r] + down_msg[k] + logA[static_cast<size_t>(r) * C + k];
-					{
-						const size_t idx = static_cast<size_t>(i)
-							+ static_cast<size_t>(r) * static_cast<size_t>(m)
-							+ static_cast<size_t>(k) * static_cast<size_t>(m) * static_cast<size_t>(C);
-						edge_beliefs[idx] = val;
-						if (val > maxv) maxv = val;
-					}
+					const size_t idx = static_cast<size_t>(i)
+						+ static_cast<size_t>(r) * static_cast<size_t>(m)
+						+ static_cast<size_t>(k) * static_cast<size_t>(m) * static_cast<size_t>(C);
+					edge_beliefs[idx] = (a[r] * Arow[k] * b[k]) * inv;
 				}
-			}
-			double sumexp = 0.0;
-			for (int r = 0; r < C; ++r) for (int k = 0; k < C; ++k)
-			{
-				const size_t idx = static_cast<size_t>(i)
-					+ static_cast<size_t>(r) * static_cast<size_t>(m)
-					+ static_cast<size_t>(k) * static_cast<size_t>(m) * static_cast<size_t>(C);
-				sumexp += std::exp(edge_beliefs[idx] - maxv);
-			}
-			double logZ = maxv + std::log(sumexp);
-			for (int r = 0; r < C; ++r) for (int k = 0; k < C; ++k)
-			{
-				const size_t idx = static_cast<size_t>(i)
-					+ static_cast<size_t>(r) * static_cast<size_t>(m)
-					+ static_cast<size_t>(k) * static_cast<size_t>(m) * static_cast<size_t>(C);
-				edge_beliefs[idx] = std::exp(edge_beliefs[idx] - logZ);
 			}
 		}
 
 		node_list[l] = node_beliefs;
 		edge_list[l] = edge_beliefs;
-		/* accumulate this locus' contribution to total logZ */
 		logZ_total += logZ_root;
 	}
 
