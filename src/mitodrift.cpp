@@ -428,6 +428,194 @@ double score_tree_bp_wrapper2(arma::Col<int> E,
 // Node & Edge Belief Computation (BP2)
 // ----------------------------
 
+static inline void compute_down_msg_fast(
+	const double* S_parent,
+	const double* expA_rowmajor,
+	int C,
+	double* out,
+	double* su);
+
+struct ComputeNodeEdgeBeliefsWorker : public Worker {
+	const int m;
+	const int n;
+	const int C;
+	const int root;
+	const int* parent_ptr;
+	const int* child_ptr;
+	const std::vector< std::array<int,2> >& children_of;
+	const std::vector<double>& row_maxA;
+	const std::vector<double>& expA_shifted;
+	const std::vector<double>& expA;
+	const std::vector< std::vector<double> >& logP_list;
+	std::vector< std::vector<double> >& node_storage;
+	std::vector< std::vector<double> >& edge_storage;
+	std::vector<double>& logZ_vals;
+
+	ComputeNodeEdgeBeliefsWorker(
+		int m_, int n_, int C_, int root_,
+		const int* parent_ptr_, const int* child_ptr_,
+		const std::vector< std::array<int,2> >& children_of_,
+		const std::vector<double>& row_maxA_,
+		const std::vector<double>& expA_shifted_,
+		const std::vector<double>& expA_,
+		const std::vector< std::vector<double> >& logP_list_,
+		std::vector< std::vector<double> >& node_storage_,
+		std::vector< std::vector<double> >& edge_storage_,
+		std::vector<double>& logZ_vals_)
+		: m(m_), n(n_), C(C_), root(root_),
+		  parent_ptr(parent_ptr_), child_ptr(child_ptr_),
+		  children_of(children_of_),
+		  row_maxA(row_maxA_), expA_shifted(expA_shifted_), expA(expA_),
+		  logP_list(logP_list_),
+		  node_storage(node_storage_), edge_storage(edge_storage_),
+		  logZ_vals(logZ_vals_) {}
+
+	void operator()(std::size_t begin, std::size_t end) {
+		const double neg_inf = -std::numeric_limits<double>::infinity();
+		const std::size_t nC = static_cast<std::size_t>(n) * static_cast<std::size_t>(C);
+
+		std::vector<double> Uin(nC);
+		std::vector<double> up_to_parent(nC);
+		std::vector<double> down_in(nC);
+		std::vector<double> temp(C);
+		std::vector<double> u(C);
+		std::vector<double> S_parent(C);
+		std::vector<double> down_msg(C);
+		std::vector<double> a(C);
+		std::vector<double> b(C);
+		std::vector<int> stack;
+		stack.reserve(static_cast<std::size_t>(n));
+
+		for (std::size_t idx_l = begin; idx_l < end; ++idx_l) {
+			const std::vector<double>& P_in = logP_list[idx_l];
+			std::vector<double>& node_out = node_storage[idx_l];
+			std::vector<double>& edge_out = edge_storage[idx_l];
+			double logZ_root = 0.0;
+
+			std::fill(Uin.begin(), Uin.end(), 0.0);
+			std::fill(up_to_parent.begin(), up_to_parent.end(), 0.0);
+			std::fill(down_in.begin(), down_in.end(), 0.0);
+
+			for (int i = 0; i < m; ++i) {
+				const int par = parent_ptr[i];
+				const int node = child_ptr[i];
+				double max_t = neg_inf;
+				int offP = node;
+				const int base_node = node * C;
+				for (int c = 0; c < C; ++c, offP += n) {
+					const double v = P_in[offP] + Uin[static_cast<std::size_t>(base_node) + c];
+					temp[c] = v;
+					if (v > max_t) max_t = v;
+				}
+				for (int c = 0; c < C; ++c) u[c] = std::exp(temp[c] - max_t);
+
+				const double* rowA = expA_shifted.data();
+				const int base_par = par * C;
+				for (int r = 0; r < C; ++r, rowA += C) {
+					double s = 0.0;
+					for (int j = 0; j < C; ++j) s += rowA[j] * u[j];
+					const double f = row_maxA[r] + max_t + std::log(s);
+					up_to_parent[static_cast<std::size_t>(node) * C + r] = f;
+					Uin[static_cast<std::size_t>(base_par) + r] += f;
+				}
+			}
+
+			stack.clear();
+			stack.push_back(root);
+			while (!stack.empty()) {
+				const int u_node = stack.back();
+				stack.pop_back();
+				const auto& ch = children_of[u_node];
+				for (int t = 0; t < 2; ++t) {
+					const int v = ch[t];
+					if (v < 0) continue;
+					for (int r = 0; r < C; ++r) {
+						const double P_ur = (u_node == root)
+							? (r == 0 ? 0.0 : neg_inf)
+							: P_in[static_cast<std::size_t>(r) * n + u_node];
+						S_parent[r] = P_ur
+							+ down_in[static_cast<std::size_t>(u_node) * C + r]
+							+ Uin[static_cast<std::size_t>(u_node) * C + r]
+							- up_to_parent[static_cast<std::size_t>(v) * C + r];
+					}
+					compute_down_msg_fast(S_parent.data(), expA.data(), C, down_msg.data(), u.data());
+					for (int k = 0; k < C; ++k) down_in[static_cast<std::size_t>(v) * C + k] = down_msg[k];
+					stack.push_back(v);
+				}
+			}
+
+			for (int v = 0; v < n; ++v) {
+				double maxW = neg_inf;
+				for (int c = 0; c < C; ++c) {
+					const double P_vc = (v == root)
+						? (c == 0 ? 0.0 : neg_inf)
+						: P_in[static_cast<std::size_t>(c) * n + v];
+					temp[c] = P_vc
+						+ Uin[static_cast<std::size_t>(v) * C + c]
+						+ down_in[static_cast<std::size_t>(v) * C + c];
+					if (temp[c] > maxW) maxW = temp[c];
+				}
+				double denom = 0.0;
+				for (int c = 0; c < C; ++c) {
+					const double val = std::exp(temp[c] - maxW);
+					node_out[static_cast<std::size_t>(v) + static_cast<std::size_t>(c) * n] = val;
+					denom += val;
+				}
+				const double inv = 1.0 / denom;
+				for (int c = 0; c < C; ++c) {
+					node_out[static_cast<std::size_t>(v) + static_cast<std::size_t>(c) * n] *= inv;
+				}
+				if (v == root) {
+					logZ_root = maxW + std::log(denom);
+				}
+			}
+
+			for (int i = 0; i < m; ++i) {
+				const int u_node = parent_ptr[i];
+				const int v = child_ptr[i];
+				for (int r = 0; r < C; ++r) {
+					const double P_ur = (u_node == root)
+						? (r == 0 ? 0.0 : neg_inf)
+						: P_in[static_cast<std::size_t>(r) * n + u_node];
+					S_parent[r] = P_ur
+						+ down_in[static_cast<std::size_t>(u_node) * C + r]
+						+ Uin[static_cast<std::size_t>(u_node) * C + r]
+						- up_to_parent[static_cast<std::size_t>(v) * C + r];
+				}
+				for (int k = 0; k < C; ++k) {
+					down_msg[k] = P_in[static_cast<std::size_t>(k) * n + v]
+						+ Uin[static_cast<std::size_t>(v) * C + k];
+				}
+				double maxWr = neg_inf;
+				for (int r = 0; r < C; ++r) if (S_parent[r] > maxWr) maxWr = S_parent[r];
+				for (int r = 0; r < C; ++r) a[r] = std::exp(S_parent[r] - maxWr);
+				double maxY = neg_inf;
+				for (int k = 0; k < C; ++k) if (down_msg[k] > maxY) maxY = down_msg[k];
+				for (int k = 0; k < C; ++k) b[k] = std::exp(down_msg[k] - maxY);
+				double denom = 0.0;
+				for (int r = 0; r < C; ++r) {
+					double s = 0.0;
+					const double* Arow = expA.data() + static_cast<std::size_t>(r) * C;
+					for (int k = 0; k < C; ++k) s += Arow[k] * b[k];
+					denom += a[r] * s;
+				}
+				const double inv = 1.0 / denom;
+				for (int r = 0; r < C; ++r) {
+					const double* Arow = expA.data() + static_cast<std::size_t>(r) * C;
+					for (int k = 0; k < C; ++k) {
+						const std::size_t idx = static_cast<std::size_t>(i)
+							+ static_cast<std::size_t>(r) * static_cast<std::size_t>(m)
+							+ static_cast<std::size_t>(k) * static_cast<std::size_t>(m) * static_cast<std::size_t>(C);
+						edge_out[idx] = a[r] * Arow[k] * b[k] * inv;
+					}
+				}
+			}
+
+			logZ_vals[idx_l] = logZ_root;
+		}
+	}
+};
+
 // Compute downward message m_{u->v}(c_v) using fast column-wise expA and S_parent.
 // expA_rowmajor: exp(logA) in row-major order, S_parent: log domain, out: result, su: scratch (length C)
 static inline void compute_down_msg_fast(
@@ -470,7 +658,6 @@ Rcpp::List compute_node_edge_beliefs_bp2(
 	const int C = static_cast<int>(std::sqrt(logA.size()));
 	if (L <= 0) Rcpp::stop("logP_list must be non-empty");
 	const int n = static_cast<int>(logP_list[0].size() / C);
-	double logZ_total = 0.0;
 	const int m = static_cast<int>(E.n_elem / 2);
 
 	// Ensure postorder and 0-indexing for BP core loops
@@ -503,159 +690,51 @@ Rcpp::List compute_node_edge_beliefs_bp2(
 	std::vector<double> expA(static_cast<size_t>(C) * C);
 	for (size_t i = 0; i < expA.size(); ++i) expA[i] = std::exp(logA[i]);
 
-	// --- Output containers per locus ---
+	std::vector< std::vector<double> > node_storage(
+		static_cast<std::size_t>(L),
+		std::vector<double>(static_cast<std::size_t>(n) * static_cast<std::size_t>(C)));
+	std::vector< std::vector<double> > edge_storage(
+		static_cast<std::size_t>(L),
+		std::vector<double>(static_cast<std::size_t>(m) * static_cast<std::size_t>(C) * static_cast<std::size_t>(C)));
+	std::vector<double> logZ_vals(static_cast<std::size_t>(L), 0.0);
+
+	const int* parent_ptr = E.memptr();
+	const int* child_ptr = E.memptr() + m;
+
+	ComputeNodeEdgeBeliefsWorker worker(
+		m, n, C, root,
+		parent_ptr, child_ptr,
+		children_of,
+		row_maxA,
+		expA_shifted,
+		expA,
+		logP_list,
+		node_storage,
+		edge_storage,
+		logZ_vals);
+
+	parallelFor(0, static_cast<std::size_t>(L), worker);
+
 	Rcpp::List node_list(L);
 	Rcpp::List edge_list(L);
+	Rcpp::IntegerVector dims = Rcpp::IntegerVector::create(m, C, C);
 
-	// Scratch shared across loci where safe
-	std::vector<double> temp(C), u(C), S_parent(C), down_msg(C);
-
-	// Reusable per-locus buffers (filled each iteration)
-	std::vector<double> Uin(static_cast<size_t>(n) * C, 0.0);          // sum of child messages into node
-	std::vector<double> up_to_parent(static_cast<size_t>(n) * C, 0.0); // message each child sends to its parent
-	std::vector<double> down_in(static_cast<size_t>(n) * C, 0.0);      // parent->child messages collected at node
-
+	double logZ_total = 0.0;
 	for (int l = 0; l < L; ++l) {
-		double logZ_root = 0.0;
-		const std::vector<double>& P_in = logP_list[l];
-
-		std::fill(Uin.begin(), Uin.end(), 0.0);
-		std::fill(up_to_parent.begin(), up_to_parent.end(), 0.0);
-		std::fill(down_in.begin(), down_in.end(), 0.0);
-
-		// Upward pass (child->parent messages) for this locus
-		for (int i = 0; i < m; ++i) {
-			const int par  = E[i];
-			const int node = E[m + i];
-			double max_t = -std::numeric_limits<double>::infinity();
-			int offP = node;
-			const int base_node = node * C;
-			for (int c = 0; c < C; ++c, offP += n) {
-				const double v = P_in[offP] + Uin[base_node + c];
-				temp[c] = v;
-				if (v > max_t) max_t = v;
-			}
-			for (int c = 0; c < C; ++c) u[c] = std::exp(temp[c] - max_t);
-
-			// up_to_parent[node, r]
-			const double* rowA = expA_shifted.data();
-			const int base_par = par * C;
-			for (int r = 0; r < C; ++r, rowA += C) {
-				double s = 0.0;
-				for (int j = 0; j < C; ++j) s += rowA[j] * u[j];
-				const double f = row_maxA[r] + max_t + std::log(s);
-				up_to_parent[static_cast<size_t>(node) * C + r] = f;
-				Uin[base_par + r] += f;
-			}
-		}
-
-		// Downward pass (parent->child messages) for this locus
-		std::vector<int> stack; stack.reserve(n);
-		stack.push_back(root);
-		while (!stack.empty()) {
-			int u_node = stack.back();
-			stack.pop_back();
-			const auto &ch = children_of[u_node];
-			for (int t = 0; t < 2; ++t) {
-				const int v = ch[t];
-				if (v < 0) continue;
-				for (int r = 0; r < C; ++r) {
-					const double P_ur = (u_node == root ? (r == 0 ? 0.0 : -std::numeric_limits<double>::infinity())
-					                                    : P_in[static_cast<size_t>(r) * n + u_node]);
-					S_parent[r] = P_ur
-						+ down_in[u_node * C + r]
-						+ Uin[u_node * C + r]
-						- up_to_parent[v * C + r];
-				}
-				compute_down_msg_fast(S_parent.data(), expA.data(), C, down_msg.data(), u.data());
-				for (int c = 0; c < C; ++c) down_in[v * C + c] = down_msg[c];
-				stack.push_back(v);
-			}
-		}
-
-		// Node beliefs for this locus
 		Rcpp::NumericMatrix node_beliefs(n, C);
-		{
-			for (int v = 0; v < n; ++v) {
-				// W[c] = logP(c,v) (+ root prior if v==root) + Uin[v,c] + down_in[v,c]
-				double maxW = -std::numeric_limits<double>::infinity();
-				for (int c = 0; c < C; ++c) {
-					const double P_vc = (v == root ? (c == 0 ? 0.0 : -std::numeric_limits<double>::infinity())
-					                                : P_in[static_cast<size_t>(c) * n + v]);
-					temp[c] = P_vc + Uin[v * C + c] + down_in[v * C + c];
-					if (temp[c] > maxW) maxW = temp[c];
-				}
-				double denom = 0.0;
-				for (int c = 0; c < C; ++c) {
-					const double a = std::exp(temp[c] - maxW);
-					node_beliefs(v, c) = a;   // store unnormalized for now
-					denom += a;
-				}
-				const double inv = 1.0 / denom;
-				for (int c = 0; c < C; ++c) node_beliefs(v, c) *= inv;
+		std::copy(node_storage[static_cast<std::size_t>(l)].begin(),
+		          node_storage[static_cast<std::size_t>(l)].end(),
+		          node_beliefs.begin());
 
-				// Root logZ from its normalization constant
-				if (v == root) {
-					logZ_root = maxW + std::log(denom);
-				}
-			}
-		}
-
-		// Edge beliefs for this locus
-		Rcpp::NumericVector edge_beliefs(static_cast<size_t>(m) * C * C);
-		Rcpp::IntegerVector dims = Rcpp::IntegerVector::create(m, C, C);
+		Rcpp::NumericVector edge_beliefs(edge_storage[static_cast<std::size_t>(l)].size());
+		std::copy(edge_storage[static_cast<std::size_t>(l)].begin(),
+		          edge_storage[static_cast<std::size_t>(l)].end(),
+		          edge_beliefs.begin());
 		edge_beliefs.attr("dim") = dims;
-
-		// Scratch for factorized normalization
-		std::vector<double> a(C), b(C);
-
-		for (int i = 0; i < m; ++i) {
-			const int u_node = E[i];
-			const int v = E[m + i];
-
-			// S_parent[r] with root prior injected if u_node==root
-			for (int r = 0; r < C; ++r) {
-				const double P_ur = (u_node == root ? (r == 0 ? 0.0 : -std::numeric_limits<double>::infinity())
-				                                    : P_in[static_cast<size_t>(r) * n + u_node]);
-				S_parent[r] = P_ur + down_in[u_node * C + r] + Uin[u_node * C + r] - up_to_parent[v * C + r];
-			}
-			// Child term Y[k] = logP(k,v) + Uin[v,k]
-			for (int k = 0; k < C; ++k) down_msg[k] = P_in[static_cast<size_t>(k) * n + v] + Uin[v * C + k];
-
-			// Factorize exp(W[r] + Y[k]) * expA[r,k]
-			double maxWr = -std::numeric_limits<double>::infinity();
-			for (int r = 0; r < C; ++r) if (S_parent[r] > maxWr) maxWr = S_parent[r];
-			for (int r = 0; r < C; ++r) a[r] = std::exp(S_parent[r] - maxWr);
-
-			double maxY = -std::numeric_limits<double>::infinity();
-			for (int k = 0; k < C; ++k) if (down_msg[k] > maxY) maxY = down_msg[k];
-			for (int k = 0; k < C; ++k) b[k] = std::exp(down_msg[k] - maxY);
-
-			// denom = sum_{r,k} a[r] * expA[r,k] * b[k]
-			double denom = 0.0;
-			for (int r = 0; r < C; ++r) {
-				double s = 0.0;
-				const double* Arow = expA.data() + static_cast<size_t>(r) * C;
-				for (int k = 0; k < C; ++k) s += Arow[k] * b[k];
-				denom += a[r] * s;
-			}
-			const double inv = 1.0 / denom;
-
-			// Fill normalized edge beliefs: p(r,k) ∝ a[r] * A[r,k] * b[k]
-			for (int r = 0; r < C; ++r) {
-				const double* Arow = expA.data() + static_cast<size_t>(r) * C;
-				for (int k = 0; k < C; ++k) {
-					const size_t idx = static_cast<size_t>(i)
-						+ static_cast<size_t>(r) * static_cast<size_t>(m)
-						+ static_cast<size_t>(k) * static_cast<size_t>(m) * static_cast<size_t>(C);
-					edge_beliefs[idx] = (a[r] * Arow[k] * b[k]) * inv;
-				}
-			}
-		}
 
 		node_list[l] = node_beliefs;
 		edge_list[l] = edge_beliefs;
-		logZ_total += logZ_root;
+		logZ_total += logZ_vals[static_cast<std::size_t>(l)];
 	}
 
 	return Rcpp::List::create(
