@@ -414,11 +414,11 @@ fit_params_em_cpp <- function(tree_fit, amat, dmat,
 		A <- get_transition_mat_wf_hmm(k = k, eps = eps, N = npop, ngen = ngen, safe = TRUE)
 		logA_vec <- as.vector(t(log(A)))
 
-		# Call the fast BP to get per-locus beliefs in native (APE) order
-		res_cpp <- compute_node_edge_beliefs_bp2(tree_fit$edge, logP_list, logA_vec)
-		nbels   <- res_cpp$node_beliefs  # list of n x C
-		edgeArr <- res_cpp$edge_beliefs  # list of m x C x C
-		logL    <- res_cpp$logZ
+		# Call the streamlined BP stats routine
+		res_cpp <- compute_node_edge_stats_bp2(tree_fit$edge, logP_list, logA_vec)
+		leaf_list <- res_cpp$leaf_beliefs
+		E_counts <- res_cpp$edge_counts
+		logL <- res_cpp$logZ
 
 		message(glue("Iteration {i} E step: logL = {logL}"))
 		if (trace) {
@@ -430,12 +430,6 @@ fit_params_em_cpp <- function(tree_fit, amat, dmat,
 				logL = logL
 			))
 		}
-
-		# Sufficient statistics for transitions: sum over edges and loci
-		E_counts <- Reduce(`+`, lapply(edgeArr, function(arr) {
-			arr <- as.array(arr)           # m x C x C
-			apply(arr, c(2, 3), sum)       # C x C
-		}))
 
 		# ---------- M step (split) ----------
 		# 1) Optimize (ngen, log_eps) using ONLY the transition term
@@ -455,16 +449,17 @@ fit_params_em_cpp <- function(tree_fit, amat, dmat,
 		Q_leaf <- function(le) {
 			err_cur <- exp(le)
 			logliks <- get_leaf_liks_mat_cpp(amat, dmat, vafs = vafs, eps = err_cur, log = TRUE)
-			# Align by leaf indices: map tip labels -> APE tip indices (1..Ntip)
-			sum(vapply(seq_along(nbels), function(ii) {
-				L <- logliks[[ii]]                    # C x |S_i|
+			sum(vapply(seq_along(logliks), function(ii) {
+				L <- logliks[[ii]]
 				if (is.null(L) || length(L) == 0) return(0.0)
-				leafs <- colnames(L)                  # tip labels (character)
+				leafs <- colnames(L)
 				ids <- match(leafs, tree_fit$tip.label)
 				if (anyNA(ids)) stop("Q_leaf: some leaf names not found in tree_fit$tip.label")
-				sum(nbels[[ii]][ids, , drop = FALSE] * t(L))
+				leaf_post <- leaf_list[[ii]][ids, , drop = FALSE]
+				sum(leaf_post * t(L))
 			}, numeric(1)))
 		}
+
 		fit_err <- optimize(
 			f = function(le) -Q_leaf(le),
 			interval = c(lower_bounds[['log_err']], upper_bounds[['log_err']]),

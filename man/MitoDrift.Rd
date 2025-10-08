@@ -89,8 +89,6 @@ Initialize MitoDrift object
 \item{\code{dmat}}{Total depth matrix (optional, if mut_dat not provided)}
 
 \item{\code{model_params}}{Model parameters (optional)}
-
-\item{\code{build_tree}}{Logical; whether to construct an initial NJ tree}
 }
 \if{html}{\out{</div>}}
 }
@@ -260,6 +258,7 @@ Alternating ML optimization and EM parameter updates until convergence
   trace_interval = 5,
   em_max_iter = 100,
   em_epsilon = 0.001,
+  em_ncores = 1,
   em_lower_bounds = c(ngen = 1, log_eps = log(1e-12), log_err = log(1e-12)),
   em_upper_bounds = c(ngen = 1000, log_eps = log(0.2), log_err = log(0.2))
 )}\if{html}{\out{</div>}}
@@ -281,6 +280,8 @@ Alternating ML optimization and EM parameter updates until convergence
 \item{\code{em_max_iter}}{EM iterations per EM step (default: 5)}
 
 \item{\code{em_epsilon}}{Convergence tolerance for EM (default: 1e-3)}
+
+\item{\code{em_ncores}}{Number of cores for EM E-step (default: 1)}
 
 \item{\code{em_lower_bounds}}{Lower bounds for EM parameters in transformed space}
 
@@ -383,8 +384,6 @@ of the code.
 \if{html}{\out{<div class="arguments">}}
 \describe{
 \item{\code{old_obj}}{The old MitoDrift object to copy from}
-
-\item{\code{rebuild_tree}}{Logical; if TRUE rebuild the initial tree from data}
 }
 \if{html}{\out{</div>}}
 }

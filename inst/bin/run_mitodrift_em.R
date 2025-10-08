@@ -61,6 +61,13 @@ option_list <- list(
         metavar = "INTEGER"
     ),
     make_option(
+        c("-u", "--ncores_em"),
+        type = "integer",
+        default = 1,
+        help = "Number of cores to use for EM parameter fitting",
+        metavar = "INTEGER"
+    ),
+    make_option(
         c("-k", "--k"),
         type = "integer",
         default = 20,
@@ -253,11 +260,6 @@ if (opts$resume) {
     }
     md <- MitoDrift$new(amat = saved_md$amat, dmat = saved_md$dmat, model_params = saved_md$model_params, build_tree = FALSE)
     md <- md$copy(saved_md)
-    
-    # Check if model components are initialized
-    if (is.null(md$logP) || is.null(md$logA)) {
-        stop("Model components not initialized")
-    }
 } else {
     model_params <- c(
         eps = opts$eps,
@@ -280,14 +282,16 @@ if (opts$resume) {
         )
     }
     saveRDS(md, mitodrift_object_file)
+}
 
+if (!(!is.null(md$logP) && !is.null(md$logA))) {
     if (opts$fit_params) {
         message("\n=== Fitting parameters using EM ===")
         fitted_params <- md$fit_params_em(
             tree_fit = md$tree_init,
             max_iter = opts$fit_param_max_iter,
             epsilon = opts$fit_param_epsilon,
-            ncores = opts$ncores
+            ncores = opts$ncores_em
         )
     } else {
         message("\n=== Skipping parameter fitting ===")
@@ -296,6 +300,8 @@ if (opts$resume) {
     message("\n=== Initializing model components ===")
     md$make_model(ncores = opts$ncores)
     saveRDS(md, mitodrift_object_file)
+} else {
+    message("\n=== Model components already initialized; skipping parameter fitting and initialization ===")
 }
 
 message("\n=== Optimizing tree ===")

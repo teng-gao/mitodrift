@@ -300,6 +300,19 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// compute_node_edge_stats_bp2
+Rcpp::List compute_node_edge_stats_bp2(arma::Col<int> E, const std::vector< std::vector<double> >& logP_list, const std::vector<double>& logA);
+RcppExport SEXP _mitodrift_compute_node_edge_stats_bp2(SEXP ESEXP, SEXP logP_listSEXP, SEXP logASEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< arma::Col<int> >::type E(ESEXP);
+    Rcpp::traits::input_parameter< const std::vector< std::vector<double> >& >::type logP_list(logP_listSEXP);
+    Rcpp::traits::input_parameter< const std::vector<double>& >::type logA(logASEXP);
+    rcpp_result_gen = Rcpp::wrap(compute_node_edge_stats_bp2(E, logP_list, logA));
+    return rcpp_result_gen;
+END_RCPP
+}
 // save_qd_cpp
 SEXP save_qd_cpp(const Rcpp::List& objects, const Rcpp::CharacterVector& paths, int compress_level, bool shuffle, std::size_t grain_size);
 RcppExport SEXP _mitodrift_save_qd_cpp(SEXP objectsSEXP, SEXP pathsSEXP, SEXP compress_levelSEXP, SEXP shuffleSEXP, SEXP grain_sizeSEXP) {
@@ -338,6 +351,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_mitodrift_tree_mcmc_cpp_cached_threadsafe", (DL_FUNC) &_mitodrift_tree_mcmc_cpp_cached_threadsafe, 5},
     {"_mitodrift_tree_mcmc_parallel", (DL_FUNC) &_mitodrift_tree_mcmc_parallel, 5},
     {"_mitodrift_tree_mcmc_parallel_seeded", (DL_FUNC) &_mitodrift_tree_mcmc_parallel_seeded, 5},
+    {"_mitodrift_compute_node_edge_stats_bp2", (DL_FUNC) &_mitodrift_compute_node_edge_stats_bp2, 3},
     {"_mitodrift_save_qd_cpp", (DL_FUNC) &_mitodrift_save_qd_cpp, 5},
     {NULL, NULL, 0}
 };

@@ -93,6 +93,10 @@ tree_mcmc_parallel_seeded <- function(start_edges, logP, logA, max_iter_vec, see
     .Call('_mitodrift_tree_mcmc_parallel_seeded', PACKAGE = 'mitodrift', start_edges, logP, logA, max_iter_vec, seeds)
 }
 
+compute_node_edge_stats_bp2 <- function(E, logP_list, logA) {
+    .Call('_mitodrift_compute_node_edge_stats_bp2', PACKAGE = 'mitodrift', E, logP_list, logA)
+}
+
 #' Parallel qdata saver
 #' 
 #' @param objects List of data-only R objects to serialize (unsupported types become NULL, mirroring `qd_save`).

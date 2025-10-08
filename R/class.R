@@ -45,7 +45,6 @@ MitoDrift <- R6::R6Class("MitoDrift",
         #' @param amat Alternative allele count matrix (optional, if mut_dat not provided)
         #' @param dmat Total depth matrix (optional, if mut_dat not provided)
         #' @param model_params Model parameters (optional)
-        #' @param build_tree Logical; whether to construct an initial NJ tree
         initialize = function(
                 mut_dat = NULL, amat = NULL, dmat = NULL, 
                 model_params = NULL, build_tree = TRUE
@@ -338,6 +337,7 @@ MitoDrift <- R6::R6Class("MitoDrift",
 		#' @param trace_interval Interval for saving ML trace (default: 5)
 		#' @param em_max_iter EM iterations per EM step (default: 5)
 		#' @param em_epsilon Convergence tolerance for EM (default: 1e-3)
+		#' @param em_ncores Number of cores for EM E-step (default: 1)
 		#' @param em_lower_bounds Lower bounds for EM parameters in transformed space
 		#' @param em_upper_bounds Upper bounds for EM parameters in transformed space
 		optimize_tree_em = function(
@@ -348,6 +348,7 @@ MitoDrift <- R6::R6Class("MitoDrift",
 			trace_interval = 5,
 			em_max_iter = 100,
 			em_epsilon = 1e-3,
+			em_ncores = 1,
 			em_lower_bounds = c('ngen' = 1, 'log_eps' = log(1e-12), 'log_err' = log(1e-12)),
 			em_upper_bounds = c('ngen' = 1000, 'log_eps' = log(0.2), 'log_err' = log(0.2))
 		) {
@@ -413,12 +414,12 @@ MitoDrift <- R6::R6Class("MitoDrift",
 					lower_bounds = em_lower_bounds,
 					upper_bounds = em_upper_bounds,
 					max_iter = em_max_iter,
-					ncores = ncores,
+					ncores = em_ncores,
 					epsilon = em_epsilon
 				)
 
 				message('Refreshing model components with EM-updated parameters...')
-				self$make_model(ncores = ncores)
+				self$make_model(ncores = em_ncores)
 
 				message('Resuming ML optimization after EM...')
 				resume_after <- !is.null(self$ml_trace_file)
@@ -568,7 +569,6 @@ MitoDrift <- R6::R6Class("MitoDrift",
         #' of the code.
         #' 
         #' @param old_obj The old MitoDrift object to copy from
-        #' @param rebuild_tree Logical; if TRUE rebuild the initial tree from data
         #' @return A new MitoDrift object with the same data
         copy = function(old_obj, rebuild_tree = FALSE) {
             
