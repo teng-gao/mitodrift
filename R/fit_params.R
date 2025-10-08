@@ -381,7 +381,7 @@ fit_params_mcmc = function(
 #' @param trace if TRUE, returns trace dataframe
 #' @return either named vector of final params (ngen, eps, err) or list(par=..., trace=...)
 #' @export
-fit_params_em_bp <- function(tree_fit, amat, dmat,
+fit_params_em_cpp <- function(tree_fit, amat, dmat,
 	initial_params = c('ngen' = 100, 'log_eps' = log(1e-3), 'log_err' = log(1e-3)),
 	lower_bounds = c('ngen' = 1, 'log_eps' = log(1e-12), 'log_err' = log(1e-12)),
 	upper_bounds = c('ngen' = 1000, 'log_eps' = log(0.2), 'log_err' = log(0.2)),

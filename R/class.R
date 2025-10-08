@@ -255,7 +255,7 @@ MitoDrift <- R6::R6Class("MitoDrift",
             message("Fitting tree parameters using EM with ", ncores, " cores")
             
             # Run EM parameter fitting using the existing function
-            params_est <- fit_params_em(
+            params_est <- fit_params_em_cpp(
                 tree_fit = tree_fit,
                 amat = self$amat,
                 dmat = self$dmat,
@@ -408,7 +408,7 @@ MitoDrift <- R6::R6Class("MitoDrift",
 					'log_err' = log(as.numeric(self$model_params['err']))
 				)
 
-				params_est <- self$fit_params_em(
+				params_est <- self$fit_params_em_cpp(
 					tree_fit = self$tree_ml,
 					initial_params = init_params,
 					lower_bounds = em_lower_bounds,
