@@ -89,6 +89,8 @@ Initialize MitoDrift object
 \item{\code{dmat}}{Total depth matrix (optional, if mut_dat not provided)}
 
 \item{\code{model_params}}{Model parameters (optional)}
+
+\item{\code{build_tree}}{Whether to build an initial NJ tree (default: TRUE)}
 }
 \if{html}{\out{</div>}}
 }
@@ -384,6 +386,8 @@ of the code.
 \if{html}{\out{<div class="arguments">}}
 \describe{
 \item{\code{old_obj}}{The old MitoDrift object to copy from}
+
+\item{\code{rebuild_tree}}{Whether to rebuild the initial tree from data (default: FALSE)}
 }
 \if{html}{\out{</div>}}
 }

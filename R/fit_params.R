@@ -416,9 +416,12 @@ fit_params_em_cpp <- function(tree_fit, amat, dmat,
 
 		# Call the streamlined BP stats routine
 		res_cpp <- compute_node_edge_stats_bp2(tree_fit$edge, logP_list, logA_vec)
-		leaf_list <- res_cpp$leaf_beliefs
+		node_post <- res_cpp$leaf_beliefs
 		E_counts <- res_cpp$edge_counts
 		logL <- res_cpp$logZ
+
+		ids <- match(colnames(logliks[[1]]), tree_fit$tip.label)
+		leaf_post <- lapply(node_post, function(x) x[ids, , drop = FALSE])
 
 		message(glue("Iteration {i} E step: logL = {logL}"))
 		if (trace) {
@@ -450,13 +453,7 @@ fit_params_em_cpp <- function(tree_fit, amat, dmat,
 			err_cur <- exp(le)
 			logliks <- get_leaf_liks_mat_cpp(amat, dmat, vafs = vafs, eps = err_cur, log = TRUE)
 			sum(vapply(seq_along(logliks), function(ii) {
-				L <- logliks[[ii]]
-				if (is.null(L) || length(L) == 0) return(0.0)
-				leafs <- colnames(L)
-				ids <- match(leafs, tree_fit$tip.label)
-				if (anyNA(ids)) stop("Q_leaf: some leaf names not found in tree_fit$tip.label")
-				leaf_post <- leaf_list[[ii]][ids, , drop = FALSE]
-				sum(leaf_post * t(L))
+				sum(leaf_post[[ii]] * t(logliks[[ii]]))
 			}, numeric(1)))
 		}
 

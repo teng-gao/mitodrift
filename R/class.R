@@ -45,6 +45,7 @@ MitoDrift <- R6::R6Class("MitoDrift",
         #' @param amat Alternative allele count matrix (optional, if mut_dat not provided)
         #' @param dmat Total depth matrix (optional, if mut_dat not provided)
         #' @param model_params Model parameters (optional)
+        #' @param build_tree Whether to build an initial NJ tree (default: TRUE)
         initialize = function(
                 mut_dat = NULL, amat = NULL, dmat = NULL, 
                 model_params = NULL, build_tree = TRUE
@@ -569,6 +570,7 @@ MitoDrift <- R6::R6Class("MitoDrift",
         #' of the code.
         #' 
         #' @param old_obj The old MitoDrift object to copy from
+        #' @param rebuild_tree Whether to rebuild the initial tree from data (default: FALSE)
         #' @return A new MitoDrift object with the same data
         copy = function(old_obj, rebuild_tree = FALSE) {
             

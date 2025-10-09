@@ -2,6 +2,16 @@
 #include <RcppArmadillo.h>
 using namespace Rcpp;
 
+//' Leaf likelihood matrix via C++ backend
+//'
+//' @param amat Integer matrix of alt counts (variants x cells).
+//' @param dmat Integer matrix of depths (same dimensions as `amat`).
+//' @param vafs Numeric vector of VAF grid points (names optional).
+//' @param eps Error rate to add to each VAF bin (default 0).
+//' @param ncores Number of threads to use (default 1).
+//' @param log Whether to return log-likelihoods instead of probabilities.
+//' @return List of matrices, one per variant, with rows = VAF bins and columns = cells.
+//' @export
 // [[Rcpp::export]]
 List get_leaf_liks_mat_cpp(const IntegerMatrix &amat,
 						   const IntegerMatrix &dmat,

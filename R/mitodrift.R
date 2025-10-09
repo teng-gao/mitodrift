@@ -29,11 +29,8 @@ optimize_tree_cpp = function(
         nni_func = nni_cpp_parallel_cached
     }
 
-    if (resume) {
+    if (resume & !is.null(outfile) & file.exists(outfile)) {
         message('Resuming from existing tree list')
-        if (is.null(outfile)) {
-            stop("outfile must be provided when resume is TRUE")
-        }
         tree_list = safe_read_chain(outfile)
         tree_current = tree_list %>% .[[length(.)]]
         max_current = tree_current$logZ

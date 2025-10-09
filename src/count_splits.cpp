@@ -24,7 +24,6 @@ static inline bool keyhs_lt(const KeyHS& a, const KeyHS& b) {
 	return a.h < b.h;
 }
 
-// [[Rcpp::export]]
 std::vector< std::vector<int> > bipartition2(Rcpp::IntegerMatrix orig, int nTips) {
     IntegerVector parent = orig( _, 0);
     IntegerVector children = orig( _, 1);

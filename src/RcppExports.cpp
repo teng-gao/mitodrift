@@ -11,18 +11,6 @@ Rcpp::Rostream<true>&  Rcpp::Rcout = Rcpp::Rcpp_cout_get();
 Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
-// bipartition2
-std::vector< std::vector<int> > bipartition2(Rcpp::IntegerMatrix orig, int nTips);
-RcppExport SEXP _mitodrift_bipartition2(SEXP origSEXP, SEXP nTipsSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< Rcpp::IntegerMatrix >::type orig(origSEXP);
-    Rcpp::traits::input_parameter< int >::type nTips(nTipsSEXP);
-    rcpp_result_gen = Rcpp::wrap(bipartition2(orig, nTips));
-    return rcpp_result_gen;
-END_RCPP
-}
 // prop_clades_par
 Rcpp::NumericVector prop_clades_par(Rcpp::IntegerMatrix E_target, SEXP edges, bool rooted, bool normalize);
 RcppExport SEXP _mitodrift_prop_clades_par(SEXP E_targetSEXP, SEXP edgesSEXP, SEXP rootedSEXP, SEXP normalizeSEXP) {
@@ -330,7 +318,6 @@ END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_mitodrift_bipartition2", (DL_FUNC) &_mitodrift_bipartition2, 2},
     {"_mitodrift_prop_clades_par", (DL_FUNC) &_mitodrift_prop_clades_par, 4},
     {"_mitodrift_get_leaf_liks_mat_cpp", (DL_FUNC) &_mitodrift_get_leaf_liks_mat_cpp, 6},
     {"_mitodrift_reorderRcpp", (DL_FUNC) &_mitodrift_reorderRcpp, 1},
