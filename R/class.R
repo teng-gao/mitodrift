@@ -464,6 +464,7 @@ MitoDrift <- R6::R6Class("MitoDrift",
             max_iter = 10000,
             nchains = 1000,
             ncores = 1,
+            ncores_qs = 1,
             batch_size = 1000,
             outfile = NULL,
             resume = FALSE,
@@ -503,6 +504,7 @@ MitoDrift <- R6::R6Class("MitoDrift",
                 max_iter = max_iter,
                 nchains = nchains,
                 ncores = ncores,
+                ncores_qs = ncores_qs,
                 outfile = self$mcmc_trace_file,
                 resume = resume,
                 diag = diag,
@@ -527,6 +529,7 @@ MitoDrift <- R6::R6Class("MitoDrift",
             max_iter = 1e8,
             use_nj = FALSE,
             ncores = 1,
+            ncores_qs = 1,
             mcmc_trace_file = NULL
         ) {
             
@@ -550,9 +553,9 @@ MitoDrift <- R6::R6Class("MitoDrift",
                 mcmc_trace_file <- self$mcmc_trace_file
             }
             
-            qs_ncores <- if (isTRUE(qs2:::check_TBB())) ncores else 1L
-            message('Loading MCMC results from ', mcmc_trace_file, ' using ', qs_ncores, ' cores')
-            res_mcmc <- qs2::qd_read(mcmc_trace_file, nthreads = qs_ncores)
+            ncores_qs <- if (isTRUE(qs2:::check_TBB())) ncores_qs else 1L
+            message('Loading MCMC results from ', mcmc_trace_file, ' using ', ncores_qs, ' cores')
+            res_mcmc <- qs2::qd_read(mcmc_trace_file, nthreads = ncores_qs)
             
             message('Collecting MCMC chains with burnin ', burnin, ' and max_iter ', max_iter, ' using ', ncores, ' cores...')
             edges_mcmc <- collect_edges(res_mcmc, burnin = burnin, max_iter = max_iter)

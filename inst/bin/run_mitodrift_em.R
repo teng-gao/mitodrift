@@ -18,9 +18,7 @@ suppressPackageStartupMessages({
     library(ggraph)
     library(mitodrift)
     library(optparse)
-    library(fmcmc)
     library(CRF)
-    library(optimParallel)
 })
 
 # repo_dir = "/lab-share/Hem-Sankaran-e2/Public/projects/tgao/tools/mitodrift"
@@ -65,6 +63,13 @@ option_list <- list(
         type = "integer",
         default = 1,
         help = "Number of cores to use for EM parameter fitting",
+        metavar = "INTEGER"
+    ),
+    make_option(
+        c("-q", "--ncores_qs"),
+        type = "integer",
+        default = 1,
+        help = "Number of cores to use for QS operations in MCMC and tree annotation",
         metavar = "INTEGER"
     ),
     make_option(
@@ -319,6 +324,7 @@ md$run_mcmc(
     max_iter = opts$tree_mcmc_iter,
     nchains = opts$tree_mcmc_chains,
     ncores = opts$ncores,
+    ncores_qs = opts$ncores_qs,
     batch_size = opts$tree_mcmc_batch_size,
     diag = opts$tree_mcmc_diag,
     outfile = mcmc_trace_file,
@@ -330,7 +336,8 @@ saveRDS(md, mitodrift_object_file)
 message("\n=== Annotating tree with clade frequencies ===")
 md$annotate_tree(
     burnin = opts$tree_mcmc_burnin,
-    ncores = opts$ncores
+    ncores = opts$ncores,
+    ncores_qs = opts$ncores_qs
 )
 
 write.tree(md$tree_annot, annot_tree_file)

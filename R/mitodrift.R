@@ -1255,7 +1255,7 @@ safe_read_chain = function(path, ncores = 1) {
 # to fix: apparently the init tree has to be rooted otherwise to_phylo_reoder won't work. 
 #' @export
 run_tree_mcmc_batch = function(
-    phy_init, logP_list, logA_vec, outfile, max_iter = 100, nchains = 1, ncores = 1,
+    phy_init, logP_list, logA_vec, outfile, max_iter = 100, nchains = 1, ncores = 1, ncores_qs = 1,
     batch_size = 1000, diag = TRUE, resume = FALSE
 ) {
 
@@ -1264,8 +1264,8 @@ run_tree_mcmc_batch = function(
     RhpcBLASctl::omp_set_num_threads(1)
     RcppParallel::setThreadOptions(numThreads = ncores)
 
-    qs_ncores <- if (isTRUE(qs2:::check_TBB())) ncores else 1L
-    message('Using ', qs_ncores, ' cores for saving/writing MCMC trace')
+    ncores_qs <- if (isTRUE(qs2:::check_TBB())) ncores_qs else 1L
+    message('Using ', ncores_qs, ' cores for saving/writing MCMC trace')
 
     chains = 1:nchains
 
@@ -1275,7 +1275,7 @@ run_tree_mcmc_batch = function(
         dir.create(outdir, recursive = TRUE)
     }
 
-    edge_list_all = if (resume) safe_read_chain(outfile, ncores = qs_ncores) else NULL
+    edge_list_all = if (resume) safe_read_chain(outfile, ncores = ncores_qs) else NULL
     if (is.null(edge_list_all)) {
         edge_list_all = vector('list', nchains)
     } else {
@@ -1302,7 +1302,7 @@ run_tree_mcmc_batch = function(
 
     if (all(remaining_vec == 0L)) {
         message('All chains have completed the requested iterations.')
-        qs2::qd_save(edge_list_all, outfile, nthreads = qs_ncores)
+        qs2::qd_save(edge_list_all, outfile, nthreads = ncores_qs)
         return(edge_list_all)
     }
 
@@ -1350,7 +1350,7 @@ run_tree_mcmc_batch = function(
             edge_list_all[[chain_id]] = new_list
         }
 
-        qs2::qd_save(edge_list_all, outfile, nthreads = qs_ncores)
+        qs2::qd_save(edge_list_all, outfile, nthreads = ncores_qs)
 
         if (diag) {
             asdsf <- compute_target_tree_asdsf(
@@ -1367,7 +1367,7 @@ run_tree_mcmc_batch = function(
         message(paste('Batch', i, 'completed', paste0('(', signif(batch_time[['elapsed']], 2), 's', ')')))
     }
 
-    qs2::qd_save(edge_list_all, outfile, nthreads = qs_ncores)
+    qs2::qd_save(edge_list_all, outfile, nthreads = ncores_qs)
 
     return(edge_list_all)
 }
