@@ -454,6 +454,7 @@ MitoDrift <- R6::R6Class("MitoDrift",
         #' @param max_iter Maximum number of MCMC iterations (default: 10000)
         #' @param nchains Number of MCMC chains (default: 1000)
         #' @param ncores Number of cores to use (default: 1)
+        #' @param ncores_qs Number of cores to use for QS operations (default: 1)
         #' @param outfile Output file for saving results (optional)
         #' @param resume Whether to resume from existing file (default: FALSE)
         #' @param use_nj Whether to use NJ tree instead of ML tree as initial tree (default: FALSE)
@@ -523,6 +524,7 @@ MitoDrift <- R6::R6Class("MitoDrift",
         #' @param use_nj Whether to use NJ tree instead of ML tree (default: FALSE)
         #' @param mcmc_trace_file MCMC result file (optional, uses stored file if NULL)
         #' @param ncores Number of cores to use (default: 1)
+        #' @param ncores_qs Number of cores to use for QS operations (default: 1)
         #' @return Trimmed tree with clade frequencies
         annotate_tree = function(
             burnin = 0,

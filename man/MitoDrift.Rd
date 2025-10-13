@@ -302,6 +302,7 @@ Run phylogenetic MCMC sampling
   max_iter = 10000,
   nchains = 1000,
   ncores = 1,
+  ncores_qs = 1,
   batch_size = 1000,
   outfile = NULL,
   resume = FALSE,
@@ -318,6 +319,8 @@ Run phylogenetic MCMC sampling
 \item{\code{nchains}}{Number of MCMC chains (default: 1000)}
 
 \item{\code{ncores}}{Number of cores to use (default: 1)}
+
+\item{\code{ncores_qs}}{Number of cores to use for QS operations (default: 1)}
 
 \item{\code{batch_size}}{Batch size for MCMC (default: 1000)}
 
@@ -346,6 +349,7 @@ Trim tree using MCMC results
   max_iter = 1e+08,
   use_nj = FALSE,
   ncores = 1,
+  ncores_qs = 1,
   mcmc_trace_file = NULL
 )}\if{html}{\out{</div>}}
 }
@@ -360,6 +364,8 @@ Trim tree using MCMC results
 \item{\code{use_nj}}{Whether to use NJ tree instead of ML tree (default: FALSE)}
 
 \item{\code{ncores}}{Number of cores to use (default: 1)}
+
+\item{\code{ncores_qs}}{Number of cores to use for QS operations (default: 1)}
 
 \item{\code{mcmc_trace_file}}{MCMC result file (optional, uses stored file if NULL)}
 }
