@@ -356,13 +356,15 @@ order_muts <- function(cell_order, mut_dat) {
   names(sort(med_tip_pos, na.last = TRUE))
 }
 
-plot_phylo_circ = function(gtree, node_conf = FALSE, conf_label = FALSE, title = '', pwidth = 0.25,
+plot_phylo_circ = function(gtree, node_conf = FALSE, conf_label = FALSE, title = '', pwidth_annot = 0.25, pwidth_activity = 0.25,
     branch_width = 0.3, dot_size = 1, conf_min = 0, conf_max = 0.5, cell_annot = NULL, annot_pal = NULL, offset = 0.05, width = 0.8,
     activity_mat = NULL, label_size = 2, rescale = FALSE, limits = c(-2,2), flip = TRUE,
     tip_annot = NULL, legend = FALSE, layered = FALSE, smooth_k = 0) {
 
-    p_tree = ggtree(gtree, ladderize = TRUE, layout = 'circular', branch.length = "none", linewidth = branch_width, right = flip) +
-            ggtitle(title)
+    p_tree = ggtree(gtree, 
+            ladderize = TRUE, layout = 'circular',
+            branch.length = "none", linewidth = branch_width, right = flip
+        ) + ggtitle(title)
 
     if (node_conf & inherits(gtree, 'tbl_graph')) {
 
@@ -417,14 +419,14 @@ plot_phylo_circ = function(gtree, node_conf = FALSE, conf_label = FALSE, title =
                 p_tree = p_tree + geom_fruit(
                     data = annot_data,
                     geom = geom_tile,
-                    pwidth = pwidth,
+                    pwidth = pwidth_annot,
                     mapping = aes(y = cell, fill = annot, x = annot),
                     show.legend = legend)
             } else {
                 p_tree = p_tree + geom_fruit(
                     data = annot_data,
                     geom = geom_col,
-                    pwidth = pwidth,
+                    pwidth = pwidth_annot,
                     mapping = aes(y = cell, fill = annot, x = 1),
                     show.legend = legend)
             }
@@ -468,22 +470,25 @@ plot_phylo_circ = function(gtree, node_conf = FALSE, conf_label = FALSE, title =
                 ungroup()
         }
 
-        p_tree = p_tree + geom_fruit(
-            data = df_activity,
-            geom = geom_tile,
-            offset = offset,
-            width = width,
-            # linewidth = 0.3,
-            axis.params = list(
-            axis       = "x", 
-            text.angle = 45,
-            text.size  = label_size,
-            vjust      = 0
-            ),
-            mapping = aes(x = feature, y = cell, fill = value),
-            show.legend = TRUE
-        ) +
-        scale_fill_gradient2(low = "blue", high = "red", limits = limits, oob = scales::oob_squish)
+        p_tree = p_tree + 
+            ggnewscale::new_scale_fill() +
+            geom_fruit(
+                data = df_activity,
+                geom = geom_tile,
+                offset = offset,
+                pwidth = pwidth_activity,
+                width = width,
+                # linewidth = 0.3,
+                axis.params = list(
+                    axis       = "x", 
+                    text.angle = 45,
+                    text.size  = label_size,
+                    vjust      = 0
+                ),
+                mapping = aes(x = feature, y = cell, fill = value),
+                show.legend = TRUE
+            ) +
+            scale_fill_gradient2(low = "blue", high = "red", limits = limits, oob = scales::oob_squish)
 
         if (!is.null(tip_annot)) {
             cts = unique(tip_annot$annot)

@@ -117,7 +117,7 @@ option_list <- list(
     make_option(
         c("-t", "--fit_param_max_iter"),
         type = "integer",
-        default = 10,
+        default = 100,
         help = "Maximum EM iterations for parameter fitting",
         metavar = "INTEGER"
     ),
