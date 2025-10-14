@@ -5,6 +5,10 @@ For now:
 ```R
 devtools::install_local('.')
 ```
+Make sure you install [qs2](https://github.com/qsbase/qs2) with TBB binding to enable faster MCMC trace file saving/reading:
+```
+remotes::install_cran("qs2", type = "source", configure.args = "--with-TBB --with-simd=AVX2")
+```
 
 # Usage
 ## Input format
