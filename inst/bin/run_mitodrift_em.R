@@ -239,9 +239,15 @@ if (!is.null(opts$mut_dat)) {
 } else {
     amat <- load_matrix_file(opts$amat)
     dmat <- load_matrix_file(opts$dmat)
+    
     if (!identical(dim(amat), dim(dmat))) {
         stop("amat and dmat must have identical dimensions")
     }
+    # Check for NA values in input matrices
+    if (any(is.na(amat)) || any(is.na(dmat))) {
+        stop('Input matrices cannot contain NA values')
+    }
+
     keep_variants <- rowSums(amat > 0) > 1
     if (!any(keep_variants)) {
         stop("No variants remain in amat after filtering for >1 non-zero counts")

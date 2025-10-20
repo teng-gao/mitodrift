@@ -3,7 +3,7 @@ plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = T
     tip_annot = NULL, annot_scale = NULL, feature_mat = NULL, feature_limits = c(-2,2), rescale = FALSE,
     title = NULL, label_site = FALSE, cell_annot = NULL, tip_lab = FALSE, node_lab = FALSE, layered = FALSE, annot_bar_height = 0.1, clade_bar_height = 1,
     het_max = 0.1, conf_min = 0, conf_max = 1, conf_label = FALSE, branch_length = TRUE, node_conf = FALSE, annot_pal = NULL, annot_legend = FALSE, label_group = FALSE,
-    annot_legend_title = '', text_size = 3, node_label_size = 1, mut = NULL, mark_low_cov = FALSE, facet_by_group = FALSE, flip = TRUE) {
+    annot_legend_title = '', text_size = 3, node_label_size = 1, mut = NULL, mark_low_cov = FALSE, facet_by_group = FALSE, flip = TRUE, ladderize = TRUE) {
 
     if (inherits(gtree, 'tbl_graph')) {
         phylo = to_phylo_reorder(gtree)
@@ -17,7 +17,7 @@ plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = T
     }
 
     p_tree = phylo %>%
-        ggtree(ladderize = TRUE, linewidth = branch_width, right = flip) + 
+        ggtree(ladderize = ladderize, linewidth = branch_width, right = flip) + 
         theme_bw() +
         theme(
             plot.margin = margin(0, 0, 0, 0, unit = "mm"), 
@@ -170,14 +170,16 @@ plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = T
             annot %>% filter(cell %in% phylo$tip.label)
         })
 
-        # Determine titles for each annotation bar
+        if (is.null(names(cell_annot))) {
+            names(cell_annot) <- paste0('annot', seq_along(cell_annot))
+        }
         annot_titles <- names(cell_annot)
 
         # Create separate bars for each annotation with its own palette
         p_bars <- mapply(function(annot, pal, bar_title) {
             annot %>%
                 mutate(cell = factor(cell, cell_order)) %>%  
-                annot_bar(
+                mitodrift:::annot_bar(
                     legend = annot_legend, 
                     label_group = label_group, 
                     label_size = text_size,
@@ -356,13 +358,14 @@ order_muts <- function(cell_order, mut_dat) {
   names(sort(med_tip_pos, na.last = TRUE))
 }
 
-plot_phylo_circ = function(gtree, node_conf = FALSE, conf_label = FALSE, title = '', pwidth_annot = 0.25, pwidth_activity = 0.25,
+
+plot_phylo_circ = function(gtree, node_conf = FALSE, conf_label = FALSE, title = '', pwidth_annot = 0.25, pwidth_feature = 0.25,
     branch_width = 0.3, dot_size = 1, conf_min = 0, conf_max = 0.5, cell_annot = NULL, annot_pal = NULL, offset = 0.05, width = 0.8,
-    activity_mat = NULL, label_size = 2, rescale = FALSE, limits = c(-2,2), flip = TRUE,
-    tip_annot = NULL, legend = FALSE, layered = FALSE, smooth_k = 0) {
+    feature_mat = NULL, label_size = 2, rescale = FALSE, limits = c(-2,2), annot_legend_title = 'Group', feature_legend_title = 'Score', flip = TRUE,
+    tip_annot = NULL, legend = FALSE, layered = FALSE, smooth_k = 0, ladderize = TRUE) {
 
     p_tree = ggtree(gtree, 
-            ladderize = TRUE, layout = 'circular',
+            ladderize = ladderize, layout = 'circular',
             branch.length = "none", linewidth = branch_width, right = flip
         ) + ggtitle(title)
 
@@ -389,6 +392,19 @@ plot_phylo_circ = function(gtree, node_conf = FALSE, conf_label = FALSE, title =
         }
     }
 
+    if (!is.null(tip_annot)) {
+
+        dat = tip_annot %>% select(any_of(c('name' = 'cell', 'annot')))
+
+        p_tree = p_tree %<+% 
+            dat +
+            geom_tippoint(aes(color = annot), size = dot_size, pch = 19, stroke = 0)
+    }
+
+    cell_order = p_tree$data %>% filter(isTip) %>% arrange(y) %>% 
+        pull(label)
+
+
     if (!is.null(cell_annot)) {
         
         # Handle both single data frame and list of data frames
@@ -405,21 +421,26 @@ plot_phylo_circ = function(gtree, node_conf = FALSE, conf_label = FALSE, title =
             annot_pal <- rep(list(NULL), length(cell_annot))
         }
         
+        # Ensure annotation list has names to use as legend titles
+        if (is.null(names(cell_annot))) {
+            names(cell_annot) <- paste0('annot', seq_along(cell_annot))
+        }
+
         # Add each annotation as a separate fruit layer
         for (i in seq_along(cell_annot)) {
             annot_data <- cell_annot[[i]]
             pal <- annot_pal[[i]]
+            bar_title <- names(cell_annot)[i]
             
-            # Start new scale for each annotation (except the first one)
-            if (i > 1) {
-                p_tree = p_tree + ggnewscale::new_scale_fill()
-            }
+            # Start new scale for each annotation
+            p_tree = p_tree + ggnewscale::new_scale_fill()
             
             if (layered) {
                 p_tree = p_tree + geom_fruit(
                     data = annot_data,
                     geom = geom_tile,
                     pwidth = pwidth_annot,
+                    offset = offset,
                     mapping = aes(y = cell, fill = annot, x = annot),
                     show.legend = legend)
             } else {
@@ -427,44 +448,35 @@ plot_phylo_circ = function(gtree, node_conf = FALSE, conf_label = FALSE, title =
                     data = annot_data,
                     geom = geom_col,
                     pwidth = pwidth_annot,
+                    offset = offset,
                     mapping = aes(y = cell, fill = annot, x = 1),
                     show.legend = legend)
             }
             
-            # Add custom palette if provided
+            # Add custom palette if provided; use the per-annotation name as legend title
             if (!is.null(pal)) {
-                p_tree = p_tree + scale_fill_manual(values = pal, na.value = 'gray90')
+                p_tree = p_tree + scale_fill_manual(name = bar_title, values = pal, na.value = 'gray30')
+            } else {
+                p_tree = p_tree + scale_fill_discrete(name = bar_title, na.value = 'gray30')
             }
         }
     }
 
-    if (!is.null(tip_annot)) {
+    if (!is.null(feature_mat)) {
 
-        dat = tip_annot %>% select(any_of(c('name' = 'cell', 'annot')))
-
-        p_tree = p_tree %<+% 
-            dat +
-            geom_tippoint(aes(color = annot), size = dot_size, pch = 19, stroke = 0)
-    }
-
-    cell_order = p_tree$data %>% filter(isTip) %>% arrange(y) %>% 
-        pull(label)
-
-    if (!is.null(activity_mat)) {
-
-        activity_mat = activity_mat[,cell_order,drop = FALSE] 
+        feature_mat = feature_mat[,cell_order,drop = FALSE] 
 
         if (smooth_k > 0) {
-            activity_mat = activity_mat %>% row_smooth(k = smooth_k)
+            feature_mat = feature_mat %>% row_smooth(k = smooth_k)
         }
 
-        df_activity = activity_mat %>%
+        df_feature = feature_mat %>%
             reshape2::melt() %>% 
             setNames(c('feature', 'cell', 'value')) %>%
             mutate(cell = as.character(cell))
 
         if (rescale) {
-            df_activity = df_activity %>%
+            df_feature = df_feature %>%
                 group_by(feature) %>%
                 mutate(value = as.vector(scale(value))) %>%
                 ungroup()
@@ -473,10 +485,10 @@ plot_phylo_circ = function(gtree, node_conf = FALSE, conf_label = FALSE, title =
         p_tree = p_tree + 
             ggnewscale::new_scale_fill() +
             geom_fruit(
-                data = df_activity,
+                data = df_feature,
                 geom = geom_tile,
                 offset = offset,
-                pwidth = pwidth_activity,
+                pwidth = pwidth_feature,
                 width = width,
                 # linewidth = 0.3,
                 axis.params = list(
@@ -487,8 +499,8 @@ plot_phylo_circ = function(gtree, node_conf = FALSE, conf_label = FALSE, title =
                 ),
                 mapping = aes(x = feature, y = cell, fill = value),
                 show.legend = TRUE
-            ) +
-            scale_fill_gradient2(low = "blue", high = "red", limits = limits, oob = scales::oob_squish)
+            ) + 
+            scale_fill_gradient2(name = feature_legend_title, low = "blue", high = "red", limits = limits, oob = scales::oob_squish)
 
         if (!is.null(tip_annot)) {
             cts = unique(tip_annot$annot)
