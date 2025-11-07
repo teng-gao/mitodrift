@@ -516,7 +516,8 @@ plot_phylo_circ = function(gtree, node_conf = FALSE, conf_label = FALSE, title =
             p_tree = p_tree +
                 scale_color_manual(
                     name   = "Annotation",   
-                    values = annot_cols
+                    values = annot_cols,
+                    
                 ) +
                 geom_point(
                     data       = data.frame(annot = names(annot_cols)),

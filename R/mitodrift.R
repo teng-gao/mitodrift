@@ -626,6 +626,7 @@ mat_to_long = function(amat, dmat) {
 #' @return A phylo object
 #' @export
 make_rooted_nj = function(vmat, dist_method = 'manhattan') {
+    vmat[is.na(vmat)] = 0
     vmat = cbind(vmat, outgroup = 0)
     dist_mat = vmat %>% as.matrix %>% t %>% dist(method = dist_method)
     nj_tree = ape::nj(dist_mat) %>% 
