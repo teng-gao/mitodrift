@@ -1,9 +1,10 @@
 #' @export 
 plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = TRUE, dot_size = 1, ylim = NULL,
     tip_annot = NULL, annot_scale = NULL, feature_mat = NULL, feature_limits = c(-2,2), rescale = FALSE,
-    title = NULL, label_site = FALSE, cell_annot = NULL, tip_lab = FALSE, node_lab = FALSE, layered = FALSE, annot_bar_height = 0.1, clade_bar_height = 1,
+    title = NULL, label_site = FALSE, cell_annot = NULL, tip_lab = FALSE, node_lab = FALSE, layered = FALSE, annot_bar_height = 0.1, clade_bar_height = 1, feature_height = 1,
     het_max = 0.1, conf_min = 0, conf_max = 1, conf_label = FALSE, branch_length = TRUE, node_conf = FALSE, annot_pal = NULL, annot_legend = FALSE, label_group = FALSE,
-    annot_legend_title = '', text_size = 3, node_label_size = 1, mut = NULL, mark_low_cov = FALSE, facet_by_group = FALSE, flip = TRUE, ladderize = TRUE) {
+    annot_legend_title = '', text_size = 3, node_label_size = 1, mut = NULL, mark_low_cov = FALSE, facet_by_group = FALSE, flip = TRUE, ladderize = TRUE,
+    variants_highlight = NULL) {
 
     if (inherits(gtree, 'tbl_graph')) {
         phylo = to_phylo_reorder(gtree)
@@ -136,6 +137,16 @@ plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = T
         xlab(paste0('cells (n=', length(cell_order), ')')) +
         ylab(paste0('variants (n=', length(unique(df_var$variant)), ')'))
 
+    # Optionally highlight specified variants in bold on y-axis
+    if (!is.null(variants_highlight)) {
+        vh <- intersect(as.character(unique(df_var$variant)), variants_highlight)
+        if (length(vh) > 0) {
+            lab_expr <- function(v) sapply(v, function(x) if (x %in% vh) paste0('bold("', x, '")') else paste0('"', x, '"'))
+            p_heatmap <- p_heatmap +
+                scale_y_discrete(labels = function(v) parse(text = lab_expr(v)))
+        }
+    }
+
     if (facet_by_group) {
         p_heatmap = p_heatmap + facet_grid(group~., scales = 'free_y', space = 'free_y') +
             theme(panel.spacing.y = unit(0,'mm'))
@@ -200,6 +211,14 @@ plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = T
             reshape2::melt(id.vars = 'feature', variable.name = 'cell', value.name = 'value') %>%
             mutate(cell = factor(cell, cell_order))
 
+        
+        if (rescale) {
+            df_feature = df_feature %>%
+                group_by(feature) %>%
+                mutate(value = as.vector(scale(value))) %>%
+                ungroup()
+        }
+
         p_feature = df_feature %>%
             ggplot(aes(x = cell, y = feature, fill = value)) +
             geom_raster(show.legend = TRUE) +
@@ -228,7 +247,7 @@ plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = T
     
     if (!is.null(feature_mat)) {
         plot_components <- c(plot_components, list(p_feature))
-        heights <- c(heights, 1)
+        heights <- c(heights, feature_height)
     }
     
     plot_components <- c(plot_components, list(p_heatmap))
@@ -463,6 +482,8 @@ plot_phylo_circ = function(gtree, node_conf = FALSE, conf_label = FALSE, title =
     }
 
     if (!is.null(feature_mat)) {
+
+        feature_mat = as.matrix(feature_mat)
 
         feature_mat = feature_mat[,cell_order,drop = FALSE] 
 

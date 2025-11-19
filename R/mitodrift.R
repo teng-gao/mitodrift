@@ -1257,7 +1257,7 @@ safe_read_chain = function(path, ncores = 1) {
 #' @export
 run_tree_mcmc_batch = function(
     phy_init, logP_list, logA_vec, outfile, max_iter = 100, nchains = 1, ncores = 1, ncores_qs = 1,
-    batch_size = 1000, diag = TRUE, resume = FALSE
+    batch_size = 1000, diag = TRUE, conv_thres = NULL, resume = FALSE
 ) {
 
 
@@ -1362,6 +1362,10 @@ run_tree_mcmc_batch = function(
                 ncores = ncores
             )
             message('ASDSF (target clades) after batch ', i, ': ', signif(asdsf, 4))
+            if (!is.null(conv_thres) && asdsf <= conv_thres) {
+                message('Convergence threshold (ASDSF) reached. Stopping MCMC.')
+                break
+            }
         }
 
         batch_time <- proc.time() - ptm

@@ -18,7 +18,6 @@ suppressPackageStartupMessages({
     library(ggraph)
     library(mitodrift)
     library(optparse)
-    library(CRF)
 })
 
 # repo_dir = "/lab-share/Hem-Sankaran-e2/Public/projects/tgao/tools/mitodrift"
@@ -169,6 +168,13 @@ option_list <- list(
         default = TRUE,
         help = "Whether to run diagnostics (e.g., ASDSF) after each MCMC batch",
         metavar = "LOGICAL"
+    ),
+    make_option(
+        c("-z", "--conv_thres"),
+        type = "double",
+        default = NULL,
+        help = "Convergence threshold for ASDSF",
+        metavar = "DOUBLE"
     ),
     make_option(
         c("-r", "--resume"),
@@ -333,6 +339,7 @@ md$run_mcmc(
     ncores_qs = opts$ncores_qs,
     batch_size = opts$tree_mcmc_batch_size,
     diag = opts$tree_mcmc_diag,
+    conv_thres = opts$conv_thres,
     outfile = mcmc_trace_file,
     resume = opts$resume
 )

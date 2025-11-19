@@ -452,6 +452,7 @@ MitoDrift <- R6::R6Class("MitoDrift",
         
         #' @description Run phylogenetic MCMC sampling
         #' @param max_iter Maximum number of MCMC iterations (default: 10000)
+        #' @param conv_thres Convergence threshold for ASDSF (default: NULL)
         #' @param nchains Number of MCMC chains (default: 1000)
         #' @param ncores Number of cores to use (default: 1)
         #' @param ncores_qs Number of cores to use for QS operations (default: 1)
@@ -463,6 +464,7 @@ MitoDrift <- R6::R6Class("MitoDrift",
         #' @return MCMC result object
         run_mcmc = function(
             max_iter = 10000,
+            conv_thres = NULL,
             nchains = 1000,
             ncores = 1,
             ncores_qs = 1,
@@ -503,6 +505,7 @@ MitoDrift <- R6::R6Class("MitoDrift",
                 logP_list = self$logP,
                 logA_vec = self$logA,
                 max_iter = max_iter,
+                conv_thres = conv_thres,
                 nchains = nchains,
                 ncores = ncores,
                 ncores_qs = ncores_qs,

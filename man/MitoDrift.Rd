@@ -300,6 +300,7 @@ Run phylogenetic MCMC sampling
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{MitoDrift$run_mcmc(
   max_iter = 10000,
+  conv_thres = NULL,
   nchains = 1000,
   ncores = 1,
   ncores_qs = 1,
@@ -315,6 +316,8 @@ Run phylogenetic MCMC sampling
 \if{html}{\out{<div class="arguments">}}
 \describe{
 \item{\code{max_iter}}{Maximum number of MCMC iterations (default: 10000)}
+
+\item{\code{conv_thres}}{Convergence threshold for ASDSF (default: NULL)}
 
 \item{\code{nchains}}{Number of MCMC chains (default: 1000)}
 
