@@ -381,10 +381,10 @@ order_muts <- function(cell_order, mut_dat) {
 plot_phylo_circ = function(gtree, node_conf = FALSE, conf_label = FALSE, title = '', pwidth_annot = 0.25, pwidth_feature = 0.25,
     branch_width = 0.3, dot_size = 1, conf_min = 0, conf_max = 0.5, cell_annot = NULL, annot_pal = NULL, offset = 0.05, width = 0.8,
     feature_mat = NULL, label_size = 2, rescale = FALSE, limits = c(-2,2), annot_legend_title = 'Group', feature_legend_title = 'Score', flip = TRUE,
-    tip_annot = NULL, legend = FALSE, layered = FALSE, smooth_k = 0, ladderize = TRUE) {
+    tip_annot = NULL, legend = FALSE, layered = FALSE, smooth_k = 0, ladderize = TRUE, open_angle = 0) {
 
     p_tree = ggtree(gtree, 
-            ladderize = ladderize, layout = 'circular',
+            ladderize = ladderize, layout = 'fan', open.angle = open_angle,
             branch.length = "none", linewidth = branch_width, right = flip
         ) + ggtitle(title)
 
@@ -487,6 +487,10 @@ plot_phylo_circ = function(gtree, node_conf = FALSE, conf_label = FALSE, title =
 
         feature_mat = feature_mat[,cell_order,drop = FALSE] 
 
+        # if (rescale) {
+        #     feature_mat = t(scale(t(feature_mat)))
+        # }
+
         if (smooth_k > 0) {
             feature_mat = feature_mat %>% row_smooth(k = smooth_k)
         }
@@ -514,9 +518,10 @@ plot_phylo_circ = function(gtree, node_conf = FALSE, conf_label = FALSE, title =
                 # linewidth = 0.3,
                 axis.params = list(
                     axis       = "x", 
-                    text.angle = 45,
+                    text.angle = 30,
                     text.size  = label_size,
-                    vjust      = 0
+                    vjust      = 0.5,
+                    hjust = 1
                 ),
                 mapping = aes(x = feature, y = cell, fill = value),
                 show.legend = TRUE
@@ -597,4 +602,64 @@ row_smooth <- function(M, k, na_rm = FALSE, edge = c("partial", "full")) {
 		out[i, ] <- res
 	}
 	out
+}
+
+#' Smooth feature matrix over phylogenetic neighbors
+#'
+#' @param phylo A phylo object
+#' @param feature_mat A matrix with features as rows and cells as columns
+#' @param k Number of nearest neighbors (including self) to smooth over
+#' @param ties_method Method to handle ties in distance: "min" (include all ties, default), "random", or "first"
+#' @return A smoothed matrix
+#' @export
+smooth_features_phylo <- function(feature_mat, phylo, k = 5, ties_method = "random") {
+    # Ensure feature_mat columns match phylo tips
+    common_cells <- intersect(phylo$tip.label, colnames(feature_mat))
+    if (length(common_cells) == 0) stop("No common cells between tree and feature matrix")
+    
+    # Subset and align
+    phylo <- ape::keep.tip(phylo, common_cells)
+    feature_mat <- feature_mat[, common_cells, drop = FALSE]
+    
+    # If no branch lengths, assume unit length
+    if (is.null(phylo$edge.length)) {
+        phylo$edge.length <- rep(1, nrow(phylo$edge))
+    }
+
+    # Compute cophenetic distance
+    dist_mat <- cophenetic(phylo)
+    
+    # Initialize output
+    smoothed_mat <- feature_mat
+    smoothed_mat[] <- NA
+    
+    # For each cell, find kNN and average
+    cells <- colnames(feature_mat)
+    
+    for (cell in cells) {
+        # Get distances for this cell
+        dists <- dist_mat[cell, ]
+        
+        # Identify neighbors based on tie handling method
+        if (ties_method == "min") {
+            # Include all neighbors with rank <= k (ties get same min rank)
+            # This may include > k neighbors if ties exist at the boundary
+            neighbors <- names(dists)[rank(dists, ties.method = "min") <= k]
+        } else if (ties_method == "random") {
+            # Randomly break ties to get exactly k neighbors
+            neighbors <- names(dists)[rank(dists, ties.method = "random") <= k]
+        } else {
+            # "first" or default sort behavior (deterministic based on tip order)
+            neighbors <- names(sort(dists)[1:k])
+        }
+        
+        # Average the features for these neighbors
+        if (length(neighbors) > 1) {
+            smoothed_mat[, cell] <- rowMeans(feature_mat[, neighbors, drop = FALSE], na.rm = TRUE)
+        } else {
+            smoothed_mat[, cell] <- feature_mat[, neighbors]
+        }
+    }
+    
+    return(smoothed_mat)
 }
