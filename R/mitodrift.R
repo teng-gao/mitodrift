@@ -1584,11 +1584,77 @@ phylo_to_gtree = function(phy) {
 
 #' @export
 trim_tree = function(tree, conf) {
+    if (!is.binary(tree)) {stop("Tree must be binary")}
     node_confs = as.numeric(tree$node.label)
     node_confs[is.na(node_confs)] = 0
     tree = TreeTools::CollapseNode(tree, which(node_confs < conf) + length(tree$tip.label))
     tree = TreeTools::Renumber(tree)
     return(tree)
+}
+
+
+#' @export
+trim_tree_size = function(tree, min_conf = 0, min_frac = 0, max_frac = Inf, method = 'union') {
+    node_confs = as.numeric(tree$node.label)
+    node_confs[is.na(node_confs)] = 0
+    
+    ntip = length(tree$tip.label)
+    node_ids = (ntip + 1):(ntip + tree$Nnode)
+    max_size = ceiling(ntip * max_frac)
+    min_size = ceiling(ntip * min_frac)
+    
+    # Calculate clade sizes
+    if (requireNamespace("phangorn", quietly = TRUE)) {
+         sizes = lengths(phangorn::Descendants(tree, node_ids, type = "tips"))
+    } else {
+         sizes = sapply(node_ids, function(x) length(ape::extract.clade(tree, x)$tip.label))
+    }
+    
+    if (method == 'union') {
+        # Collapse if EITHER criteria is failed (strict filtering)
+        # i.e. keep only if conf >= min_conf AND size >= min_size AND size <= max_size
+        to_collapse = which(node_confs < min_conf | sizes < min_size | sizes > max_size)
+    } else if (method == 'intersection') {
+        # Collapse only if BOTH criteria are failed (lenient filtering)
+        # i.e. keep if conf >= min_conf OR (size >= min_size AND size <= max_size)
+        to_collapse = which(node_confs < min_conf & (sizes < min_size | sizes > max_size))
+    } else {
+        stop("method must be 'union' or 'intersection'")
+    }
+    
+    if (length(to_collapse) > 0) {
+        tree = TreeTools::CollapseNode(tree, node_ids[to_collapse])
+        tree = TreeTools::Renumber(tree)
+    }
+    return(tree)
+}
+
+#' @export
+trim_tree_exp = function(tree, tol) {
+	
+	n_tip <- length(tree$tip.label)
+    n_tol = n_tip * tol
+	
+	# branch posteriors on internal nodes
+	node_confs <- as.numeric(tree$node.label)
+	node_confs[is.na(node_confs)] <- 0
+	
+	internal_nodes <- (n_tip + 1L):(n_tip + tree$Nnode)
+	desc_nodes <- TreeTools::CladeSizes(tree, nodes = internal_nodes)
+	clade_tips <- as.integer((desc_nodes + 2L) / 2L)
+	
+	# Expected wrong cells per branch: (1 - p) * clade_size
+	exp_wrong <- (1 - node_confs) * clade_tips
+
+	# Collapse branches whose expected wrong cells exceeds epsilon (= n_tol)
+	nodes_to_collapse <- which(exp_wrong > n_tol) + n_tip
+	
+	if (length(nodes_to_collapse) > 0L) {
+		tree <- TreeTools::CollapseNode(tree, nodes_to_collapse)
+		tree <- TreeTools::Renumber(tree)
+	}
+	
+	return(tree)
 }
 
 #' @export
