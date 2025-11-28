@@ -87,8 +87,8 @@ tree_mcmc_cpp_cached <- function(E, logP, logA, max_iter = 100L, seed = -1L) {
     .Call('_mitodrift_tree_mcmc_cpp_cached', PACKAGE = 'mitodrift', E, logP, logA, max_iter, seed)
 }
 
-tree_mcmc_cpp_cached_threadsafe <- function(E, logP, logA, max_iter = 100L, seed = -1L) {
-    .Call('_mitodrift_tree_mcmc_cpp_cached_threadsafe', PACKAGE = 'mitodrift', E, logP, logA, max_iter, seed)
+tree_mcmc_cpp_cached_threadsafe <- function(E, logP, logA, max_iter = 100L, seed = -1L, reorder = TRUE) {
+    .Call('_mitodrift_tree_mcmc_cpp_cached_threadsafe', PACKAGE = 'mitodrift', E, logP, logA, max_iter, seed, reorder)
 }
 
 tree_mcmc_parallel <- function(E, logP, logA, max_iter, nchains) {

@@ -244,8 +244,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // tree_mcmc_cpp_cached_threadsafe
-std::vector<arma::Col<int>> tree_mcmc_cpp_cached_threadsafe(arma::Col<int> E, const std::vector< std::vector<double> >& logP, const std::vector<double>& logA, int max_iter, int seed);
-RcppExport SEXP _mitodrift_tree_mcmc_cpp_cached_threadsafe(SEXP ESEXP, SEXP logPSEXP, SEXP logASEXP, SEXP max_iterSEXP, SEXP seedSEXP) {
+std::vector<arma::Col<int>> tree_mcmc_cpp_cached_threadsafe(arma::Col<int> E, const std::vector< std::vector<double> >& logP, const std::vector<double>& logA, int max_iter, int seed, bool reorder);
+RcppExport SEXP _mitodrift_tree_mcmc_cpp_cached_threadsafe(SEXP ESEXP, SEXP logPSEXP, SEXP logASEXP, SEXP max_iterSEXP, SEXP seedSEXP, SEXP reorderSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -254,7 +254,8 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const std::vector<double>& >::type logA(logASEXP);
     Rcpp::traits::input_parameter< int >::type max_iter(max_iterSEXP);
     Rcpp::traits::input_parameter< int >::type seed(seedSEXP);
-    rcpp_result_gen = Rcpp::wrap(tree_mcmc_cpp_cached_threadsafe(E, logP, logA, max_iter, seed));
+    Rcpp::traits::input_parameter< bool >::type reorder(reorderSEXP);
+    rcpp_result_gen = Rcpp::wrap(tree_mcmc_cpp_cached_threadsafe(E, logP, logA, max_iter, seed, reorder));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -335,7 +336,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_mitodrift_nni_cpp_parallel_multi", (DL_FUNC) &_mitodrift_nni_cpp_parallel_multi, 3},
     {"_mitodrift_tree_mcmc_cpp", (DL_FUNC) &_mitodrift_tree_mcmc_cpp, 5},
     {"_mitodrift_tree_mcmc_cpp_cached", (DL_FUNC) &_mitodrift_tree_mcmc_cpp_cached, 5},
-    {"_mitodrift_tree_mcmc_cpp_cached_threadsafe", (DL_FUNC) &_mitodrift_tree_mcmc_cpp_cached_threadsafe, 5},
+    {"_mitodrift_tree_mcmc_cpp_cached_threadsafe", (DL_FUNC) &_mitodrift_tree_mcmc_cpp_cached_threadsafe, 6},
     {"_mitodrift_tree_mcmc_parallel", (DL_FUNC) &_mitodrift_tree_mcmc_parallel, 5},
     {"_mitodrift_tree_mcmc_parallel_seeded", (DL_FUNC) &_mitodrift_tree_mcmc_parallel_seeded, 5},
     {"_mitodrift_compute_node_edge_stats_bp2", (DL_FUNC) &_mitodrift_compute_node_edge_stats_bp2, 3},
