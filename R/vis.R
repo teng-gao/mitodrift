@@ -377,11 +377,48 @@ order_muts <- function(cell_order, mut_dat) {
   names(sort(med_tip_pos, na.last = TRUE))
 }
 
-
-plot_phylo_circ = function(gtree, node_conf = FALSE, conf_label = FALSE, title = '', pwidth_annot = 0.25, pwidth_feature = 0.25,
-    branch_width = 0.3, dot_size = 1, conf_min = 0, conf_max = 0.5, cell_annot = NULL, annot_pal = NULL, offset = 0.05, width = 0.8,
-    feature_mat = NULL, label_size = 2, rescale = FALSE, limits = c(-2,2), annot_legend_title = 'Group', feature_legend_title = 'Score', flip = TRUE,
-    tip_annot = NULL, legend = FALSE, layered = FALSE, smooth_k = 0, ladderize = TRUE, open_angle = 0) {
+#' Plot Circular Phylogenetic Tree with Annotations
+#'
+#' Creates a circular (fan) layout phylogenetic tree plot with optional annotations,
+#' feature heatmaps, and node confidence values.
+#'
+#' @param gtree A `phylo` object or `tbl_graph` object representing the tree.
+#' @param cell_annot A data frame or list of data frames containing cell annotations.
+#'   Columns should include 'cell' and 'annot'.
+#' @param tip_annot A data frame containing tip annotations. Columns should include 'cell' and 'annot'.
+#' @param feature_mat A matrix of features to plot as a heatmap (rows are features, columns are cells).
+#' @param branch_scores Optional branch scores (currently unused).
+#' @param node_conf Logical. If `TRUE` and `gtree` is a `tbl_graph`, plots node confidence.
+#' @param conf_label Logical. If `TRUE`, adds text labels for node confidence.
+#' @param title Character string for the plot title.
+#' @param pwidth_annot Numeric. Width of the annotation ring(s).
+#' @param pwidth_feature Numeric. Width of the feature heatmap ring.
+#' @param branch_width Numeric. Line width for tree branches.
+#' @param dot_size Numeric. Size of tip/node points.
+#' @param conf_min Numeric. Minimum value for confidence color scale.
+#' @param conf_max Numeric. Maximum value for confidence color scale.
+#' @param annot_pal A vector or list of vectors specifying colors for annotations.
+#' @param offset Numeric. Offset distance between tree and annotation rings.
+#' @param width Numeric. Width of heatmap cells.
+#' @param label_size Numeric. Size of text labels.
+#' @param rescale Logical. If `TRUE`, rescales features (z-score) for the heatmap.
+#' @param limits Numeric vector of length 2. Limits for the feature heatmap color scale.
+#' @param annot_legend_title Character string. Title for the annotation legend.
+#' @param feature_legend_title Character string. Title for the feature heatmap legend.
+#' @param flip Logical. If `TRUE`, flips the tree direction.
+#' @param legend Logical. If `TRUE`, shows legends.
+#' @param layered Logical. If `TRUE`, plots annotations as layered tiles.
+#' @param smooth_k Integer. Number of neighbors for smoothing features. 0 means no smoothing.
+#' @param ladderize Logical. If `TRUE`, ladderizes the tree.
+#' @param open_angle Numeric. Angle of the opening in the fan layout.
+#'
+#' @return A `ggtree` plot object.
+#' @export
+plot_phylo_circ = function(gtree, cell_annot = NULL, tip_annot = NULL, feature_mat = NULL, branch_scores = NULL,
+    node_conf = FALSE, conf_label = FALSE, title = '', pwidth_annot = 0.25, pwidth_feature = 0.25,
+    branch_width = 0.3, dot_size = 1, conf_min = 0, conf_max = 0.5, annot_pal = NULL, offset = 0.05, width = 0.8,
+    label_size = 2, rescale = FALSE, limits = c(-2,2), annot_legend_title = 'Group', feature_legend_title = 'Score', flip = TRUE,
+    legend = FALSE, layered = FALSE, smooth_k = 0, ladderize = TRUE, open_angle = 0) {
 
     p_tree = ggtree(gtree, 
             ladderize = ladderize, layout = 'fan', open.angle = open_angle,

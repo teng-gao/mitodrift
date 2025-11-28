@@ -1662,6 +1662,9 @@ std::vector< std::vector<arma::Col<int>> > tree_mcmc_parallel_seeded(std::vector
     return chain_results;
 }
 
+
+////////////////////////  EM Helpers //////////////////////// 
+
 struct ComputeNodeEdgeStatsWorker : public Worker {
 	const int m;
 	const int n;
