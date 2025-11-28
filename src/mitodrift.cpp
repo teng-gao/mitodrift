@@ -10,6 +10,7 @@
 #include <vector>
 #include <sstream>
 #include <numeric>
+#include <mutex>
 
 using namespace Rcpp;
 using namespace RcppParallel;
@@ -848,6 +849,7 @@ struct NNICache {
     // Size L
     mutable std::vector<double> scratch_max_t;
     mutable std::vector<double> scratch_s;
+	mutable std::mutex scratch_mutex;
 
 	NNICache(arma::Col<int> E_in,
 		const std::vector< std::vector<double> >& logP_in,
@@ -1174,10 +1176,11 @@ struct NNICache {
 
 	// Compute new total loglik if we perform the NNI "which" (0 or 1) at the nth internal edge.
 	double compute_new_loglik(int edge_n, int which) const {
-		// Locate the nth internal edge (child > nTips)
+		std::lock_guard<std::mutex> guard(scratch_mutex);
+		// Locate the nth internal edge (child >= nTips after 0-indexing)
 		int cnt = 0, ind = -1;
 		for (int i = 0; i < m; ++i) {
-			if (E[m + i] > nTips) {
+			if (E[m + i] >= nTips) {
 				++cnt;
 				if (cnt == edge_n) { ind = i; break; }
 			}
@@ -1271,10 +1274,11 @@ struct NNICache {
 
 	// Commit the NNI: update topology and cached F/logZ across loci.
 	void apply_nni(int edge_n, int which) {
+		std::lock_guard<std::mutex> guard(scratch_mutex);
 		// Identify key nodes from current topology
 		int cnt = 0, ind = -1;
 		for (int i = 0; i < m; ++i) {
-			if (E[m + i] > nTips) {
+			if (E[m + i] >= nTips) {
 				++cnt;
 				if (cnt == edge_n) { ind = i; break; }
 			}
