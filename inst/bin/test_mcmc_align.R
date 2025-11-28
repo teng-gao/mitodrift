@@ -112,3 +112,18 @@ p <- tree_counts %>%
 plot_file <- file.path(outdir, "mcmc_alignment_plot.pdf")
 ggsave(plot_file, p, width = 6, height = 5)
 message("Plot saved to ", plot_file)
+
+# Save dataframe
+df_file <- file.path(outdir, "mcmc_alignment_data.csv")
+write.csv(tree_counts, df_file, row.names = FALSE)
+message("Dataframe saved to ", df_file)
+
+# Calculate and print metrics
+correlation <- cor(tree_counts$p, tree_counts$frac)
+r_squared <- correlation^2
+rmse <- sqrt(mean((tree_counts$p - tree_counts$frac)^2))
+
+message("\nAgreement Metrics:")
+message(sprintf("Correlation (r): %.4f", correlation))
+message(sprintf("R-squared: %.4f", r_squared))
+message(sprintf("RMSE: %.4f", rmse))
