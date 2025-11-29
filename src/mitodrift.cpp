@@ -450,12 +450,13 @@ struct NNICache {
 	int root;				// root node id (0-indexed)
 	arma::Col<int> E;		// edge list, 0-indexed, postorder (parent col [0..m-1], child col [m..2m-1])
 
+
 	// topology helpers
 	std::vector<int> parent_of;					// size n
 	std::vector< std::array<int,2> > children_of;		// for internal nodes: exactly two children
 	// transition precompute
 	std::vector<double> row_maxA;				// size C
-	std::vector<double> expA_shifted;			// size C*C, row-major
+    arma::Mat<double> expA_shifted_t;    // stores exp(A) rows as columns (C x C)
 
 	// data likelihoods
 	std::vector< std::vector<double> > logP_list;	// L × (C*n), row-major per locus
@@ -476,11 +477,10 @@ struct NNICache {
     mutable std::vector<double> scratch_childF;
     mutable std::vector<double> scratch_prev_childF;
     mutable std::vector<double> scratch_F_v;
-    mutable std::vector<double> scratch_curF;
-    
+    mutable std::vector<double> scratch_s_full;
+
     // Size L
     mutable std::vector<double> scratch_max_t;
-    mutable std::vector<double> scratch_s;
 	mutable std::mutex scratch_mutex;
 
 	NNICache(arma::Col<int> E_in,
@@ -501,10 +501,9 @@ struct NNICache {
         scratch_childF.resize(CL);
         scratch_prev_childF.resize(CL);
         scratch_F_v.resize(CL);
-        scratch_curF.resize(CL);
-        
+        scratch_s_full.resize(CL);
+		
         scratch_max_t.resize(L);
-        scratch_s.resize(L);
 
 		// Bring E to postorder and 0-indexed
         if (reorder) {
@@ -529,16 +528,17 @@ struct NNICache {
 		}
 
 		// A precompute
-		row_maxA.resize(C);
-		expA_shifted.resize(static_cast<size_t>(C) * C);
-		for (int r = 0; r < C; ++r) {
-			const double* Arow = logA_in.data() + static_cast<size_t>(r) * C;
-			double mr = Arow[0];
-			for (int j = 1; j < C; ++j) if (Arow[j] > mr) mr = Arow[j];
-			row_maxA[r] = mr;
-			double* out = expA_shifted.data() + static_cast<size_t>(r) * C;
-			for (int j = 0; j < C; ++j) out[j] = std::exp(Arow[j] - mr);
-		}
+        row_maxA.resize(C);
+        expA_shifted_t.set_size(C, C);
+        for (int r = 0; r < C; ++r) {
+            const double* Arow = logA_in.data() + static_cast<size_t>(r) * C;
+            double mr = Arow[0];
+            for (int j = 1; j < C; ++j) if (Arow[j] > mr) mr = Arow[j];
+            row_maxA[r] = mr;
+            for (int j = 0; j < C; ++j) {
+                expA_shifted_t(j, r) = std::exp(Arow[j] - mr);
+            }
+        }
 
 		// Transpose logP
         logP_storage.resize(n * C * L);
@@ -563,7 +563,7 @@ struct NNICache {
         std::vector<double> init_temp(C * L);
         std::vector<double> init_u(C * L);
         std::vector<double> init_max_t(L);
-        std::vector<double> init_s(L);
+        std::vector<double> init_s_full(C * L);
         
         for (int i = 0; i < m; ++i) {
             const int par  = E[i];
@@ -602,26 +602,21 @@ struct NNICache {
                 }
             }
             
-            const double* rowA = expA_shifted.data();
-            for (int r = 0; r < C; ++r, rowA += C) {
-                std::fill(init_s.begin(), init_s.end(), 0.0);
-                for (int j = 0; j < C; ++j) {
-                    double A_val = rowA[j];
-                    double* u = init_u.data() + j * L;
-                    for (int l = 0; l < L; ++l) {
-                        init_s[l] += A_val * u[l];
-                    }
-                }
-                
+            arma::Mat<double> init_U(init_u.data(), L, C, false, true);
+            arma::Mat<double> init_S(init_s_full.data(), L, C, false, true);
+            init_S = init_U * expA_shifted_t;
+            const double* s_ptr = init_S.memptr();
+            for (int r = 0; r < C; ++r) {
                 double row_max = row_maxA[r];
+                const double* s_col = s_ptr + static_cast<size_t>(r) * L;
                 double* f = F_ptr + r * L;
                 double* mp = msg_par_ptr + r * L;
                 for (int l = 0; l < L; ++l) {
-                    if (init_max_t[l] == -std::numeric_limits<double>::infinity()) {
+                    if (init_max_t[l] == -std::numeric_limits<double>::infinity() || s_col[l] <= 0.0) {
                         f[l] = -std::numeric_limits<double>::infinity();
                         mp[l] += -std::numeric_limits<double>::infinity();
                     } else {
-                        double val = row_max + init_max_t[l] + std::log(init_s[l]);
+                        double val = row_max + init_max_t[l] + std::log(s_col[l]);
                         f[l] = val;
                         mp[l] += val;
                     }
@@ -666,63 +661,61 @@ struct NNICache {
 		return (ch[0] == child) ? ch[1] : ch[0];
 	}
 
-	inline void compute_F_vectorized(
-        const double* F_c1, const double* F_c2, // pointers to [c=0][l=0]
-        const double* P_base, // pointer to P[node][0][0]
+    inline int locate_internal_edge_index(int edge_n) const {
+        int cnt = 0;
+        for (int i = 0; i < m; ++i) {
+            if (E[m + i] >= nTips) {
+                ++cnt;
+                if (cnt == edge_n) return i;
+            }
+        }
+        return -1;
+    }
+
+    inline void compute_F_vectorized(
+        const double* F_c1, const double* F_c2,
+        const double* P_base,
         double* outF,
-        // scratch buffers of size C*L
-        double* u, double* temp, double* s_vec, double* max_t
+        double* u, double* temp,
+        double* max_t, double* s_full
     ) const {
-        // 1. Compute temp = P + F1 + F2 and max_t
-        std::fill(max_t, max_t + L, -std::numeric_limits<double>::infinity());
-        
+        const double neg_inf = -std::numeric_limits<double>::infinity();
+        std::fill(max_t, max_t + L, neg_inf);
+		
         for (int c = 0; c < C; ++c) {
             const double* p_ptr = P_base + c * L;
             const double* f1_ptr = F_c1 + c * L;
             const double* f2_ptr = F_c2 + c * L;
             double* t_ptr = temp + c * L;
-            
             for (int l = 0; l < L; ++l) {
                 double val = p_ptr[l] + f1_ptr[l] + f2_ptr[l];
                 t_ptr[l] = val;
                 if (val > max_t[l]) max_t[l] = val;
             }
         }
-        
-        // 2. Compute u = exp(temp - max_t)
+		
         for (int c = 0; c < C; ++c) {
             double* t_ptr = temp + c * L;
             double* u_ptr = u + c * L;
             for (int l = 0; l < L; ++l) {
-                if (max_t[l] == -std::numeric_limits<double>::infinity()) {
-                    u_ptr[l] = 0.0;
-                } else {
-                    u_ptr[l] = std::exp(t_ptr[l] - max_t[l]);
-                }
+                u_ptr[l] = (max_t[l] == neg_inf) ? 0.0 : std::exp(t_ptr[l] - max_t[l]);
             }
         }
-        
-        // 3. Compute s = sum(A * u) and outF
-        const double* rowA = expA_shifted.data();
-        for (int r = 0; r < C; ++r, rowA += C) {
-            double* out_ptr = outF + r * L;
-            
-            std::fill(s_vec, s_vec + L, 0.0);
-            
-            for (int j = 0; j < C; ++j) {
-                double A_val = rowA[j];
-                const double* u_ptr = u + j * L;
-                for (int l = 0; l < L; ++l) {
-                    s_vec[l] += A_val * u_ptr[l];
-                }
-            }
-            
+		
+        arma::Mat<double> U_view(u, L, C, false, true);
+        arma::Mat<double> S_view(s_full, L, C, false, true);
+        S_view = U_view * expA_shifted_t;
+        const double* s_ptr = S_view.memptr();
+		
+        for (int r = 0; r < C; ++r) {
             double row_max = row_maxA[r];
+            const double* s_col = s_ptr + static_cast<size_t>(r) * L;
+            double* out_ptr = outF + r * L;
             for (int l = 0; l < L; ++l) {
-                if (max_t[l] == -std::numeric_limits<double>::infinity()) {
-                    out_ptr[l] = -std::numeric_limits<double>::infinity();
+                if (max_t[l] == neg_inf || s_col[l] <= 0.0) {
+                    out_ptr[l] = neg_inf;
                 } else {
-                    out_ptr[l] = row_max + max_t[l] + std::log(s_vec[l]);
+                    out_ptr[l] = row_max + max_t[l] + std::log(s_col[l]);
                 }
             }
         }
@@ -764,48 +757,38 @@ struct NNICache {
         return total_logZ;
     }
 
-	// Compute new total loglik if we perform the NNI "which" (0 or 1) at the nth internal edge.
-	double compute_new_loglik(int edge_n, int which) const {
-		std::lock_guard<std::mutex> guard(scratch_mutex);
-		// Locate the nth internal edge (child >= nTips after 0-indexing)
-		int cnt = 0, ind = -1;
-		for (int i = 0; i < m; ++i) {
-			if (E[m + i] >= nTips) {
-				++cnt;
-				if (cnt == edge_n) { ind = i; break; }
-			}
-		}
-		if (ind < 0) stop("edge_n out of range in compute_new_loglik");
+    // Compute new total loglik if we perform the NNI "which" (0 or 1) at the nth internal edge.
+    double compute_new_loglik(int edge_n, int which) const {
+        std::lock_guard<std::mutex> guard(scratch_mutex);
+        const int ind = locate_internal_edge_index(edge_n);
+        if (ind < 0) stop("edge_n out of range in compute_new_loglik");
 
-		const int p1 = E[ind];
-		const int p2 = E[m + ind];
-		const int c1 = other_child(p1, p2);
-		const int c2 = children_of[p2][0];
-		const int c3 = children_of[p2][1];
+        const int p1 = E[ind];
+        const int p2 = E[m + ind];
+        const int c1 = other_child(p1, p2);
+        const int c2 = children_of[p2][0];
+        const int c3 = children_of[p2][1];
 
-		const int cX    = (which == 0 ? c2 : c3);   // moves to p1
-		const int cStay = (which == 0 ? c3 : c2);   // stays under p2
+        const int cX    = (which == 0 ? c2 : c3);   // moves to p1
+        const int cStay = (which == 0 ? c3 : c2);   // stays under p2
 
-		// 1) Recompute F at p2 with new children {c1, cStay}
         compute_F_vectorized(
             F.data() + c1 * C * L,
             F.data() + cStay * C * L,
             logP_storage.data() + p2 * C * L,
             scratch_F_p2.data(),
-            scratch_u.data(), scratch_temp.data(), scratch_s.data(), scratch_max_t.data()
+            scratch_u.data(), scratch_temp.data(), scratch_max_t.data(), scratch_s_full.data()
         );
 
-		// 2) Recompute F at p1 with new children {p2(new), cX}
         compute_F_vectorized(
             scratch_F_p2.data(),
             F.data() + cX * C * L,
             logP_storage.data() + p1 * C * L,
             scratch_F_p1.data(),
-            scratch_u.data(), scratch_temp.data(), scratch_s.data(), scratch_max_t.data()
+            scratch_u.data(), scratch_temp.data(), scratch_max_t.data(), scratch_s_full.data()
         );
 
-		// If p1 is root, compute root logZ directly
-		if (parent_of[p1] == -1) {
+        if (parent_of[p1] == -1) {
             double new_total = compute_root_logZ_vectorized(
                 scratch_F_p2.data(),
                 F.data() + cX * C * L,
@@ -813,24 +796,22 @@ struct NNICache {
                 scratch_temp.data(), scratch_max_t.data()
             );
             return new_total;
-		}
+        }
 
-		// Otherwise climb to root
-		int child = p1;
+        int child = p1;
         double* p_childF = scratch_childF.data();
         double* p_prev_childF = scratch_prev_childF.data();
         double* p_F_v = scratch_F_v.data();
-        
+
         std::copy(scratch_F_p1.begin(), scratch_F_p1.end(), p_childF);
 
-		int prev_child = -1;
+        int prev_child = -1;
 
-		while (true) {
-			const int v = parent_of[child];
-			if (v == -1) {
-                // child is root
-				const int root_node = child;
-				const int sib = other_child(root_node, prev_child);
+        while (true) {
+            const int v = parent_of[child];
+            if (v == -1) {
+                const int root_node = child;
+                const int sib = other_child(root_node, prev_child);
                 double new_total = compute_root_logZ_vectorized(
                     p_prev_childF,
                     F.data() + sib * C * L,
@@ -838,41 +819,30 @@ struct NNICache {
                     scratch_temp.data(), scratch_max_t.data()
                 );
                 return new_total;
-			}
+            }
 
-			const int sib = other_child(v, child);
-            
+            const int sib = other_child(v, child);
             compute_F_vectorized(
                 p_childF,
                 F.data() + sib * C * L,
                 logP_storage.data() + v * C * L,
                 p_F_v,
-                scratch_u.data(), scratch_temp.data(), scratch_s.data(), scratch_max_t.data()
+                scratch_u.data(), scratch_temp.data(), scratch_max_t.data(), scratch_s_full.data()
             );
 
-			prev_child = child;
-            
-            // Swap pointers
+            prev_child = child;
             double* temp = p_prev_childF;
             p_prev_childF = p_childF;
             p_childF = p_F_v;
             p_F_v = temp;
-            
-			child = v;
-		}
-	}
+            child = v;
+        }
+    }
 
 	// Commit the NNI: update topology and cached F/logZ across loci.
-	void apply_nni(int edge_n, int which) {
+    void apply_nni(int edge_n, int which) {
 		std::lock_guard<std::mutex> guard(scratch_mutex);
-		// Identify key nodes from current topology
-		int cnt = 0, ind = -1;
-		for (int i = 0; i < m; ++i) {
-			if (E[m + i] >= nTips) {
-				++cnt;
-				if (cnt == edge_n) { ind = i; break; }
-			}
-		}
+        int ind = locate_internal_edge_index(edge_n);
 		if (ind < 0) stop("edge_n out of range in apply_nni");
 
 		const int p1 = E[ind];
@@ -891,7 +861,7 @@ struct NNICache {
             F.data() + cStay * C * L,
             logP_storage.data() + p2 * C * L,
             F.data() + p2 * C * L,
-            scratch_u.data(), scratch_temp.data(), scratch_s.data(), scratch_max_t.data()
+            scratch_u.data(), scratch_temp.data(), scratch_max_t.data(), scratch_s_full.data()
         );
 
         // p1 new F
@@ -900,7 +870,7 @@ struct NNICache {
             F.data() + cX * C * L,
             logP_storage.data() + p1 * C * L,
             F.data() + p1 * C * L,
-            scratch_u.data(), scratch_temp.data(), scratch_s.data(), scratch_max_t.data()
+            scratch_u.data(), scratch_temp.data(), scratch_max_t.data(), scratch_s_full.data()
         );
 
         // Climb to root
@@ -939,7 +909,7 @@ struct NNICache {
                 F.data() + sib * C * L,
                 logP_storage.data() + v * C * L,
                 F.data() + v * C * L,
-                scratch_u.data(), scratch_temp.data(), scratch_s.data(), scratch_max_t.data()
+                scratch_u.data(), scratch_temp.data(), scratch_max_t.data(), scratch_s_full.data()
             );
 
             prev_child = child;
@@ -968,8 +938,8 @@ struct NNICache {
 			E1 = reorderRcpp(E1);
 			E = E1 - 1;                            // return to 0-indexed
 			root = E(m - 1);
-		}
-	}
+        }
+    }
 
 	double total_loglik() const {
 		return current_total_loglik_val;
@@ -1335,7 +1305,7 @@ std::vector<arma::Col<int>> tree_mcmc_cpp_cached_threadsafe(
 	arma::Col<int> E,
 	const std::vector< std::vector<double> >& logP,
 	const std::vector<double>& logA,
-	int max_iter = 100, int seed = -1, bool reorder = true) {
+    int max_iter = 100, int seed = -1, bool reorder = true) {
 
 	// Number of internal edges (unchanged by reordering)
 	const int n = static_cast<int>(E.n_elem / 4) - 1;
@@ -1343,11 +1313,11 @@ std::vector<arma::Col<int>> tree_mcmc_cpp_cached_threadsafe(
 	// Build cache locally (constructor reorders and 0-indexes internally)
 	NNICache cache(E, logP, logA, reorder);
 
-	std::vector<arma::Col<int>> tree_list(static_cast<size_t>(max_iter) + 1);
+    std::vector<arma::Col<int>> tree_list(static_cast<size_t>(max_iter) + 1);
 
-	// Starting log-likelihood and tree
-	double l_0 = cache.total_loglik();
-	tree_list[0] = cache.E + 1; // back to 1-indexed
+    // Starting log-likelihood and tree
+    double l_0 = cache.total_loglik();
+    tree_list[0] = cache.E + 1; // back to 1-indexed
 
 	// RNG
 	std::mt19937 gen;
@@ -1361,13 +1331,13 @@ std::vector<arma::Col<int>> tree_mcmc_cpp_cached_threadsafe(
 	std::uniform_int_distribution<> dis2(0, 1);
 	std::uniform_real_distribution<> dis3(0.0, 1.0);
 
-	for (int i = 0; i < max_iter; ++i) {
+    for (int i = 0; i < max_iter; ++i) {
 		// propose: pick internal edge and which swap (0/1)
 		const int r1 = dis1(gen);
 		const int r2 = dis2(gen);
 
-		// local log-likelihood delta using cached messages
-		double new_ll = cache.compute_new_loglik(r1, r2);
+        // local log-likelihood delta using cached messages
+        double new_ll = cache.compute_new_loglik(r1, r2);
         double dl;
         if (l_0 == -std::numeric_limits<double>::infinity()) {
              if (new_ll > -std::numeric_limits<double>::infinity()) dl = std::numeric_limits<double>::infinity();
@@ -1377,13 +1347,13 @@ std::vector<arma::Col<int>> tree_mcmc_cpp_cached_threadsafe(
         }
 
 		// accept using log form (stable)
-		if (std::log(dis3(gen)) < dl) {
-			cache.apply_nni(r1, r2);
-			l_0 = new_ll;
+        if (std::log(dis3(gen)) < dl) {
+            cache.apply_nni(r1, r2);
+            l_0 = new_ll;
 		}
 
-		// store current tree (1-indexed)
-		tree_list[static_cast<size_t>(i) + 1] = cache.E + 1;
+        // store current tree (1-indexed)
+        tree_list[static_cast<size_t>(i) + 1] = cache.E + 1;
 	}
 
 	return tree_list;
@@ -1436,8 +1406,8 @@ struct TreeChainWorker : public Worker {
 std::vector< std::vector<arma::Col<int>> > tree_mcmc_parallel(arma::Col<int> E,
 	const std::vector< std::vector<double> >& logP,
 	const std::vector<double>& logA,
-	int max_iter,
-	int nchains) {
+    int max_iter,
+    int nchains) {
 	// Do not adjust the indexing of E.
 	// Optionally, you can reorder E if needed.
 	E = reorderRcpp(E);
@@ -1446,7 +1416,7 @@ std::vector< std::vector<arma::Col<int>> > tree_mcmc_parallel(arma::Col<int> E,
 	std::vector< std::vector<arma::Col<int>> > chain_results(nchains);
 
 	// Create the worker that will run chains in parallel.
-	TreeChainWorker worker(E, logP, logA, max_iter, chain_results);
+    TreeChainWorker worker(E, logP, logA, max_iter, chain_results);
 
 	// Launch parallelFor over chain indices [0, nchains).
 	parallelFor(0, nchains, worker);
@@ -1464,11 +1434,11 @@ struct SeededTreeChainWorker : public Worker {
     std::vector< std::vector<arma::Col<int>> >& chain_results;
 
     SeededTreeChainWorker(const std::vector< arma::Col<int> >& start_edges,
-                          const std::vector< std::vector<double> >& logP,
-                          const std::vector<double>& logA,
-                          const std::vector<int>& max_iter_vec,
-                          const std::vector<int>& seeds,
-                          std::vector< std::vector<arma::Col<int>> >& chain_results)
+                      const std::vector< std::vector<double> >& logP,
+                      const std::vector<double>& logA,
+                      const std::vector<int>& max_iter_vec,
+                      const std::vector<int>& seeds,
+                      std::vector< std::vector<arma::Col<int>> >& chain_results)
         : start_edges(start_edges), logP(logP), logA(logA),
           max_iter_vec(max_iter_vec), seeds(seeds), chain_results(chain_results) {}
 

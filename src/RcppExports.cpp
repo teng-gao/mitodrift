@@ -25,6 +25,19 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// compute_node_edge_stats_bp2
+Rcpp::List compute_node_edge_stats_bp2(arma::Col<int> E, const std::vector< std::vector<double> >& logP_list, const std::vector<double>& logA);
+RcppExport SEXP _mitodrift_compute_node_edge_stats_bp2(SEXP ESEXP, SEXP logP_listSEXP, SEXP logASEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< arma::Col<int> >::type E(ESEXP);
+    Rcpp::traits::input_parameter< const std::vector< std::vector<double> >& >::type logP_list(logP_listSEXP);
+    Rcpp::traits::input_parameter< const std::vector<double>& >::type logA(logASEXP);
+    rcpp_result_gen = Rcpp::wrap(compute_node_edge_stats_bp2(E, logP_list, logA));
+    return rcpp_result_gen;
+END_RCPP
+}
 // get_leaf_liks_mat_cpp
 List get_leaf_liks_mat_cpp(const IntegerMatrix& amat, const IntegerMatrix& dmat, const NumericVector& vafs, double eps, int ncores, bool log);
 RcppExport SEXP _mitodrift_get_leaf_liks_mat_cpp(SEXP amatSEXP, SEXP dmatSEXP, SEXP vafsSEXP, SEXP epsSEXP, SEXP ncoresSEXP, SEXP logSEXP) {
@@ -132,19 +145,6 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const std::vector< std::vector<double> >& >::type logP_list(logP_listSEXP);
     Rcpp::traits::input_parameter< const std::vector<double>& >::type logA(logASEXP);
     rcpp_result_gen = Rcpp::wrap(score_tree_bp_wrapper2(E, logP_list, logA));
-    return rcpp_result_gen;
-END_RCPP
-}
-// compute_node_edge_beliefs_bp2
-Rcpp::List compute_node_edge_beliefs_bp2(arma::Col<int> E, const std::vector< std::vector<double> >& logP_list, const std::vector<double>& logA);
-RcppExport SEXP _mitodrift_compute_node_edge_beliefs_bp2(SEXP ESEXP, SEXP logP_listSEXP, SEXP logASEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< arma::Col<int> >::type E(ESEXP);
-    Rcpp::traits::input_parameter< const std::vector< std::vector<double> >& >::type logP_list(logP_listSEXP);
-    Rcpp::traits::input_parameter< const std::vector<double>& >::type logA(logASEXP);
-    rcpp_result_gen = Rcpp::wrap(compute_node_edge_beliefs_bp2(E, logP_list, logA));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -289,19 +289,6 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
-// compute_node_edge_stats_bp2
-Rcpp::List compute_node_edge_stats_bp2(arma::Col<int> E, const std::vector< std::vector<double> >& logP_list, const std::vector<double>& logA);
-RcppExport SEXP _mitodrift_compute_node_edge_stats_bp2(SEXP ESEXP, SEXP logP_listSEXP, SEXP logASEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< arma::Col<int> >::type E(ESEXP);
-    Rcpp::traits::input_parameter< const std::vector< std::vector<double> >& >::type logP_list(logP_listSEXP);
-    Rcpp::traits::input_parameter< const std::vector<double>& >::type logA(logASEXP);
-    rcpp_result_gen = Rcpp::wrap(compute_node_edge_stats_bp2(E, logP_list, logA));
-    return rcpp_result_gen;
-END_RCPP
-}
 // save_qd_cpp
 SEXP save_qd_cpp(const Rcpp::List& objects, const Rcpp::CharacterVector& paths, int compress_level, bool shuffle, std::size_t grain_size);
 RcppExport SEXP _mitodrift_save_qd_cpp(SEXP objectsSEXP, SEXP pathsSEXP, SEXP compress_levelSEXP, SEXP shuffleSEXP, SEXP grain_sizeSEXP) {
@@ -320,6 +307,7 @@ END_RCPP
 
 static const R_CallMethodDef CallEntries[] = {
     {"_mitodrift_prop_clades_par", (DL_FUNC) &_mitodrift_prop_clades_par, 4},
+    {"_mitodrift_compute_node_edge_stats_bp2", (DL_FUNC) &_mitodrift_compute_node_edge_stats_bp2, 3},
     {"_mitodrift_get_leaf_liks_mat_cpp", (DL_FUNC) &_mitodrift_get_leaf_liks_mat_cpp, 6},
     {"_mitodrift_reorderRcpp", (DL_FUNC) &_mitodrift_reorderRcpp, 1},
     {"_mitodrift_nnin_cpp", (DL_FUNC) &_mitodrift_nnin_cpp, 2},
@@ -328,7 +316,6 @@ static const R_CallMethodDef CallEntries[] = {
     {"_mitodrift_score_tree_bp_wrapper", (DL_FUNC) &_mitodrift_score_tree_bp_wrapper, 3},
     {"_mitodrift_score_tree_bp2", (DL_FUNC) &_mitodrift_score_tree_bp2, 7},
     {"_mitodrift_score_tree_bp_wrapper2", (DL_FUNC) &_mitodrift_score_tree_bp_wrapper2, 3},
-    {"_mitodrift_compute_node_edge_beliefs_bp2", (DL_FUNC) &_mitodrift_compute_node_edge_beliefs_bp2, 3},
     {"_mitodrift_score_trees_parallel", (DL_FUNC) &_mitodrift_score_trees_parallel, 3},
     {"_mitodrift_score_tree_bp_wrapper_multi", (DL_FUNC) &_mitodrift_score_tree_bp_wrapper_multi, 3},
     {"_mitodrift_nni_cpp_parallel", (DL_FUNC) &_mitodrift_nni_cpp_parallel, 3},
@@ -339,7 +326,6 @@ static const R_CallMethodDef CallEntries[] = {
     {"_mitodrift_tree_mcmc_cpp_cached_threadsafe", (DL_FUNC) &_mitodrift_tree_mcmc_cpp_cached_threadsafe, 6},
     {"_mitodrift_tree_mcmc_parallel", (DL_FUNC) &_mitodrift_tree_mcmc_parallel, 5},
     {"_mitodrift_tree_mcmc_parallel_seeded", (DL_FUNC) &_mitodrift_tree_mcmc_parallel_seeded, 5},
-    {"_mitodrift_compute_node_edge_stats_bp2", (DL_FUNC) &_mitodrift_compute_node_edge_stats_bp2, 3},
     {"_mitodrift_save_qd_cpp", (DL_FUNC) &_mitodrift_save_qd_cpp, 5},
     {NULL, NULL, 0}
 };

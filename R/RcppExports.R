@@ -5,6 +5,10 @@ prop_clades_par <- function(E_target, edges, rooted = TRUE, normalize = TRUE) {
     .Call('_mitodrift_prop_clades_par', PACKAGE = 'mitodrift', E_target, edges, rooted, normalize)
 }
 
+compute_node_edge_stats_bp2 <- function(E, logP_list, logA) {
+    .Call('_mitodrift_compute_node_edge_stats_bp2', PACKAGE = 'mitodrift', E, logP_list, logA)
+}
+
 #' Leaf likelihood matrix via C++ backend
 #'
 #' @param amat Integer matrix of alt counts (variants x cells).
@@ -55,10 +59,6 @@ score_tree_bp_wrapper2 <- function(E, logP_list, logA) {
     .Call('_mitodrift_score_tree_bp_wrapper2', PACKAGE = 'mitodrift', E, logP_list, logA)
 }
 
-compute_node_edge_beliefs_bp2 <- function(E, logP_list, logA) {
-    .Call('_mitodrift_compute_node_edge_beliefs_bp2', PACKAGE = 'mitodrift', E, logP_list, logA)
-}
-
 score_trees_parallel <- function(trees, logP, logA) {
     .Call('_mitodrift_score_trees_parallel', PACKAGE = 'mitodrift', trees, logP, logA)
 }
@@ -97,10 +97,6 @@ tree_mcmc_parallel <- function(E, logP, logA, max_iter, nchains) {
 
 tree_mcmc_parallel_seeded <- function(start_edges, logP, logA, max_iter_vec, seeds) {
     .Call('_mitodrift_tree_mcmc_parallel_seeded', PACKAGE = 'mitodrift', start_edges, logP, logA, max_iter_vec, seeds)
-}
-
-compute_node_edge_stats_bp2 <- function(E, logP_list, logA) {
-    .Call('_mitodrift_compute_node_edge_stats_bp2', PACKAGE = 'mitodrift', E, logP_list, logA)
 }
 
 #' Parallel qdata saver

@@ -552,6 +552,7 @@ struct ComputeNodeEdgeStatsWorker : public Worker {
     }
 };
 
+// [[Rcpp::export]]
 Rcpp::List compute_node_edge_stats_bp2(
     arma::Col<int> E,
     const std::vector< std::vector<double> >& logP_list,
