@@ -925,48 +925,6 @@ struct NNICache {
 		F.assign(n * C * L, 0.0);
 		logZ.assign(L, 0.0);
 
-		// initialize F and logZ per locus with one postorder pass
-        // We can use the vectorized functions, but we need to process nodes in postorder.
-        // E is in postorder.
-        
-        // We need to handle leaf nodes?
-        // In this code, leaf nodes are processed?
-        // The loop iterates over edges.
-        // E[m+i] is the child node.
-        // If child is tip, F[child] is 0?
-        // Wait, original code:
-        // temp[c] = logP[c*n + node] + sum_children(node)[c]
-        // If node is tip, sum_children is 0.
-        // F is initialized to 0.
-        // So for tips, F is 0.
-        // But tips are not in E[m+i] as children?
-        // E contains all edges. Tips are children of some edges.
-        // Yes.
-        
-        // But wait, original code:
-        // for (int i = 0; i < m; ++i) { ... }
-        // It iterates edges.
-        // If node is tip, msg_nm[base_node + c] is 0 (initialized).
-        // So temp[c] = P + 0.
-        // Then u[c] = exp(temp).
-        // Then F[node] is computed.
-        // And added to parent message.
-        
-        // So we can use compute_F_vectorized but we need to handle tips (no children F).
-        // Or just initialize F to 0.
-        // compute_F_vectorized takes F_c1 and F_c2.
-        // If node is tip, it has no children.
-        // But the loop iterates edges.
-        // If node is tip, we don't call compute_F_vectorized?
-        // Original code:
-        // temp[c] = P + msg_nm.
-        // msg_nm accumulates children messages.
-        // If tip, msg_nm is 0.
-        
-        // My vectorized function assumes 2 children.
-        // But initialization loop handles any number of children (via accumulation).
-        // So I should keep the initialization loop logic but vectorized over L.
-        
         std::vector<double> msg_nm(n * C * L, 0.0); // Accumulator for children messages
         
         // Scratch buffers for initialization
@@ -1720,13 +1678,6 @@ std::vector<arma::Col<int>> tree_mcmc_cpp_cached(
 
 		// local log-likelihood delta using cached messages
 		double new_ll = nni_cache_delta(xp, r1, r2); // nni_cache_delta now returns new_ll - cur_ll, wait.
-        // I updated nni_cache_delta to return delta if possible, or handle -inf.
-        // But wait, I updated nni_cache_delta to return delta.
-        // Let's check what I wrote in nni_cache_delta.
-        // double new_ll = ptr->compute_new_loglik(edge_n, which);
-        // double cur_ll = ptr->total_loglik();
-        // if (cur_ll == -inf) ... return inf or 0.0;
-        // return new_ll - cur_ll;
         
         // So nni_cache_delta returns delta.
         double dl = nni_cache_delta(xp, r1, r2);
@@ -1736,9 +1687,6 @@ std::vector<arma::Col<int>> tree_mcmc_cpp_cached(
 		if (std::log(r3) < dl) {
 			nni_cache_apply(xp, r1, r2);
 			l_0 += dl;
-            // If l_0 was -inf and dl was inf, l_0 becomes NaN?
-            // No, -inf + inf = NaN.
-            // I should update l_0 properly.
             l_0 = nni_cache_loglik(xp);
 		}
 
