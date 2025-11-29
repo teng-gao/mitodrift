@@ -11,9 +11,92 @@
 #include <sstream>
 #include <numeric>
 #include <mutex>
+#include <chrono>
+#include <cstdlib>
 
 using namespace Rcpp;
 using namespace RcppParallel;
+
+namespace {
+
+struct ScratchBuffers {
+    double* temp;
+    double* u;
+    double* F_p2;
+    double* F_p1;
+    double* childF;
+    double* prev_childF;
+    double* F_v;
+    double* s_full;
+    double* max_t;
+};
+
+struct ThreadScratchBuffers {
+    std::vector<double> temp;
+    std::vector<double> u;
+    std::vector<double> F_p2;
+    std::vector<double> F_p1;
+    std::vector<double> childF;
+    std::vector<double> prev_childF;
+    std::vector<double> F_v;
+    std::vector<double> s_full;
+    std::vector<double> max_t;
+
+    void ensure(std::size_t CL, int L) {
+        auto ensure_vec = [](std::vector<double>& vec, std::size_t target) {
+            if (vec.size() < target) vec.resize(target);
+        };
+        ensure_vec(temp, CL);
+        ensure_vec(u, CL);
+        ensure_vec(F_p2, CL);
+        ensure_vec(F_p1, CL);
+        ensure_vec(childF, CL);
+        ensure_vec(prev_childF, CL);
+        ensure_vec(F_v, CL);
+        ensure_vec(s_full, CL);
+        ensure_vec(max_t, static_cast<std::size_t>(L));
+    }
+
+    ScratchBuffers view() {
+        return ScratchBuffers{
+            temp.data(), u.data(), F_p2.data(), F_p1.data(),
+            childF.data(), prev_childF.data(), F_v.data(), s_full.data(), max_t.data()
+        };
+    }
+};
+
+inline ThreadScratchBuffers& thread_scratch_buffers() {
+    thread_local ThreadScratchBuffers scratch;
+    return scratch;
+}
+
+inline bool mitodrift_profile_enabled() {
+    static bool enabled = []() {
+        const char* env = std::getenv("MITODRIFT_PROFILE");
+        if (!env) return false;
+        if (env[0] == '\0') return false;
+        return !(env[0] == '0' && env[1] == '\0');
+    }();
+    return enabled;
+}
+
+struct OptionalTimer {
+    std::chrono::steady_clock::time_point start;
+    long long* accum;
+
+    explicit OptionalTimer(long long* target) : accum(target) {
+        if (accum) start = std::chrono::steady_clock::now();
+    }
+
+    ~OptionalTimer() {
+        if (!accum) return;
+        const auto end = std::chrono::steady_clock::now();
+        const auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
+        *accum += static_cast<long long>(ns);
+    }
+};
+
+} // namespace
 
 /////////////////////////////////////// NNI ////////////////////////////////////////
 
@@ -484,6 +567,29 @@ struct NNICache {
     mutable std::vector<double> scratch_max_t;
     mutable std::mutex scratch_mutex;
 
+    inline ScratchBuffers shared_scratch() const {
+        return ScratchBuffers{
+            scratch_temp.data(),
+            scratch_u.data(),
+            scratch_F_p2.data(),
+            scratch_F_p1.data(),
+            scratch_childF.data(),
+            scratch_prev_childF.data(),
+            scratch_F_v.data(),
+            scratch_s_full.data(),
+            scratch_max_t.data()
+        };
+    }
+
+    inline ScratchBuffers acquire_scratch(bool stage_mode) const {
+        if (stage_mode) {
+            return shared_scratch();
+        }
+        auto& local = thread_scratch_buffers();
+        local.ensure(CL, L);
+        return local.view();
+    }
+
     mutable std::vector<int> staged_nodes;
     mutable std::vector<double> staged_F;
     mutable bool staged_ready = false;
@@ -707,9 +813,12 @@ struct NNICache {
         const double* F_c1, const double* F_c2,
         const double* P_base,
         double* outF,
-        double* u, double* temp,
-        double* max_t, double* s_full
+        const ScratchBuffers& scratch
     ) const {
+        double* u = scratch.u;
+        double* temp = scratch.temp;
+        double* max_t = scratch.max_t;
+        double* s_full = scratch.s_full;
         const double neg_inf = -std::numeric_limits<double>::infinity();
         std::fill(max_t, max_t + L, neg_inf);
 		
@@ -755,8 +864,10 @@ struct NNICache {
     inline double compute_root_logZ_vectorized(
         const double* F_c1, const double* F_c2,
         const double* P_base,
-        double* temp, double* max_t
+        const ScratchBuffers& scratch
     ) const {
+        double* temp = scratch.temp;
+        double* max_t = scratch.max_t;
         std::fill(max_t, max_t + L, -std::numeric_limits<double>::infinity());
         
         for (int c = 0; c < C; ++c) {
@@ -788,10 +899,7 @@ struct NNICache {
         return total_logZ;
     }
 
-    // Compute new total loglik if we perform the NNI "which" (0 or 1) at the nth internal edge.
-    double compute_new_loglik(int edge_n, int which, bool stage_results = false) const {
-        std::lock_guard<std::mutex> guard(scratch_mutex);
-        reset_staged_state_unlocked();
+    double compute_new_loglik_impl(int edge_n, int which, bool stage_results, const ScratchBuffers& scratch) const {
         const int ind = locate_internal_edge_index(edge_n);
         if (ind < 0) stop("edge_n out of range in compute_new_loglik");
 
@@ -815,30 +923,33 @@ struct NNICache {
             staged_cStay = cStay;
         }
 
+        double* scratch_F_p2_ptr = scratch.F_p2;
+        double* scratch_F_p1_ptr = scratch.F_p1;
+
         compute_F_vectorized(
             F.data() + c1 * C * L,
             F.data() + cStay * C * L,
             logP_storage.data() + p2 * C * L,
-            scratch_F_p2.data(),
-            scratch_u.data(), scratch_temp.data(), scratch_max_t.data(), scratch_s_full.data()
+            scratch_F_p2_ptr,
+            scratch
         );
-        if (stage_results) stage_node_F(p2, scratch_F_p2.data());
+        if (stage_results) stage_node_F(p2, scratch_F_p2_ptr);
 
         compute_F_vectorized(
-            scratch_F_p2.data(),
+            scratch_F_p2_ptr,
             F.data() + cX * C * L,
             logP_storage.data() + p1 * C * L,
-            scratch_F_p1.data(),
-            scratch_u.data(), scratch_temp.data(), scratch_max_t.data(), scratch_s_full.data()
+            scratch_F_p1_ptr,
+            scratch
         );
-        if (stage_results) stage_node_F(p1, scratch_F_p1.data());
+        if (stage_results) stage_node_F(p1, scratch_F_p1_ptr);
 
         if (parent_of[p1] == -1) {
             double new_total = compute_root_logZ_vectorized(
-                scratch_F_p2.data(),
+                scratch_F_p2_ptr,
                 F.data() + cX * C * L,
                 logP_storage.data() + p1 * C * L,
-                scratch_temp.data(), scratch_max_t.data()
+                scratch
             );
             if (stage_results) {
                 staged_total_loglik = new_total;
@@ -848,11 +959,11 @@ struct NNICache {
         }
 
         int child = p1;
-        double* p_childF = scratch_childF.data();
-        double* p_prev_childF = scratch_prev_childF.data();
-        double* p_F_v = scratch_F_v.data();
+        double* p_childF = scratch.childF;
+        double* p_prev_childF = scratch.prev_childF;
+        double* p_F_v = scratch.F_v;
 
-        std::copy(scratch_F_p1.begin(), scratch_F_p1.end(), p_childF);
+        std::copy(scratch_F_p1_ptr, scratch_F_p1_ptr + CL, p_childF);
 
         int prev_child = -1;
 
@@ -865,7 +976,7 @@ struct NNICache {
                     p_prev_childF,
                     F.data() + sib * C * L,
                     logP_storage.data() + root_node * C * L,
-                    scratch_temp.data(), scratch_max_t.data()
+                    scratch
                 );
                 if (stage_results) {
                     staged_total_loglik = new_total;
@@ -880,7 +991,7 @@ struct NNICache {
                 F.data() + sib * C * L,
                 logP_storage.data() + v * C * L,
                 p_F_v,
-                scratch_u.data(), scratch_temp.data(), scratch_max_t.data(), scratch_s_full.data()
+                scratch
             );
             if (stage_results) stage_node_F(v, p_F_v);
 
@@ -891,6 +1002,16 @@ struct NNICache {
             p_F_v = temp;
             child = v;
         }
+    }
+
+    // Compute new total loglik if we perform the NNI "which" (0 or 1) at the nth internal edge.
+    double compute_new_loglik(int edge_n, int which, bool stage_results = false) const {
+        if (stage_results) {
+            std::lock_guard<std::mutex> guard(scratch_mutex);
+            reset_staged_state_unlocked();
+            return compute_new_loglik_impl(edge_n, which, true, shared_scratch());
+        }
+        return compute_new_loglik_impl(edge_n, which, false, acquire_scratch(false));
     }
 
     void commit_staged_nni() {
