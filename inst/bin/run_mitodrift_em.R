@@ -130,7 +130,7 @@ option_list <- list(
     make_option(
         c("-i", "--ml_iter"),
         type = "integer",
-        default = 100,
+        default = 0,
         help = "Maximum iterations for tree optimization",
         metavar = "INTEGER"
     ),
