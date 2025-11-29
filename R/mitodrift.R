@@ -65,7 +65,6 @@ optimize_tree_cpp = function(
         message(paste(i, round(max_current, 4), paste0('(', signif(unname(runtime[3]),2), 's', ')')))
 
         scores = nni_func(tree_current$edge, logP, logA)
-        scores[is.na(scores)] = -Inf
         
         if (max(scores) > max_current) {
             max_id = which.max(scores)
