@@ -444,9 +444,10 @@ struct NNICache {
 	// static tree info
 	int n;					// #nodes
 	int m;					// #edges
-	int C;					// #states
-	int L;					// #loci
-	int nTips;				// #tips
+    int C;				// #states
+    int L;				// #loci
+    std::size_t CL;			// states × loci per node
+    int nTips;			// #tips
 	int root;				// root node id (0-indexed)
 	arma::Col<int> E;		// edge list, 0-indexed, postorder (parent col [0..m-1], child col [m..2m-1])
 
@@ -481,19 +482,48 @@ struct NNICache {
 
     // Size L
     mutable std::vector<double> scratch_max_t;
-	mutable std::mutex scratch_mutex;
+    mutable std::mutex scratch_mutex;
+
+    mutable std::vector<int> staged_nodes;
+    mutable std::vector<double> staged_F;
+    mutable bool staged_ready = false;
+    mutable int staged_edge_n = -1;
+    mutable int staged_edge_index = -1;
+    mutable int staged_which = -1;
+    mutable int staged_p1 = -1;
+    mutable int staged_p2 = -1;
+    mutable int staged_c1 = -1;
+    mutable int staged_cX = -1;
+    mutable int staged_cStay = -1;
+    mutable double staged_total_loglik = -std::numeric_limits<double>::infinity();
+
+    inline void reset_staged_state_unlocked() const {
+        staged_ready = false;
+        staged_nodes.clear();
+        staged_F.clear();
+        staged_edge_n = -1;
+        staged_edge_index = -1;
+        staged_which = -1;
+        staged_p1 = staged_p2 = staged_c1 = staged_cX = staged_cStay = -1;
+        staged_total_loglik = -std::numeric_limits<double>::infinity();
+    }
+
+    inline void stage_node_F(int node_id, const double* src) const {
+        staged_nodes.push_back(node_id);
+        staged_F.insert(staged_F.end(), src, src + CL);
+    }
 
 	NNICache(arma::Col<int> E_in,
 		const std::vector< std::vector<double> >& logP_in,
 		const std::vector<double>& logA_in,
         bool reorder = true) {
 
-		L = static_cast<int>(logP_in.size());
-		C = static_cast<int>(std::sqrt(logA_in.size()));
-		n = static_cast<int>(logP_in[0].size() / C);
+        L = static_cast<int>(logP_in.size());
+        C = static_cast<int>(std::sqrt(logA_in.size()));
+        n = static_cast<int>(logP_in[0].size() / C);
+        CL = static_cast<std::size_t>(C) * static_cast<std::size_t>(L);
 
         // Initialize scratch space
-        int CL = C * L;
         scratch_temp.resize(CL);
         scratch_u.resize(CL);
         scratch_F_p2.resize(CL);
@@ -504,6 +534,7 @@ struct NNICache {
         scratch_s_full.resize(CL);
 		
         scratch_max_t.resize(L);
+        reset_staged_state_unlocked();
 
 		// Bring E to postorder and 0-indexed
         if (reorder) {
@@ -758,8 +789,9 @@ struct NNICache {
     }
 
     // Compute new total loglik if we perform the NNI "which" (0 or 1) at the nth internal edge.
-    double compute_new_loglik(int edge_n, int which) const {
+    double compute_new_loglik(int edge_n, int which, bool stage_results = false) const {
         std::lock_guard<std::mutex> guard(scratch_mutex);
+        reset_staged_state_unlocked();
         const int ind = locate_internal_edge_index(edge_n);
         if (ind < 0) stop("edge_n out of range in compute_new_loglik");
 
@@ -769,8 +801,19 @@ struct NNICache {
         const int c2 = children_of[p2][0];
         const int c3 = children_of[p2][1];
 
-        const int cX    = (which == 0 ? c2 : c3);   // moves to p1
-        const int cStay = (which == 0 ? c3 : c2);   // stays under p2
+        const int cX    = (which == 0 ? c2 : c3);
+        const int cStay = (which == 0 ? c3 : c2);
+
+        if (stage_results) {
+            staged_edge_n = edge_n;
+            staged_edge_index = ind;
+            staged_which = which;
+            staged_p1 = p1;
+            staged_p2 = p2;
+            staged_c1 = c1;
+            staged_cX = cX;
+            staged_cStay = cStay;
+        }
 
         compute_F_vectorized(
             F.data() + c1 * C * L,
@@ -779,6 +822,7 @@ struct NNICache {
             scratch_F_p2.data(),
             scratch_u.data(), scratch_temp.data(), scratch_max_t.data(), scratch_s_full.data()
         );
+        if (stage_results) stage_node_F(p2, scratch_F_p2.data());
 
         compute_F_vectorized(
             scratch_F_p2.data(),
@@ -787,6 +831,7 @@ struct NNICache {
             scratch_F_p1.data(),
             scratch_u.data(), scratch_temp.data(), scratch_max_t.data(), scratch_s_full.data()
         );
+        if (stage_results) stage_node_F(p1, scratch_F_p1.data());
 
         if (parent_of[p1] == -1) {
             double new_total = compute_root_logZ_vectorized(
@@ -795,6 +840,10 @@ struct NNICache {
                 logP_storage.data() + p1 * C * L,
                 scratch_temp.data(), scratch_max_t.data()
             );
+            if (stage_results) {
+                staged_total_loglik = new_total;
+                staged_ready = true;
+            }
             return new_total;
         }
 
@@ -818,6 +867,10 @@ struct NNICache {
                     logP_storage.data() + root_node * C * L,
                     scratch_temp.data(), scratch_max_t.data()
                 );
+                if (stage_results) {
+                    staged_total_loglik = new_total;
+                    staged_ready = true;
+                }
                 return new_total;
             }
 
@@ -829,6 +882,7 @@ struct NNICache {
                 p_F_v,
                 scratch_u.data(), scratch_temp.data(), scratch_max_t.data(), scratch_s_full.data()
             );
+            if (stage_results) stage_node_F(v, p_F_v);
 
             prev_child = child;
             double* temp = p_prev_childF;
@@ -839,106 +893,57 @@ struct NNICache {
         }
     }
 
-	// Commit the NNI: update topology and cached F/logZ across loci.
+    void commit_staged_nni() {
+        std::lock_guard<std::mutex> guard(scratch_mutex);
+        if (!staged_ready) stop("No staged NNI proposal to apply");
+        const std::size_t block = CL;
+        double* F_ptr = F.data();
+        const double* staged_ptr = staged_F.data();
+        for (std::size_t idx = 0; idx < staged_nodes.size(); ++idx) {
+            const int node_id = staged_nodes[idx];
+            double* dest = F_ptr + static_cast<std::size_t>(node_id) * block;
+            std::copy(staged_ptr, staged_ptr + block, dest);
+            staged_ptr += block;
+        }
+        current_total_loglik_val = staged_total_loglik;
+
+        const int p1 = staged_p1;
+        const int p2 = staged_p2;
+        const int c1 = staged_c1;
+        const int cX = staged_cX;
+        const int cStay = staged_cStay;
+
+        auto &ch1 = children_of[p1];
+        if (ch1[0] == c1) ch1[0] = cX; else ch1[1] = cX;
+        auto &ch2 = children_of[p2];
+        if (ch2[0] == cX) ch2[0] = c1; else ch2[1] = c1;
+        parent_of[c1] = p2;
+        parent_of[cX] = p1;
+
+        for (int i = 0; i < m; ++i) {
+            if (E[i] == p1 && E[m + i] == c1) { E[m + i] = cX; break; }
+        }
+        for (int i = 0; i < m; ++i) {
+            if (E[i] == p2 && E[m + i] == cX) { E[m + i] = c1; break; }
+        }
+
+        arma::Col<int> E1 = E + 1;
+        E1 = reorderRcpp(E1);
+        E = E1 - 1;
+        root = E(m - 1);
+
+        reset_staged_state_unlocked();
+    }
+
+    void discard_staged_nni() const {
+        std::lock_guard<std::mutex> guard(scratch_mutex);
+        reset_staged_state_unlocked();
+    }
+
+    // Commit the NNI: update topology and cached F/logZ across loci.
     void apply_nni(int edge_n, int which) {
-		std::lock_guard<std::mutex> guard(scratch_mutex);
-        int ind = locate_internal_edge_index(edge_n);
-		if (ind < 0) stop("edge_n out of range in apply_nni");
-
-		const int p1 = E[ind];
-		const int p2 = E[m + ind];
-		const int c1 = other_child(p1, p2);
-		const int c2 = children_of[p2][0];
-		const int c3 = children_of[p2][1];
-
-		const int cX    = (which == 0 ? c2 : c3);	// moves to p1
-		const int cStay = (which == 0 ? c3 : c2);	// stays under p2
-
-        // Update F
-        // p2 new F
-        compute_F_vectorized(
-            F.data() + c1 * C * L,
-            F.data() + cStay * C * L,
-            logP_storage.data() + p2 * C * L,
-            F.data() + p2 * C * L,
-            scratch_u.data(), scratch_temp.data(), scratch_max_t.data(), scratch_s_full.data()
-        );
-
-        // p1 new F
-        compute_F_vectorized(
-            F.data() + p2 * C * L,
-            F.data() + cX * C * L,
-            logP_storage.data() + p1 * C * L,
-            F.data() + p1 * C * L,
-            scratch_u.data(), scratch_temp.data(), scratch_max_t.data(), scratch_s_full.data()
-        );
-
-        // Climb to root
-        int child = p1;
-        int prev_child = -1;
-
-        while (true) {
-            const int v = parent_of[child];
-            if (v == -1) {
-                // child is root
-                if (prev_child == -1) {
-                    // p1 is root
-                    current_total_loglik_val = compute_root_logZ_vectorized(
-                        F.data() + p2 * C * L,
-                        F.data() + cX * C * L,
-                        logP_storage.data() + p1 * C * L,
-                        scratch_temp.data(), scratch_max_t.data()
-                    );
-                } else {
-                    const int root_node = child;
-                    const int sib = other_child(root_node, prev_child);
-                    current_total_loglik_val = compute_root_logZ_vectorized(
-                        F.data() + prev_child * C * L,
-                        F.data() + sib * C * L,
-                        logP_storage.data() + root_node * C * L,
-                        scratch_temp.data(), scratch_max_t.data()
-                    );
-                }
-                break;
-            }
-
-            const int sib = other_child(v, child);
-            
-            compute_F_vectorized(
-                F.data() + child * C * L,
-                F.data() + sib * C * L,
-                logP_storage.data() + v * C * L,
-                F.data() + v * C * L,
-                scratch_u.data(), scratch_temp.data(), scratch_max_t.data(), scratch_s_full.data()
-            );
-
-            prev_child = child;
-            child = v;
-        }
-
-		// Update adjacency: p1:{p2,cX}, p2:{c1,cStay}; parent_of for c1,cX
-		auto &ch1 = children_of[p1];
-		if (ch1[0] == c1) ch1[0] = cX; else ch1[1] = cX;
-		auto &ch2 = children_of[p2];
-		if (ch2[0] == cX) ch2[0] = c1; else ch2[1] = c1;
-		parent_of[c1] = p2;
-		parent_of[cX] = p1;
-
-		// Update E's child column for the two affected edges
-		for (int i = 0; i < m; ++i) {
-			if (E[i] == p1 && E[m + i] == c1) { E[m + i] = cX; break; }
-		}
-		for (int i = 0; i < m; ++i) {
-			if (E[i] == p2 && E[m + i] == cX) { E[m + i] = c1; break; }
-		}
-
-		// Keep E in postorder so the nth internal edge ordering matches nnin_cpp
-		{
-			arma::Col<int> E1 = E + 1;            // back to 1-indexed for reorderRcpp
-			E1 = reorderRcpp(E1);
-			E = E1 - 1;                            // return to 0-indexed
-			root = E(m - 1);
-        }
+        compute_new_loglik(edge_n, which, true);
+        commit_staged_nni();
     }
 
 	double total_loglik() const {
@@ -1337,7 +1342,7 @@ std::vector<arma::Col<int>> tree_mcmc_cpp_cached_threadsafe(
 		const int r2 = dis2(gen);
 
         // local log-likelihood delta using cached messages
-        double new_ll = cache.compute_new_loglik(r1, r2);
+        double new_ll = cache.compute_new_loglik(r1, r2, true);
         double dl;
         if (l_0 == -std::numeric_limits<double>::infinity()) {
              if (new_ll > -std::numeric_limits<double>::infinity()) dl = std::numeric_limits<double>::infinity();
@@ -1348,8 +1353,10 @@ std::vector<arma::Col<int>> tree_mcmc_cpp_cached_threadsafe(
 
 		// accept using log form (stable)
         if (std::log(dis3(gen)) < dl) {
-            cache.apply_nni(r1, r2);
+            cache.commit_staged_nni();
             l_0 = new_ll;
+		} else {
+			cache.discard_staged_nni();
 		}
 
         // store current tree (1-indexed)
