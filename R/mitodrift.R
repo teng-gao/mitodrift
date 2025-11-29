@@ -1258,7 +1258,8 @@ safe_read_chain = function(path, ncores = 1) {
 #' @export
 run_tree_mcmc_batch = function(
     phy_init, logP_list, logA_vec, outfile, max_iter = 100, nchains = 1, ncores = 1, ncores_qs = 1,
-    batch_size = 1000, diag = TRUE, conv_thres = NULL, resume = FALSE
+    batch_size = 1000, diag = TRUE, conv_thres = NULL, resume = FALSE,
+    use_locus_parallel = FALSE
 ) {
 
 
@@ -1310,7 +1311,30 @@ run_tree_mcmc_batch = function(
 
     n_batches = ceiling(max(remaining_vec) / batch_size)
 
-    message('Running MCMC with ', length(chains), ' chains in up to ', n_batches, ' batches of ', batch_size)
+    impl_label <- if (use_locus_parallel) 'locus-parallel' else 'chain-parallel'
+    message('Running ', impl_label, ' MCMC with ', length(chains), ' chains in up to ', n_batches, ' batches of ', batch_size)
+
+    mcmc_runner <- if (use_locus_parallel) {
+        function(start_edges, logP_list, logA_vec, iter_vec, seed_vec) {
+            tree_mcmc_parallel_seeded_locus(
+                start_edges,
+                logP_list,
+                logA_vec,
+                iter_vec,
+                seed_vec
+            )
+        }
+    } else {
+        function(start_edges, logP_list, logA_vec, iter_vec, seed_vec) {
+            tree_mcmc_parallel_seeded(
+                start_edges,
+                logP_list,
+                logA_vec,
+                iter_vec,
+                seed_vec
+            )
+        }
+    }
 
     for (i in seq_len(n_batches)) {
 
@@ -1333,7 +1357,7 @@ run_tree_mcmc_batch = function(
         })[active_idx]
         seed_vec = as.integer(1000003L * (i - 1L) + chains)[active_idx]
 
-        elist_active = tree_mcmc_parallel_seeded(
+        elist_active = mcmc_runner(
             start_edges,
             logP_list,
             logA_vec,

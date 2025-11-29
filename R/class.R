@@ -461,6 +461,7 @@ MitoDrift <- R6::R6Class("MitoDrift",
         #' @param use_nj Whether to use NJ tree instead of ML tree as initial tree (default: FALSE)
         #' @param batch_size Batch size for MCMC (default: 1000)
         #' @param diag Whether to compute ASDSF diagnostics (default: TRUE)
+        #' @param use_locus_parallel Whether to parallelize within chains across loci (default: FALSE)
         #' @return MCMC result object
         run_mcmc = function(
             max_iter = 10000,
@@ -472,7 +473,8 @@ MitoDrift <- R6::R6Class("MitoDrift",
             outfile = NULL,
             resume = FALSE,
             diag = TRUE,
-            use_nj = FALSE
+            use_nj = FALSE,
+            use_locus_parallel = FALSE
         ) {
 
             if (!is.null(outfile)) {
@@ -512,7 +514,8 @@ MitoDrift <- R6::R6Class("MitoDrift",
                 outfile = self$mcmc_trace_file,
                 resume = resume,
                 diag = diag,
-                batch_size = batch_size
+                batch_size = batch_size,
+                use_locus_parallel = use_locus_parallel
             )
             
             message('Phylogenetic MCMC completed!')

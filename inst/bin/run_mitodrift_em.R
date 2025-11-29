@@ -163,6 +163,13 @@ option_list <- list(
         metavar = "INTEGER"
     ),
     make_option(
+        c("--tree_mcmc_use_locus"),
+        type = "logical",
+        default = FALSE,
+        help = "Use locus-parallel MCMC implementation",
+        metavar = "LOGICAL"
+    ),
+    make_option(
         c("-y", "--tree_mcmc_diag"),
         type = "logical",
         default = TRUE,
@@ -341,7 +348,8 @@ md$run_mcmc(
     diag = opts$tree_mcmc_diag,
     conv_thres = opts$conv_thres,
     outfile = mcmc_trace_file,
-    resume = opts$resume
+    resume = opts$resume,
+    use_locus_parallel = isTRUE(opts$tree_mcmc_use_locus),
 )
 
 saveRDS(md, mitodrift_object_file)

@@ -11,6 +11,8 @@
 #include <sstream>
 #include <numeric>
 #include <mutex>
+#include <memory>
+#include <thread>
 
 using namespace Rcpp;
 using namespace RcppParallel;
@@ -827,6 +829,7 @@ struct NNICache {
 
 	// data likelihoods
 	std::vector< std::vector<double> > logP_list;	// L × (C*n), row-major per locus
+	std::vector<int> locus_ids;
 
 	// per-locus cached child→parent contributions F (n*C) and root logZ
     // F layout: [node][c][l] -> node * (C*L) + c*L + l
@@ -854,30 +857,70 @@ struct NNICache {
 	NNICache(arma::Col<int> E_in,
 		const std::vector< std::vector<double> >& logP_in,
 		const std::vector<double>& logA_in,
-        bool reorder = true) {
+		bool reorder = true) {
+		initialize_cache(E_in, logP_in, logA_in, reorder, nullptr);
+	}
 
-		L = static_cast<int>(logP_in.size());
+	NNICache(arma::Col<int> E_in,
+		const std::vector< std::vector<double> >& logP_in,
+		const std::vector<double>& logA_in,
+		const std::vector<int>& locus_subset,
+		bool reorder)
+	{
+		initialize_cache(E_in, logP_in, logA_in, reorder, &locus_subset);
+	}
+
+	void initialize_cache(
+		arma::Col<int> E_in,
+		const std::vector< std::vector<double> >& logP_in,
+		const std::vector<double>& logA_in,
+		bool reorder,
+		const std::vector<int>* locus_subset)
+	{
+		if (logP_in.empty()) {
+			stop("logP_in must contain at least one locus");
+		}
+		const int total_loci = static_cast<int>(logP_in.size());
+		if (locus_subset) {
+			if (locus_subset->empty()) {
+				stop("locus_subset must not be empty");
+			}
+			locus_ids = *locus_subset;
+			for (int idx : locus_ids) {
+				if (idx < 0 || idx >= total_loci) {
+					stop("locus_subset index out of range");
+				}
+			}
+		} else {
+			locus_ids.resize(total_loci);
+			std::iota(locus_ids.begin(), locus_ids.end(), 0);
+		}
+
+		L = static_cast<int>(locus_ids.size());
 		C = static_cast<int>(std::sqrt(logA_in.size()));
-		n = static_cast<int>(logP_in[0].size() / C);
+		if (C <= 0) {
+			stop("logA_in must define at least one state");
+		}
+		n = static_cast<int>(logP_in[locus_ids[0]].size() / C);
 
-        // Initialize scratch space
-        int CL = C * L;
-        scratch_temp.resize(CL);
-        scratch_u.resize(CL);
-        scratch_F_p2.resize(CL);
-        scratch_F_p1.resize(CL);
-        scratch_childF.resize(CL);
-        scratch_prev_childF.resize(CL);
-        scratch_F_v.resize(CL);
-        scratch_curF.resize(CL);
-        
-        scratch_max_t.resize(L);
-        scratch_s.resize(L);
+		// Initialize scratch space
+		int CL = C * L;
+		scratch_temp.resize(CL);
+		scratch_u.resize(CL);
+		scratch_F_p2.resize(CL);
+		scratch_F_p1.resize(CL);
+		scratch_childF.resize(CL);
+		scratch_prev_childF.resize(CL);
+		scratch_F_v.resize(CL);
+		scratch_curF.resize(CL);
+		
+		scratch_max_t.resize(L);
+		scratch_s.resize(L);
 
 		// Bring E to postorder and 0-indexed
-        if (reorder) {
-		    E_in = reorderRcpp(E_in);
-        }
+		if (reorder) {
+			E_in = reorderRcpp(E_in);
+		}
 		E = E_in - 1;
 
 		m = static_cast<int>(E.n_elem / 2);
@@ -909,166 +952,125 @@ struct NNICache {
 		}
 
 		// Transpose logP
-        logP_storage.resize(n * C * L);
-        for (int l = 0; l < L; ++l) {
-            const auto& P_l = logP_in[l];
-            for (int node = 0; node < n; ++node) {
-                for (int c = 0; c < C; ++c) {
-                    // Old: P_l[c * n + node]
-                    // New: logP_storage[node * C * L + c * L + l]
-                    logP_storage[node * C * L + c * L + l] = P_l[c * n + node];
-                }
-            }
-        }
+		logP_storage.resize(n * C * L);
+		for (int l = 0; l < L; ++l) {
+			const auto& P_l = logP_in[locus_ids[l]];
+			for (int node = 0; node < n; ++node) {
+				for (int c = 0; c < C; ++c) {
+					// Old: P_l[c * n + node]
+					// New: logP_storage[node * C * L + c * L + l]
+					logP_storage[node * C * L + c * L + l] = P_l[c * n + node];
+				}
+			}
+		}
 
 		// allocate caches
 		F.assign(n * C * L, 0.0);
 		logZ.assign(L, 0.0);
 
 		// initialize F and logZ per locus with one postorder pass
-        // We can use the vectorized functions, but we need to process nodes in postorder.
-        // E is in postorder.
-        
-        // We need to handle leaf nodes?
-        // In this code, leaf nodes are processed?
-        // The loop iterates over edges.
-        // E[m+i] is the child node.
-        // If child is tip, F[child] is 0?
-        // Wait, original code:
-        // temp[c] = logP[c*n + node] + sum_children(node)[c]
-        // If node is tip, sum_children is 0.
-        // F is initialized to 0.
-        // So for tips, F is 0.
-        // But tips are not in E[m+i] as children?
-        // E contains all edges. Tips are children of some edges.
-        // Yes.
-        
-        // But wait, original code:
-        // for (int i = 0; i < m; ++i) { ... }
-        // It iterates edges.
-        // If node is tip, msg_nm[base_node + c] is 0 (initialized).
-        // So temp[c] = P + 0.
-        // Then u[c] = exp(temp).
-        // Then F[node] is computed.
-        // And added to parent message.
-        
-        // So we can use compute_F_vectorized but we need to handle tips (no children F).
-        // Or just initialize F to 0.
-        // compute_F_vectorized takes F_c1 and F_c2.
-        // If node is tip, it has no children.
-        // But the loop iterates edges.
-        // If node is tip, we don't call compute_F_vectorized?
-        // Original code:
-        // temp[c] = P + msg_nm.
-        // msg_nm accumulates children messages.
-        // If tip, msg_nm is 0.
-        
-        // My vectorized function assumes 2 children.
-        // But initialization loop handles any number of children (via accumulation).
-        // So I should keep the initialization loop logic but vectorized over L.
-        
-        std::vector<double> msg_nm(n * C * L, 0.0); // Accumulator for children messages
-        
-        // Scratch buffers for initialization
-        std::vector<double> init_temp(C * L);
-        std::vector<double> init_u(C * L);
-        std::vector<double> init_max_t(L);
-        std::vector<double> init_s(L);
-        
-        for (int i = 0; i < m; ++i) {
-            const int par  = E[i];
-            const int node = E[m + i];
-            
-            // Compute F[node]
-            // temp = P[node] + msg_nm[node]
-            
-            const double* P_ptr = logP_storage.data() + node * C * L;
-            const double* msg_ptr = msg_nm.data() + node * C * L;
-            double* F_ptr = F.data() + node * C * L;
-            double* msg_par_ptr = msg_nm.data() + par * C * L;
-            
-            std::fill(init_max_t.begin(), init_max_t.end(), -std::numeric_limits<double>::infinity());
-            
-            for (int c = 0; c < C; ++c) {
-                const double* p = P_ptr + c * L;
-                const double* m_ = msg_ptr + c * L;
-                double* t = init_temp.data() + c * L;
-                for (int l = 0; l < L; ++l) {
-                    double val = p[l] + m_[l];
-                    t[l] = val;
-                    if (val > init_max_t[l]) init_max_t[l] = val;
-                }
-            }
-            
-            for (int c = 0; c < C; ++c) {
-                double* t = init_temp.data() + c * L;
-                double* u = init_u.data() + c * L;
-                for (int l = 0; l < L; ++l) {
-                    if (init_max_t[l] == -std::numeric_limits<double>::infinity()) {
-                        u[l] = 0.0;
-                    } else {
-                        u[l] = std::exp(t[l] - init_max_t[l]);
-                    }
-                }
-            }
-            
-            const double* rowA = expA_shifted.data();
-            for (int r = 0; r < C; ++r, rowA += C) {
-                std::fill(init_s.begin(), init_s.end(), 0.0);
-                for (int j = 0; j < C; ++j) {
-                    double A_val = rowA[j];
-                    double* u = init_u.data() + j * L;
-                    for (int l = 0; l < L; ++l) {
-                        init_s[l] += A_val * u[l];
-                    }
-                }
-                
-                double row_max = row_maxA[r];
-                double* f = F_ptr + r * L;
-                double* mp = msg_par_ptr + r * L;
-                for (int l = 0; l < L; ++l) {
-                    if (init_max_t[l] == -std::numeric_limits<double>::infinity()) {
-                        f[l] = -std::numeric_limits<double>::infinity();
-                        mp[l] += -std::numeric_limits<double>::infinity();
-                    } else {
-                        double val = row_max + init_max_t[l] + std::log(init_s[l]);
-                        f[l] = val;
-                        mp[l] += val;
-                    }
-                }
-            }
-        }
-        
-        // Root marginal
-        const double* P_root = logP_storage.data() + root * C * L;
-        const double* msg_root = msg_nm.data() + root * C * L;
-        
-        std::fill(init_max_t.begin(), init_max_t.end(), -std::numeric_limits<double>::infinity());
-        
-        for (int c = 0; c < C; ++c) {
-            const double* p = P_root + c * L;
-            const double* m_ = msg_root + c * L;
-            double* t = init_temp.data() + c * L;
-            for (int l = 0; l < L; ++l) {
-                double val = p[l] + m_[l];
-                t[l] = val;
-                if (val > init_max_t[l]) init_max_t[l] = val;
-            }
-        }
-        
-        current_total_loglik_val = 0.0;
-        for (int l = 0; l < L; ++l) {
-            if (init_max_t[l] == -std::numeric_limits<double>::infinity()) {
-                logZ[l] = -std::numeric_limits<double>::infinity();
-            } else {
-                double sum_exp = 0.0;
-                for (int c = 0; c < C; ++c) {
-                    sum_exp += std::exp(init_temp[c * L + l] - init_max_t[l]);
-                }
-                logZ[l] = init_max_t[l] + std::log(sum_exp);
-            }
-            current_total_loglik_val += logZ[l];
-        }
+		std::vector<double> msg_nm(n * C * L, 0.0); // Accumulator for children messages
+		
+		// Scratch buffers for initialization
+		std::vector<double> init_temp(C * L);
+		std::vector<double> init_u(C * L);
+		std::vector<double> init_max_t(L);
+		std::vector<double> init_s(L);
+		
+		for (int i = 0; i < m; ++i) {
+			const int par  = E[i];
+			const int node = E[m + i];
+			
+			// Compute F[node]
+			// temp = P[node] + msg_nm[node]
+			
+			const double* P_ptr = logP_storage.data() + node * C * L;
+			const double* msg_ptr = msg_nm.data() + node * C * L;
+			double* F_ptr = F.data() + node * C * L;
+			double* msg_par_ptr = msg_nm.data() + par * C * L;
+			
+			std::fill(init_max_t.begin(), init_max_t.end(), -std::numeric_limits<double>::infinity());
+			
+			for (int c = 0; c < C; ++c) {
+				const double* p = P_ptr + c * L;
+				const double* m_ = msg_ptr + c * L;
+				double* t = init_temp.data() + c * L;
+				for (int l = 0; l < L; ++l) {
+					double val = p[l] + m_[l];
+					t[l] = val;
+					if (val > init_max_t[l]) init_max_t[l] = val;
+				}
+			}
+			
+			for (int c = 0; c < C; ++c) {
+				double* t = init_temp.data() + c * L;
+				double* u = init_u.data() + c * L;
+				for (int l = 0; l < L; ++l) {
+					if (init_max_t[l] == -std::numeric_limits<double>::infinity()) {
+						u[l] = 0.0;
+					} else {
+						u[l] = std::exp(t[l] - init_max_t[l]);
+					}
+				}
+			}
+			
+			const double* rowA = expA_shifted.data();
+			for (int r = 0; r < C; ++r, rowA += C) {
+				std::fill(init_s.begin(), init_s.end(), 0.0);
+				for (int j = 0; j < C; ++j) {
+					double A_val = rowA[j];
+					double* u = init_u.data() + j * L;
+					for (int l = 0; l < L; ++l) {
+						init_s[l] += A_val * u[l];
+					}
+				}
+				
+				double row_max = row_maxA[r];
+				double* f = F_ptr + r * L;
+				double* mp = msg_par_ptr + r * L;
+				for (int l = 0; l < L; ++l) {
+					if (init_max_t[l] == -std::numeric_limits<double>::infinity()) {
+						f[l] = -std::numeric_limits<double>::infinity();
+						mp[l] += -std::numeric_limits<double>::infinity();
+					} else {
+						double val = row_max + init_max_t[l] + std::log(init_s[l]);
+						f[l] = val;
+						mp[l] += val;
+					}
+				}
+			}
+		}
+		
+		// Root marginal
+		const double* P_root = logP_storage.data() + root * C * L;
+		const double* msg_root = msg_nm.data() + root * C * L;
+		
+		std::fill(init_max_t.begin(), init_max_t.end(), -std::numeric_limits<double>::infinity());
+		
+		for (int c = 0; c < C; ++c) {
+			const double* p = P_root + c * L;
+			const double* m_ = msg_root + c * L;
+			double* t = init_temp.data() + c * L;
+			for (int l = 0; l < L; ++l) {
+				double val = p[l] + m_[l];
+				t[l] = val;
+				if (val > init_max_t[l]) init_max_t[l] = val;
+			}
+		}
+		
+		current_total_loglik_val = 0.0;
+		for (int l = 0; l < L; ++l) {
+			if (init_max_t[l] == -std::numeric_limits<double>::infinity()) {
+				logZ[l] = -std::numeric_limits<double>::infinity();
+			} else {
+				double sum_exp = 0.0;
+				for (int c = 0; c < C; ++c) {
+					sum_exp += std::exp(init_temp[c * L + l] - init_max_t[l]);
+				}
+				logZ[l] = init_max_t[l] + std::log(sum_exp);
+			}
+			current_total_loglik_val += logZ[l];
+		}
 	}
 
 	inline int other_child(int parent, int child) const {
@@ -1719,16 +1721,8 @@ std::vector<arma::Col<int>> tree_mcmc_cpp_cached(
 		int r2 = dis2(gen);
 
 		// local log-likelihood delta using cached messages
-		double new_ll = nni_cache_delta(xp, r1, r2); // nni_cache_delta now returns new_ll - cur_ll, wait.
-        // I updated nni_cache_delta to return delta if possible, or handle -inf.
-        // But wait, I updated nni_cache_delta to return delta.
-        // Let's check what I wrote in nni_cache_delta.
-        // double new_ll = ptr->compute_new_loglik(edge_n, which);
-        // double cur_ll = ptr->total_loglik();
-        // if (cur_ll == -inf) ... return inf or 0.0;
-        // return new_ll - cur_ll;
+		double new_ll = nni_cache_delta(xp, r1, r2); 
         
-        // So nni_cache_delta returns delta.
         double dl = nni_cache_delta(xp, r1, r2);
 
 		// accept using log form (stable, avoids exp)
@@ -1736,9 +1730,6 @@ std::vector<arma::Col<int>> tree_mcmc_cpp_cached(
 		if (std::log(r3) < dl) {
 			nni_cache_apply(xp, r1, r2);
 			l_0 += dl;
-            // If l_0 was -inf and dl was inf, l_0 becomes NaN?
-            // No, -inf + inf = NaN.
-            // I should update l_0 properly.
             l_0 = nni_cache_loglik(xp);
 		}
 
@@ -1921,6 +1912,163 @@ std::vector< std::vector<arma::Col<int>> > tree_mcmc_parallel_seeded(std::vector
     parallelFor(0, static_cast<std::size_t>(nchains), worker);
 
     return chain_results;
+}
+
+struct LocusChunkComputeWorker : public Worker {
+	const std::vector<NNICache*>& caches;
+	const int edge_n;
+	const int which;
+	std::vector<double>& partial_totals;
+
+	LocusChunkComputeWorker(const std::vector<NNICache*>& caches_, int edge_n_, int which_, std::vector<double>& partial_totals_)
+		: caches(caches_), edge_n(edge_n_), which(which_), partial_totals(partial_totals_) {}
+
+	void operator()(std::size_t begin, std::size_t end) {
+		for (std::size_t i = begin; i < end; ++i) {
+			partial_totals[i] = caches[i]->compute_new_loglik(edge_n, which);
+		}
+	}
+};
+
+struct LocusChunkApplyWorker : public Worker {
+	const std::vector<NNICache*>& caches;
+	const int edge_n;
+	const int which;
+
+	LocusChunkApplyWorker(const std::vector<NNICache*>& caches_, int edge_n_, int which_)
+		: caches(caches_), edge_n(edge_n_), which(which_) {}
+
+	void operator()(std::size_t begin, std::size_t end) {
+		for (std::size_t i = begin; i < end; ++i) {
+			caches[i]->apply_nni(edge_n, which);
+		}
+	}
+};
+
+std::vector<arma::Col<int>> run_locus_parallel_chain(
+	arma::Col<int> start_E,
+	const std::vector< std::vector<double> >& logP,
+	const std::vector<double>& logA,
+	int max_iter,
+	int seed) {
+
+	if (logP.empty()) {
+		stop("logP must contain at least one locus");
+	}
+
+	arma::Col<int> ordered_E = reorderRcpp(start_E);
+	const int total_loci = static_cast<int>(logP.size());
+	int chunk_count = defaultNumThreads();
+	if (chunk_count <= 0) {
+		const unsigned hw = std::thread::hardware_concurrency();
+		chunk_count = static_cast<int>(hw == 0 ? 1u : hw);
+	}
+	chunk_count = std::max(1, std::min(chunk_count, total_loci));
+
+	std::vector<std::unique_ptr<NNICache>> cache_storage;
+	cache_storage.reserve(chunk_count);
+	std::vector<NNICache*> cache_ptrs;
+	cache_ptrs.reserve(chunk_count);
+	std::vector<int> offsets(chunk_count + 1);
+	for (int i = 0; i <= chunk_count; ++i) {
+		offsets[i] = (static_cast<long long>(i) * total_loci) / chunk_count;
+	}
+
+	for (int chunk = 0; chunk < chunk_count; ++chunk) {
+		std::vector<int> locus_subset;
+		const int begin = offsets[chunk];
+		const int end = offsets[chunk + 1];
+		locus_subset.reserve(end - begin);
+		for (int idx = begin; idx < end; ++idx) locus_subset.push_back(idx);
+		cache_storage.emplace_back(new NNICache(ordered_E, logP, logA, locus_subset, false));
+		cache_ptrs.push_back(cache_storage.back().get());
+	}
+
+	std::vector<arma::Col<int>> tree_list(static_cast<std::size_t>(max_iter) + 1);
+	if (cache_ptrs.empty()) {
+		stop("Failed to initialize locus caches");
+	}
+	const int n_internal = static_cast<int>(ordered_E.n_elem / 4) - 1;
+	std::vector<double> partial_totals(chunk_count, 0.0);
+
+	double current_ll = 0.0;
+	for (NNICache* cache : cache_ptrs) {
+		current_ll += cache->total_loglik();
+	}
+	
+	std::mt19937 gen;
+	if (seed == -1) {
+		std::random_device rd;
+		gen.seed(rd());
+	} else {
+		gen.seed(seed);
+	}
+	std::uniform_int_distribution<> dis1(1, n_internal);
+	std::uniform_int_distribution<> dis2(0, 1);
+	std::uniform_real_distribution<> dis3(0.0, 1.0);
+
+	tree_list[0] = cache_ptrs.front()->E + 1;
+
+	auto compute_new_total = [&](int edge_n, int which) {
+		if (cache_ptrs.size() == 1) {
+			return cache_ptrs[0]->compute_new_loglik(edge_n, which);
+		}
+		LocusChunkComputeWorker worker(cache_ptrs, edge_n, which, partial_totals);
+		parallelFor(0, cache_ptrs.size(), worker);
+		double sum = 0.0;
+		for (double val : partial_totals) sum += val;
+		return sum;
+	};
+
+	auto apply_move = [&](int edge_n, int which) {
+		if (cache_ptrs.size() == 1) {
+			cache_ptrs[0]->apply_nni(edge_n, which);
+			return;
+		}
+		LocusChunkApplyWorker worker(cache_ptrs, edge_n, which);
+		parallelFor(0, cache_ptrs.size(), worker);
+	};
+
+	for (int iter = 0; iter < max_iter; ++iter) {
+		const int edge_n = dis1(gen);
+		const int which = dis2(gen);
+		double new_total = compute_new_total(edge_n, which);
+		double delta;
+		if (current_ll == -std::numeric_limits<double>::infinity()) {
+			if (new_total > -std::numeric_limits<double>::infinity()) delta = std::numeric_limits<double>::infinity();
+			else delta = 0.0;
+		} else {
+			delta = new_total - current_ll;
+		}
+		if (std::log(dis3(gen)) < delta) {
+			apply_move(edge_n, which);
+			current_ll = new_total;
+		}
+		tree_list[static_cast<std::size_t>(iter) + 1] = cache_ptrs.front()->E + 1;
+	}
+
+	return tree_list;
+}
+
+// [[Rcpp::export]]
+std::vector< std::vector<arma::Col<int>> > tree_mcmc_parallel_seeded_locus(
+	std::vector< arma::Col<int> > start_edges,
+	const std::vector< std::vector<double> >& logP,
+	const std::vector<double>& logA,
+	const std::vector<int>& max_iter_vec,
+	const std::vector<int>& seeds) {
+
+	const std::size_t nchains = start_edges.size();
+	if (max_iter_vec.size() != nchains || seeds.size() != nchains) {
+		stop("start_edges, max_iter_vec, and seeds must have the same length");
+	}
+
+	std::vector< std::vector<arma::Col<int>> > chain_results(nchains);
+	for (std::size_t i = 0; i < nchains; ++i) {
+		chain_results[i] = run_locus_parallel_chain(start_edges[i], logP, logA, max_iter_vec[i], seeds[i]);
+	}
+
+	return chain_results;
 }
 
 
