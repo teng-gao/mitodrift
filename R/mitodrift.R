@@ -1268,6 +1268,11 @@ run_tree_mcmc_batch = function(
     ncores_qs <- if (isTRUE(qs2:::check_TBB())) ncores_qs else 1L
     message('Using ', ncores_qs, ' cores for saving/writing MCMC trace')
 
+    if (!is.null(conv_thres) && !diag) {
+        warning('conv_thres provided but diag = FALSE; enabling diagnostics to monitor convergence')
+        diag <- TRUE
+    }
+
     chains = 1:nchains
 
     outdir = dirname(outfile)
@@ -1283,54 +1288,71 @@ run_tree_mcmc_batch = function(
         length(edge_list_all) = nchains
     }
 
-    max_len = max_iter + 1
+    max_len = if (is.null(conv_thres)) max_iter + 1L else NULL
     for (i in seq_along(edge_list_all)) {
         chain_list = edge_list_all[[i]]
         if (is.null(chain_list) || length(chain_list) == 0) {
             edge_list_all[[i]] = list(phy_init$edge)
             next
         }
-        if (length(chain_list) > max_len) {
+        if (!is.null(max_len) && length(chain_list) > max_len) {
             edge_list_all[[i]] = chain_list[seq_len(max_len)]
         }
     }
     names(edge_list_all) = as.character(chains)
 
-    chain_lengths = sapply(edge_list_all, length)
-    remaining_vec = pmax(0L, max_iter - chain_lengths + 1L)
+    chain_lengths = vapply(edge_list_all, length, integer(1))
+    if (length(unique(chain_lengths)) != 1L) {
+        stop('run_tree_mcmc_batch assumes all chains have the same length. Please regenerate or clean the saved state before resuming.')
+    }
+    completed_iters = chain_lengths[1] - 1L
 
-    message('Remaining iterations per chain: ', paste(remaining_vec, collapse = ', '))
-
-    if (all(remaining_vec == 0L)) {
-        message('All chains have completed the requested iterations.')
-        qs2::qd_save(edge_list_all, outfile, nthreads = ncores_qs)
-        return(edge_list_all)
+    if (is.null(conv_thres)) {
+        remaining = max_iter - completed_iters
+        message('Remaining iterations per chain: ', remaining)
+        if (remaining <= 0L) {
+            message('All chains have completed the requested iterations.')
+            qs2::qd_save(edge_list_all, outfile, nthreads = ncores_qs)
+            return(edge_list_all)
+        }
+        total_batches = ceiling(remaining / batch_size)
+        message('Running MCMC with ', length(chains), ' chains in up to ', total_batches, ' batches of ', batch_size)
+    } else {
+        message('Running MCMC with ', length(chains), ' chains until ASDSF <= ', conv_thres,
+                ' (batch size ', batch_size, ')')
     }
 
-    n_batches = ceiling(max(remaining_vec) / batch_size)
+    batch_idx = 0L
+    repeat {
+        chain_lengths = vapply(edge_list_all, length, integer(1))
+        if (length(unique(chain_lengths)) != 1L) {
+            stop('run_tree_mcmc_batch assumes all chains have the same length. Found inconsistent lengths during execution.')
+        }
+        completed_iters = chain_lengths[1] - 1L
 
-    message('Running MCMC with ', length(chains), ' chains in up to ', n_batches, ' batches of ', batch_size)
-
-    for (i in seq_len(n_batches)) {
-
-        ptm <- proc.time()
- 
-        chain_lengths = sapply(edge_list_all, length)
-        remaining_vec = pmax(0L, max_iter - chain_lengths + 1L)
-        active_idx = which(remaining_vec > 0L)
-
-        if (length(active_idx) == 0L) {
-            message('All chains have completed the requested iterations.')
-            break
+        if (is.null(conv_thres)) {
+            remaining = max_iter - completed_iters
+            if (remaining <= 0L) {
+                message('All chains have completed the requested iterations.')
+                break
+            }
+            iter_this_batch = min(batch_size, remaining)
+            batch_label = paste('batch', batch_idx + 1L, 'of', ceiling(remaining / batch_size))
+        } else {
+            iter_this_batch = batch_size
+            batch_label = paste('batch', batch_idx + 1L)
         }
 
-        message('Running batch ', i, ' of ', n_batches)
+        batch_idx = batch_idx + 1L
+        message('Running ', batch_label)
 
-        iter_vec = pmin(batch_size, remaining_vec[active_idx])
+        ptm <- proc.time()
+
+        iter_vec = rep(iter_this_batch, length(chains))
         start_edges = lapply(edge_list_all, function(chain_list) {
             chain_list[[length(chain_list)]]
-        })[active_idx]
-        seed_vec = as.integer(1000003L * (i - 1L) + chains)[active_idx]
+        })
+        seed_vec = as.integer(1000003L * (batch_idx - 1L) + chains)
 
         elist_active = tree_mcmc_parallel_seeded(
             start_edges,
@@ -1340,15 +1362,12 @@ run_tree_mcmc_batch = function(
             seed_vec
         )
 
-        for (idx_pos in seq_along(active_idx)) {
-            chain_id = active_idx[idx_pos]
-            elist = elist_active[[idx_pos]]
-            elist = restore_elist(elist)
+        for (chain_id in seq_along(edge_list_all)) {
+            elist = restore_elist(elist_active[[chain_id]])
             if (length(elist) > 0) {
                 elist = elist[-1]
             }
-            new_list = c(edge_list_all[[chain_id]], elist)
-            edge_list_all[[chain_id]] = new_list
+            edge_list_all[[chain_id]] = c(edge_list_all[[chain_id]], elist)
         }
 
         qs2::qd_save(edge_list_all, outfile, nthreads = ncores_qs)
@@ -1361,15 +1380,15 @@ run_tree_mcmc_batch = function(
                 rooted = TRUE,
                 ncores = ncores
             )
-            message('ASDSF (target clades) after batch ', i, ': ', signif(asdsf, 4))
-            if (!is.null(conv_thres) && asdsf <= conv_thres) {
+            message('ASDSF (target clades) after ', batch_label, ': ', signif(asdsf, 4))
+            if (!is.null(conv_thres) && !is.na(asdsf) && asdsf <= conv_thres) {
                 message('Convergence threshold (ASDSF) reached. Stopping MCMC.')
                 break
             }
         }
 
         batch_time <- proc.time() - ptm
-        message(paste('Batch', i, 'completed', paste0('(', signif(batch_time[['elapsed']], 2), 's', ')')))
+        message(paste('Completed', batch_label, paste0('(', signif(batch_time[['elapsed']], 2), 's', ')')))
     }
 
     qs2::qd_save(edge_list_all, outfile, nthreads = ncores_qs)
