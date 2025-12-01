@@ -59,11 +59,14 @@ Options:
 	-p INTEGER, --ncores=INTEGER
 		Number of cores for ML/MCMC (default: 1)
 
-	-q INTEGER, --ncores_annot=INTEGER
-		Number of cores for branch confidence annotation (default: 1)
+	--ncores_nj=INTEGER
+		Number of cores to use for initial NJ tree construction (default: 1)
 
 	-u INTEGER, --ncores_em=INTEGER
 		Number of cores for EM parameter fitting (default: 1)
+
+	-q INTEGER, --ncores_qs=INTEGER
+		Number of cores to use for QS operations in MCMC and tree annotation (default: 1)
 
 	-f LOGICAL, --fit_params=LOGICAL
 		Fit parameters using EM (default: TRUE)
@@ -75,7 +78,7 @@ Options:
 		EM convergence threshold (default: 1e-3)
 
 	-i INTEGER, --ml_iter=INTEGER
-		Maximum iterations for tree optimization (default: 100)
+		Maximum iterations for tree optimization (default: 0)
 
 	-j INTEGER, --tree_mcmc_iter=INTEGER
 		Maximum iterations for phylogenetic MCMC (default: 100)
@@ -92,6 +95,9 @@ Options:
 	-y LOGICAL, --tree_mcmc_diag=LOGICAL
 		Run diagnostics (e.g., ASDSF) after each MCMC batch (default: TRUE)
 
+	-z DOUBLE, --conv_thres=DOUBLE
+		Convergence threshold for ASDSF (default: NULL)
+
 	-r LOGICAL, --resume=LOGICAL
 		Resume from existing outputs (default: FALSE)
 
@@ -105,6 +111,7 @@ Rscript "$repo_dir/inst/bin/run_mitodrift_em.R" \
 	--mut_dat "$mutfile" \  # or replace with: --amat "$amat" --dmat "$dmat"
 	--outdir "$outdir" \
 	--ncores "$ncores" \
+	--ncores_nj "$ncores_nj" \
 	--ncores_em "$ncores_em" \
 	--ncores_qs "$ncores_qs" \
 	--fit_params "$fit_params" \
@@ -116,6 +123,7 @@ Rscript "$repo_dir/inst/bin/run_mitodrift_em.R" \
 	--tree_mcmc_burnin "$tree_mcmc_burnin" \
 	--tree_mcmc_batch_size "$tree_mcmc_batch_size" \
 	--tree_mcmc_diag "$tree_mcmc_diag" \
+	--conv_thres "$conv_thres" \
 	--resume "$resume"
 ```
 

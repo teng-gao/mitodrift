@@ -75,7 +75,7 @@ option_list <- list(
         c("-q", "--ncores_qs"),
         type = "integer",
         default = 1,
-        help = "Number of cores to use for QS operations in MCMC and tree annotation",
+        help = "Number of cores to use for file saving/writing (qs2) in MCMC and tree annotation",
         metavar = "INTEGER"
     ),
     make_option(
@@ -96,21 +96,21 @@ option_list <- list(
         c("-e", "--eps"),
         type = "double",
         default = 0.001,
-        help = "Mutation rate per branch",
+        help = "Mutation rate per branch; automatically fitted using EM if fit_params=TRUE",
         metavar = "DOUBLE"
     ),
     make_option(
         c("-s", "--err"),
         type = "double",
         default = 0,
-        help = "Sequencing error rate",
+        help = "Sequencing error rate; automatically fitted using EM if fit_params=TRUE",
         metavar = "DOUBLE"
     ),
     make_option(
         c("-g", "--ngen"),
         type = "integer",
         default = 100,
-        help = "Number of generations",
+        help = "Number of generations; automatically fitted using EM if fit_params=TRUE",
         metavar = "INTEGER"
     ),
     make_option(
