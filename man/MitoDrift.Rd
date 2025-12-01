@@ -75,7 +75,8 @@ Initialize MitoDrift object
   amat = NULL,
   dmat = NULL,
   model_params = NULL,
-  build_tree = TRUE
+  build_tree = TRUE,
+  ncores = 1
 )}\if{html}{\out{</div>}}
 }
 
@@ -91,6 +92,8 @@ Initialize MitoDrift object
 \item{\code{model_params}}{Model parameters (optional)}
 
 \item{\code{build_tree}}{Whether to build an initial NJ tree (default: TRUE)}
+
+\item{\code{ncores}}{Number of cores used when building the initial NJ tree (default: 1)}
 }
 \if{html}{\out{</div>}}
 }

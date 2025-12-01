@@ -4,12 +4,14 @@
 \alias{make_rooted_nj}
 \title{Make a rooted NJ tree}
 \usage{
-make_rooted_nj(vmat, dist_method = "manhattan")
+make_rooted_nj(vmat, dist_method = "manhattan", ncores = 1)
 }
 \arguments{
 \item{vmat}{A matrix of cell-by-variable values}
 
 \item{dist_method}{The distance method to use}
+
+\item{ncores}{Number of threads for \code{parallelDist::parDist} (default: 1)}
 }
 \value{
 A phylo object
