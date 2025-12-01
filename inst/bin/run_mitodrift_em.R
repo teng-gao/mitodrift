@@ -58,6 +58,13 @@ option_list <- list(
         metavar = "INTEGER"
     ),
     make_option(
+        c("--ncores_nj"),
+        type = "integer",
+        default = 1,
+        help = "Number of cores to use for initial NJ tree construction via ParDist; notice this may change the resulting tree",
+        metavar = "INTEGER"
+    ),
+    make_option(
         c("-u", "--ncores_em"),
         type = "integer",
         default = 1,
@@ -280,7 +287,7 @@ if (opts$resume) {
         dmat = saved_md$dmat,
         model_params = saved_md$model_params,
         build_tree = FALSE,
-        ncores = opts$ncores
+        ncores = opts$ncores_nj
     )
     md <- md$copy(saved_md)
 } else {
@@ -293,19 +300,19 @@ if (opts$resume) {
     )
 
     if (!is.null(opts$mut_dat)) {
-        message(glue("Building NJ tree for long-format input using {opts$ncores} core(s)"))
+        message(glue("Building NJ tree for long-format input using {opts$ncores_nj} core(s)"))
         md <- MitoDrift$new(
             mut_dat = mut_dat,
             model_params = model_params,
-            ncores = opts$ncores
+            ncores = opts$ncores_nj
         )
     } else {
-        message(glue("Building NJ tree for matrix input using {opts$ncores} core(s)"))
+        message(glue("Building NJ tree for matrix input using {opts$ncores_nj} core(s)"))
         md <- MitoDrift$new(
             amat = amat,
             dmat = dmat,
             model_params = model_params,
-            ncores = opts$ncores
+            ncores = opts$ncores_nj
         )
     }
     saveRDS(md, mitodrift_object_file)

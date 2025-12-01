@@ -628,8 +628,12 @@ mat_to_long = function(amat, dmat) {
 #' @export
 make_rooted_nj = function(vmat, dist_method = 'manhattan', ncores = 1) {
     vmat[is.na(vmat)] = 0
-    vmat = cbind(vmat, outgroup = 0)
-    dist_mat = vmat %>% as.matrix %>% t %>% parallelDist::parDist(method = dist_method, threads = ncores)
+    vmat = cbind(vmat, outgroup = 0) %>% as.matrix %>% t
+    if (ncores > 1) {
+        dist_mat = parallelDist::parDist(vmat, method = dist_method, threads = ncores)
+    } else {
+        dist_mat = dist(vmat, method = dist_method)
+    }
     nj_tree = ape::nj(dist_mat) %>% 
         ape::root(outgroup = 'outgroup') %>% drop.tip('outgroup') 
     return(nj_tree)

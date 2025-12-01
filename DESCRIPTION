@@ -1,6 +1,6 @@
 Package: mitodrift
 Title: Reconstructing single-cell lineage history using mitochondrial mutation drift dynamics
-Version: 1.0.1
+Version: 1.0.2
 Authors@R: 
     person("Teng", "Gao", , "tgao@broadinstitute.org", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0002-0196-689X"))
