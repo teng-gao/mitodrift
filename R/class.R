@@ -46,9 +46,11 @@ MitoDrift <- R6::R6Class("MitoDrift",
         #' @param dmat Total depth matrix (optional, if mut_dat not provided)
         #' @param model_params Model parameters (optional)
         #' @param build_tree Whether to build an initial NJ tree (default: TRUE)
+        #' @param ncores Number of cores used when building the initial NJ tree (default: 1)
         initialize = function(
                 mut_dat = NULL, amat = NULL, dmat = NULL, 
-                model_params = NULL, build_tree = TRUE
+                model_params = NULL, build_tree = TRUE,
+                ncores = 1
             ) {
             
             # Set model parameters if complete
@@ -94,8 +96,8 @@ MitoDrift <- R6::R6Class("MitoDrift",
             }
             
             if (build_tree) {
-                message('Building initial tree...')
-                self$tree_init <- make_rooted_nj(self$vmat) %>% reorder_phylo()
+                message(sprintf('Building initial tree (NJ) using %d core(s)...', ncores))
+                self$tree_init <- make_rooted_nj(self$vmat, ncores = ncores) %>% reorder_phylo()
             }
 
         },

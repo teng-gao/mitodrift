@@ -4,7 +4,7 @@ Version: 1.0.1
 Authors@R: 
     person("Teng", "Gao", , "tgao@broadinstitute.org", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0002-0196-689X"))
-Description: Reconstructing single cell lineage history using drift dynamics of mitochondrial mutations
+Description: Reconstructing single-cell lineage history using mitochondrial mutation drift dynamics
 License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true

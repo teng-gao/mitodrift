@@ -275,7 +275,13 @@ if (opts$resume) {
     if (is.null(saved_md$amat) || is.null(saved_md$dmat)) {
         stop("Saved MitoDrift object lacks `amat`/`dmat`; cannot resume.")
     }
-    md <- MitoDrift$new(amat = saved_md$amat, dmat = saved_md$dmat, model_params = saved_md$model_params, build_tree = FALSE)
+    md <- MitoDrift$new(
+        amat = saved_md$amat,
+        dmat = saved_md$dmat,
+        model_params = saved_md$model_params,
+        build_tree = FALSE,
+        ncores = opts$ncores
+    )
     md <- md$copy(saved_md)
 } else {
     model_params <- c(
@@ -287,15 +293,19 @@ if (opts$resume) {
     )
 
     if (!is.null(opts$mut_dat)) {
+        message(glue("Building NJ tree for long-format input using {opts$ncores} core(s)"))
         md <- MitoDrift$new(
             mut_dat = mut_dat,
-            model_params = model_params
+            model_params = model_params,
+            ncores = opts$ncores
         )
     } else {
+        message(glue("Building NJ tree for matrix input using {opts$ncores} core(s)"))
         md <- MitoDrift$new(
             amat = amat,
             dmat = dmat,
-            model_params = model_params
+            model_params = model_params,
+            ncores = opts$ncores
         )
     }
     saveRDS(md, mitodrift_object_file)

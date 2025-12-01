@@ -623,12 +623,13 @@ mat_to_long = function(amat, dmat) {
 #' Make a rooted NJ tree
 #' @param vmat A matrix of cell-by-variable values
 #' @param dist_method The distance method to use
+#' @param ncores Number of threads for `parallelDist::parDist` (default: 1)
 #' @return A phylo object
 #' @export
-make_rooted_nj = function(vmat, dist_method = 'manhattan') {
+make_rooted_nj = function(vmat, dist_method = 'manhattan', ncores = 1) {
     vmat[is.na(vmat)] = 0
     vmat = cbind(vmat, outgroup = 0)
-    dist_mat = vmat %>% as.matrix %>% t %>% dist(method = dist_method)
+    dist_mat = vmat %>% as.matrix %>% t %>% parallelDist::parDist(method = dist_method, threads = ncores)
     nj_tree = ape::nj(dist_mat) %>% 
         ape::root(outgroup = 'outgroup') %>% drop.tip('outgroup') 
     return(nj_tree)
