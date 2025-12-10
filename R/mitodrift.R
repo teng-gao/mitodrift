@@ -1401,6 +1401,150 @@ run_tree_mcmc_batch = function(
     return(edge_list_all)
 }
 
+#' Uniform random-walk tree MCMC (accept-all)
+#'
+#' Mirrors `run_tree_mcmc_batch` but uses the uniform sampler that accepts every NNI proposal
+#' (no likelihood evaluation). Useful for generating random walks over tree space quickly.
+#' @export
+run_tree_mcmc_batch_uniform = function(
+    phy_init, outfile, max_iter = 100, nchains = 1, ncores = 1, ncores_qs = 1,
+    batch_size = 1000, diag = TRUE, conv_thres = NULL, resume = FALSE
+) {
+
+
+    RhpcBLASctl::blas_set_num_threads(1)
+    RhpcBLASctl::omp_set_num_threads(1)
+    RcppParallel::setThreadOptions(numThreads = ncores)
+
+    ncores_qs <- if (isTRUE(qs2:::check_TBB())) ncores_qs else 1L
+    message('Using ', ncores_qs, ' cores for saving/writing MCMC trace')
+
+    if (!is.null(conv_thres) && !diag) {
+        warning('conv_thres provided but diag = FALSE; enabling diagnostics to monitor convergence')
+        diag <- TRUE
+    }
+
+    chains = 1:nchains
+
+    outdir = dirname(outfile)
+
+    if (!dir.exists(outdir)) {
+        dir.create(outdir, recursive = TRUE)
+    }
+
+    edge_list_all = if (resume) safe_read_chain(outfile, ncores = ncores_qs) else NULL
+    if (is.null(edge_list_all)) {
+        edge_list_all = vector('list', nchains)
+    } else {
+        length(edge_list_all) = nchains
+    }
+
+    max_len = if (is.null(conv_thres)) max_iter + 1L else NULL
+    for (i in seq_along(edge_list_all)) {
+        chain_list = edge_list_all[[i]]
+        if (is.null(chain_list) || length(chain_list) == 0) {
+            edge_list_all[[i]] = list(phy_init$edge)
+            next
+        }
+        if (!is.null(max_len) && length(chain_list) > max_len) {
+            edge_list_all[[i]] = chain_list[seq_len(max_len)]
+        }
+    }
+    names(edge_list_all) = as.character(chains)
+
+    chain_lengths = vapply(edge_list_all, length, integer(1))
+    if (length(unique(chain_lengths)) != 1L) {
+        stop('run_tree_mcmc_batch_uniform assumes all chains have the same length. Please regenerate or clean the saved state before resuming.')
+    }
+    completed_iters = chain_lengths[1] - 1L
+
+    if (is.null(conv_thres)) {
+        remaining = max_iter - completed_iters
+        message('Remaining iterations per chain: ', remaining)
+        if (remaining <= 0L) {
+            message('All chains have completed the requested iterations.')
+            qs2::qd_save(edge_list_all, outfile, nthreads = ncores_qs)
+            return(edge_list_all)
+        }
+        total_batches = ceiling(remaining / batch_size)
+        message('Running uniform MCMC with ', length(chains), ' chains in up to ', total_batches, ' batches of ', batch_size)
+    } else {
+        message('Running uniform MCMC with ', length(chains), ' chains until ASDSF <= ', conv_thres,
+                ' (batch size ', batch_size, ')')
+    }
+
+    batch_idx = 0L
+    repeat {
+        chain_lengths = vapply(edge_list_all, length, integer(1))
+        if (length(unique(chain_lengths)) != 1L) {
+            stop('run_tree_mcmc_batch_uniform assumes all chains have the same length. Found inconsistent lengths during execution.')
+        }
+        completed_iters = chain_lengths[1] - 1L
+
+        if (is.null(conv_thres)) {
+            remaining = max_iter - completed_iters
+            if (remaining <= 0L) {
+                message('All chains have completed the requested iterations.')
+                break
+            }
+            iter_this_batch = min(batch_size, remaining)
+            batch_label = paste('batch', batch_idx + 1L, 'of', ceiling(remaining / batch_size))
+        } else {
+            iter_this_batch = batch_size
+            batch_label = paste('batch', batch_idx + 1L)
+        }
+
+        batch_idx = batch_idx + 1L
+        message('Running ', batch_label)
+
+        ptm <- proc.time()
+
+        iter_vec = rep(iter_this_batch, length(chains))
+        start_edges = lapply(edge_list_all, function(chain_list) {
+            chain_list[[length(chain_list)]]
+        })
+        seed_vec = as.integer(1000003L * (batch_idx - 1L) + chains)
+
+        elist_active = tree_mcmc_parallel_seeded_uniform(
+            start_edges,
+            iter_vec,
+            seed_vec
+        )
+
+        for (chain_id in seq_along(edge_list_all)) {
+            elist = restore_elist(elist_active[[chain_id]])
+            if (length(elist) > 0) {
+                elist = elist[-1]
+            }
+            edge_list_all[[chain_id]] = c(edge_list_all[[chain_id]], elist)
+        }
+
+        qs2::qd_save(edge_list_all, outfile, nthreads = ncores_qs)
+
+        if (diag) {
+            asdsf <- compute_target_tree_asdsf(
+                phy_target = phy_init,
+                edge_list_chains = edge_list_all,
+                min_freq = 0,
+                rooted = TRUE,
+                ncores = ncores
+            )
+            message('ASDSF (target clades) after ', batch_label, ': ', signif(asdsf, 4))
+            if (!is.null(conv_thres) && !is.na(asdsf) && asdsf <= conv_thres) {
+                message('Convergence threshold (ASDSF) reached. Stopping uniform MCMC.')
+                break
+            }
+        }
+
+        batch_time <- proc.time() - ptm
+        message(paste('Completed', batch_label, paste0('(', signif(batch_time[['elapsed']], 2), 's', ')')))
+    }
+
+    qs2::qd_save(edge_list_all, outfile, nthreads = ncores_qs)
+
+    return(edge_list_all)
+}
+
 restore_elist = function(elist) {
     lapply(elist, function(edges){matrix(edges, ncol = 2)})
 }

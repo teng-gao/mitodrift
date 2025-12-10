@@ -1600,3 +1600,74 @@ std::vector< std::vector<arma::Col<int>> > tree_mcmc_parallel_seeded(std::vector
 
     return chain_results;
 }
+
+
+// --------------------------------------------------------------------------
+// Lightweight uniform-likelihood MCMC: accepts every NNI proposal without scoring.
+// Useful for generating random tree walks quickly.
+struct UniformTreeChainWorker : public Worker {
+    const std::vector< arma::Col<int> >& start_edges;
+    const std::vector<int>& max_iter_vec;
+    const std::vector<int>& seeds;
+    std::vector< std::vector<arma::Col<int>> >& chain_results;
+
+    UniformTreeChainWorker(const std::vector< arma::Col<int> >& start_edges,
+                           const std::vector<int>& max_iter_vec,
+                           const std::vector<int>& seeds,
+                           std::vector< std::vector<arma::Col<int>> >& chain_results)
+        : start_edges(start_edges), max_iter_vec(max_iter_vec), seeds(seeds), chain_results(chain_results) {}
+
+    void operator()(std::size_t begin, std::size_t end) {
+        for (std::size_t i = begin; i < end; ++i) {
+            const arma::Col<int>& E0 = start_edges[i];
+            const int max_iter = max_iter_vec[i];
+            const int n_internal = static_cast<int>(E0.n_elem / 4) - 1;
+
+            std::vector<arma::Col<int>> chain(static_cast<size_t>(max_iter) + 1);
+            chain[0] = E0; // already reordered upstream
+
+            std::mt19937 gen;
+            if (seeds[i] == -1) {
+                std::random_device rd;
+                gen.seed(rd());
+            } else {
+                gen.seed(seeds[i]);
+            }
+            std::uniform_int_distribution<> dis_edge(1, n_internal);
+            std::uniform_int_distribution<> dis_swap(0, 1);
+
+            arma::Col<int> E_current = E0;
+            for (int iter = 0; iter < max_iter; ++iter) {
+                const int edge_id = dis_edge(gen);
+                const int which = dis_swap(gen);
+                std::vector<arma::Col<int>> proposals = nnin_cpp(E_current, edge_id);
+                E_current = std::move(proposals[which]);
+                chain[static_cast<size_t>(iter) + 1] = E_current;
+            }
+
+            chain_results[i] = std::move(chain);
+        }
+    }
+};
+
+// [[Rcpp::export]]
+std::vector< std::vector<arma::Col<int>> > tree_mcmc_parallel_seeded_uniform(std::vector< arma::Col<int> > start_edges,
+    const std::vector<int>& max_iter_vec,
+    const std::vector<int>& seeds) {
+
+    const std::size_t nchains = start_edges.size();
+    if (max_iter_vec.size() != nchains || seeds.size() != nchains) {
+        stop("start_edges, max_iter_vec, and seeds must have the same length");
+    }
+
+    for (std::size_t i = 0; i < nchains; ++i) {
+        start_edges[i] = reorderRcpp(start_edges[i]);
+    }
+
+    std::vector< std::vector<arma::Col<int>> > chain_results(nchains);
+
+    UniformTreeChainWorker worker(start_edges, max_iter_vec, seeds, chain_results);
+    parallelFor(0, nchains, worker);
+
+    return chain_results;
+}
