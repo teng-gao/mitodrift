@@ -1,7 +1,7 @@
 ## -----------------------------------------------------------------------------
 #' Compute ASDSF across chains using clades from a target tree
 #'
-#' @param phy_target A rooted `phylo` object defining the reference clades.
+#' @param phy_target A rooted `phylo` object defining the reference clades. Assumed to be in postorder.
 #' @param edge_list_chains List of chains, each a list of edge matrices (2-column integer matrices).
 #' @param rooted Logical; treat trees as rooted when matching clades. Default `TRUE`.
 #' @param normalize Logical; pass through to `prop_clades_par` (default `TRUE`).

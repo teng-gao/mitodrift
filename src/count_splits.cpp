@@ -188,6 +188,7 @@ Rcpp::NumericVector prop_clades_par(Rcpp::IntegerMatrix E_target,
     bool rooted = true,
     bool normalize = true)
 {
+	// E_target is expected in postorder
 	Rcpp::List el(edges);
 	const int nbtree = el.size();
 	if (nbtree <= 0) Rcpp::stop("edge_list is empty");
