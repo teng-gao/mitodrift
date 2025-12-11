@@ -1713,6 +1713,7 @@ add_clade_freq = function(phy, edge_list, rooted = TRUE, ncores = 1) {
     RhpcBLASctl::blas_set_num_threads(1)
     RhpcBLASctl::omp_set_num_threads(1)
     RcppParallel::setThreadOptions(numThreads = ncores)
+    phy = reorder_phylo(phy)
     freqs = prop_clades_par(phy$edge, edge_list, rooted = rooted, normalize = TRUE)
     phy$node.label = freqs
     return(phy)

@@ -289,6 +289,19 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// tree_mcmc_parallel_seeded_uniform
+std::vector< std::vector<arma::Col<int>> > tree_mcmc_parallel_seeded_uniform(std::vector< arma::Col<int> > start_edges, const std::vector<int>& max_iter_vec, const std::vector<int>& seeds);
+RcppExport SEXP _mitodrift_tree_mcmc_parallel_seeded_uniform(SEXP start_edgesSEXP, SEXP max_iter_vecSEXP, SEXP seedsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< std::vector< arma::Col<int> > >::type start_edges(start_edgesSEXP);
+    Rcpp::traits::input_parameter< const std::vector<int>& >::type max_iter_vec(max_iter_vecSEXP);
+    Rcpp::traits::input_parameter< const std::vector<int>& >::type seeds(seedsSEXP);
+    rcpp_result_gen = Rcpp::wrap(tree_mcmc_parallel_seeded_uniform(start_edges, max_iter_vec, seeds));
+    return rcpp_result_gen;
+END_RCPP
+}
 // save_qd_cpp
 SEXP save_qd_cpp(const Rcpp::List& objects, const Rcpp::CharacterVector& paths, int compress_level, bool shuffle, std::size_t grain_size);
 RcppExport SEXP _mitodrift_save_qd_cpp(SEXP objectsSEXP, SEXP pathsSEXP, SEXP compress_levelSEXP, SEXP shuffleSEXP, SEXP grain_sizeSEXP) {
@@ -326,6 +339,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_mitodrift_tree_mcmc_cpp_cached_threadsafe", (DL_FUNC) &_mitodrift_tree_mcmc_cpp_cached_threadsafe, 6},
     {"_mitodrift_tree_mcmc_parallel", (DL_FUNC) &_mitodrift_tree_mcmc_parallel, 5},
     {"_mitodrift_tree_mcmc_parallel_seeded", (DL_FUNC) &_mitodrift_tree_mcmc_parallel_seeded, 5},
+    {"_mitodrift_tree_mcmc_parallel_seeded_uniform", (DL_FUNC) &_mitodrift_tree_mcmc_parallel_seeded_uniform, 3},
     {"_mitodrift_save_qd_cpp", (DL_FUNC) &_mitodrift_save_qd_cpp, 5},
     {NULL, NULL, 0}
 };
