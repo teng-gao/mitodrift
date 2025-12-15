@@ -411,6 +411,7 @@ order_muts <- function(cell_order, mut_dat) {
 #' @param smooth_k Integer. Number of neighbors for smoothing features. 0 means no smoothing.
 #' @param ladderize Logical. If `TRUE`, ladderizes the tree.
 #' @param open_angle Numeric. Angle of the opening in the fan layout.
+#' @param feature_axis_label Logical. If `TRUE`, show feature heatmap axis labels; hide when `FALSE`.
 #'
 #' @return A `ggtree` plot object.
 #' @export
@@ -418,7 +419,7 @@ plot_phylo_circ = function(gtree, cell_annot = NULL, tip_annot = NULL, feature_m
     node_conf = FALSE, conf_label = FALSE, title = '', pwidth_annot = 0.25, pwidth_feature = 0.25,
     branch_width = 0.3, dot_size = 1, conf_min = 0, conf_max = 0.5, annot_pal = NULL, offset = 0.05, width = 0.8,
     label_size = 2, rescale = FALSE, limits = c(-2,2), annot_legend_title = 'Group', feature_legend_title = 'Score', flip = TRUE,
-    legend = FALSE, layered = FALSE, smooth_k = 0, ladderize = TRUE, open_angle = 0) {
+    legend = FALSE, layered = FALSE, smooth_k = 0, ladderize = TRUE, open_angle = 0, feature_axis_label = TRUE) {
 
     p_tree = ggtree(gtree, 
             ladderize = ladderize, layout = 'fan', open.angle = open_angle,
@@ -544,6 +545,9 @@ plot_phylo_circ = function(gtree, cell_annot = NULL, tip_annot = NULL, feature_m
                 ungroup()
         }
 
+        axis_flag = if (feature_axis_label) "x" else "none"
+        axis_text_size = if (feature_axis_label) label_size else 0
+
         p_tree = p_tree + 
             ggnewscale::new_scale_fill() +
             geom_fruit(
@@ -554,9 +558,9 @@ plot_phylo_circ = function(gtree, cell_annot = NULL, tip_annot = NULL, feature_m
                 width = width,
                 # linewidth = 0.3,
                 axis.params = list(
-                    axis       = "x", 
+                    axis       = axis_flag, 
                     text.angle = 30,
-                    text.size  = label_size,
+                    text.size  = axis_text_size,
                     vjust      = 0.5,
                     hjust = 1
                 ),
