@@ -1563,15 +1563,21 @@ prop.clades.par <- function(phy, phy_list, rooted = FALSE,
 #' @param edge_list A list of edge matrices (or phylogenetic trees) to compare against the reference tree.
 #' @param rooted Logical; whether to treat the trees as rooted. Default is \code{TRUE}.
 #' @param ncores Integer; number of cores to use for parallel computation. Default is \code{1} (no parallelization).
-#' @return A phylo object with clade frequencies added as node labels.
+#' @param nbatch Integer; number of batches to use for batch-means SE estimation. Defaults to 50.
+#'
+#' @return A phylo object with clade frequencies added as node labels (`node.label`) and
+#'   corresponding standard errors stored in `node.se`.
 #' @export
-add_clade_freq = function(phy, edge_list, rooted = TRUE, ncores = 1) {
+add_clade_freq = function(phy, edge_list, rooted = TRUE, ncores = 1, nbatch = 50) {
     RhpcBLASctl::blas_set_num_threads(1)
     RhpcBLASctl::omp_set_num_threads(1)
     RcppParallel::setThreadOptions(numThreads = ncores)
     phy = reorder_phylo(phy) # prop_clades_par requires phylo in postorder
-    freqs = prop_clades_par(phy$edge, edge_list, rooted = rooted, normalize = TRUE)
-    phy$node.label = freqs
+    ntrees = length(edge_list)
+    nbatch_eff = max(2L, min(as.integer(nbatch), as.integer(ntrees)))
+    res = prop_clades_par_bm_se(phy$edge, edge_list, nbatch = nbatch_eff, rooted = rooted)
+    phy$node.label = res$prop
+    phy$node.se = res$se
     return(phy)
 }
 

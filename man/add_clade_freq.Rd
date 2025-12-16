@@ -4,7 +4,7 @@
 \alias{add_clade_freq}
 \title{Add clade frequencies to a phylogenetic tree}
 \usage{
-add_clade_freq(phy, edge_list, rooted = TRUE, ncores = 1)
+add_clade_freq(phy, edge_list, rooted = TRUE, ncores = 1, nbatch = 50)
 }
 \arguments{
 \item{phy}{A reference phylogeny of class \code{phylo}.}
@@ -14,9 +14,12 @@ add_clade_freq(phy, edge_list, rooted = TRUE, ncores = 1)
 \item{rooted}{Logical; whether to treat the trees as rooted. Default is \code{TRUE}.}
 
 \item{ncores}{Integer; number of cores to use for parallel computation. Default is \code{1} (no parallelization).}
+
+\item{nbatch}{Integer; number of batches to use for batch-means SE estimation. Defaults to 50.}
 }
 \value{
-A phylo object with clade frequencies added as node labels.
+A phylo object with clade frequencies added as node labels (\code{node.label}) and
+corresponding standard errors stored in \code{node.se}.
 }
 \description{
 Computes the frequency (support) of each clade in a reference phylogeny (\code{phy}) across a list of phylogenetic trees (\code{edge_list}),
