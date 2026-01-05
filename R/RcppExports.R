@@ -5,6 +5,10 @@ prop_clades_par <- function(E_target, edges, rooted = TRUE, normalize = TRUE) {
     .Call('_mitodrift_prop_clades_par', PACKAGE = 'mitodrift', E_target, edges, rooted, normalize)
 }
 
+prop_clades_par_bm_se <- function(E_target, edges, nbatch = 50L, rooted = TRUE) {
+    .Call('_mitodrift_prop_clades_par_bm_se', PACKAGE = 'mitodrift', E_target, edges, nbatch, rooted)
+}
+
 compute_node_edge_stats_bp2 <- function(E, logP_list, logA) {
     .Call('_mitodrift_compute_node_edge_stats_bp2', PACKAGE = 'mitodrift', E, logP_list, logA)
 }

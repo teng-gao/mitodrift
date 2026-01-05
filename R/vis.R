@@ -57,9 +57,11 @@ plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = T
         dat = gtree %>% activate(nodes) %>%
             mutate(isRoot = node_is_root()) %>%
             as.data.frame() %>% 
-            select(any_of(c('name', 'isRoot', 'conf')))
+            select(any_of(c('name', 'isRoot', 'conf', 'conf_label')))
 
         if ('conf' %in% colnames(dat)) {
+            dat$conf_label_text <- if ('conf_label' %in% colnames(dat)) dat$conf_label else round(dat$conf, 2)
+
             p_tree = p_tree %<+% 
                 dat + 
                 geom_nodepoint(aes(fill = conf, subset = !isTip & !isRoot, x = branch), size = dot_size, pch = 22, stroke = 0) +
@@ -68,8 +70,8 @@ plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = T
             if (conf_label) {
                 p_tree = p_tree + 
                     geom_text2(
-                        aes(label = round(conf, 2), x = branch, subset = !isTip & !isRoot),
-                        size = text_size, hjust = 0, vjust = 0.25
+                        aes(label = conf_label_text, x = branch, subset = !isTip & !isRoot),
+                        size = node_label_size, hjust = 0, vjust = 0.25
                     )
             }
         }

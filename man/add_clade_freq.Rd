@@ -16,7 +16,9 @@ add_clade_freq(phy, edge_list, rooted = TRUE, ncores = 1)
 \item{ncores}{Integer; number of cores to use for parallel computation. Default is \code{1} (no parallelization).}
 }
 \value{
-A phylo object with clade frequencies added as node labels.
+A phylo object with clade frequencies added as node labels. The
+attribute \code{node_mcse} stores Monte Carlo standard errors for each internal
+node.
 }
 \description{
 Computes the frequency (support) of each clade in a reference phylogeny (\code{phy}) across a list of phylogenetic trees (\code{edge_list}),

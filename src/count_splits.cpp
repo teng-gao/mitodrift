@@ -175,6 +175,89 @@ struct TargetEdgesWorker : public RcppParallel::Worker {
 	}
 };
 
+struct BatchEdgesWorker : public RcppParallel::Worker {
+	// inputs
+	const std::vector< Rcpp::IntegerMatrix >& mats;   // edge matrices for all trees (in MCMC order)
+	const std::vector<KeyHS>& keys_sorted;            // sorted (hash,size) keys
+	const std::vector<int>&   pos;                    // map from sorted index -> target index
+	const int K;
+	const int nTips;
+	const std::vector<uint64_t>& tipH;
+	const int batch_size;
+	const int n_use;
+
+	// output: per-batch sums (length nbatch*K), written without locks since each batch index is exclusive
+	RcppParallel::RMatrix<double> batch_sums;
+
+	BatchEdgesWorker(const std::vector<Rcpp::IntegerMatrix>& mats_,
+				  const std::vector<KeyHS>& keys_sorted_,
+				  const std::vector<int>& pos_,
+				  int K_, int nTips_,
+				  const std::vector<uint64_t>& tipH_,
+				  int batch_size_,
+				  int n_use_,
+				  Rcpp::NumericMatrix& batch_sums_)
+		: mats(mats_), keys_sorted(keys_sorted_), pos(pos_), K(K_), nTips(nTips_), tipH(tipH_),
+		  batch_size(batch_size_), n_use(n_use_), batch_sums(batch_sums_) {}
+
+	void operator()(std::size_t begin, std::size_t end) {
+		// thread-local reusable buffers
+		std::vector< std::vector<int> > ch;
+		std::vector<uint64_t> H;
+		std::vector<uint32_t> SZ;
+
+		for (std::size_t b = begin; b < end; ++b) {
+			std::vector<double> local((size_t)K, 0.0);
+
+			const int k0 = (int)b * batch_size;
+			const int k1 = std::min(k0 + batch_size, n_use);
+			for (int k = k0; k < k1; ++k) {
+				const Rcpp::IntegerMatrix& E = mats[(size_t)k];
+
+				// build children and root
+				int root = 0;
+				build_children_and_root(E, nTips, ch, root);
+				const int N = (int)ch.size() - 1;
+
+				// per-node (hash,size)
+				H.assign((size_t)N + 1, 0);
+				SZ.assign((size_t)N + 1, 0);
+				dfs_hash_size(root, ch, tipH, nTips, H, SZ);
+
+				// iterate internal child edges
+				const int nEdge = E.nrow();
+				for (int e = 0; e < nEdge; ++e) {
+					const int child = E(e,1);
+					if (child <= nTips) continue;
+					KeyHS key{ H[(size_t)child], SZ[(size_t)child] };
+
+					// binary search on keys_sorted
+					int lo = 0, hi = K;
+					while (lo < hi) {
+						int mid = (lo + hi) >> 1;
+						const KeyHS& km = keys_sorted[(size_t)mid];
+						if (keyhs_lt(km, key)) lo = mid + 1;
+						else hi = mid;
+					}
+					if (lo < K) {
+						const KeyHS& km = keys_sorted[(size_t)lo];
+						if (km.h == key.h && km.s == key.s) {
+							const int tgt = pos[(size_t)lo];
+							local[(size_t)tgt] += 1.0;
+						}
+					}
+				}
+			}
+
+			// ape parity for the first split within this batch
+			if (K > 0) local[0] += (double)(k1 - k0);
+
+			// write local into batch_sums(b, i)
+			for (int i = 0; i < K; ++i) batch_sums((int)b, i) = local[(size_t)i];
+		}
+	}
+};
+
 static inline int infer_nTips_binary(const Rcpp::IntegerMatrix& E) {
 	const int m = E.nrow();
 	if ((m & 1) != 0) Rcpp::stop("infer_nTips_binary: edge count is odd (%d). Not a fully binary rooted tree.", m);
@@ -245,4 +328,98 @@ Rcpp::NumericVector prop_clades_par(Rcpp::IntegerMatrix E_target,
 		for (int i = 0; i < K; ++i) counts[i] /= (double)nbtree;
 	}
 	return counts;
+}
+
+// [[Rcpp::export]]
+Rcpp::List prop_clades_par_bm_se(Rcpp::IntegerMatrix E_target,
+	SEXP edges,
+	int nbatch = 50,
+	bool rooted = true)
+{
+	// E_target is expected in postorder
+	Rcpp::List el(edges);
+	const int nbtree = el.size();
+	if (nbtree <= 0) Rcpp::stop("edge_list is empty");
+	if (nbatch < 2) Rcpp::stop("nbatch must be >= 2 for batch means SE");
+	if (!rooted) Rcpp::warning("prop_clades_par_bm_se assumes rooted; proceeding as rooted.");
+
+	// infer nTips from target (assumes fully binary rooted tree)
+	const int nTips = infer_nTips_binary(E_target);
+
+	// tip hashes
+	std::vector<uint64_t> tipH = make_tip_hashes(nTips);
+
+	// 1) Build target keys (hash,size) in target order
+	std::vector< std::vector<int> > targetSplits = bipartition2(E_target, nTips);
+	const int K = (int)targetSplits.size();
+	if (K <= 0) Rcpp::stop("target tree has no internal splits");
+
+	std::vector<KeyHS> keys((size_t)K);
+	for (int i = 0; i < K; ++i) {
+		uint64_t h = 0;
+		for (int t : targetSplits[(size_t)i]) h ^= tipH[(size_t)t];
+		keys[(size_t)i] = KeyHS{h, (uint32_t)targetSplits[(size_t)i].size()};
+	}
+	// sorted view for binary search
+	std::vector<int> ord((size_t)K);
+	for (int i = 0; i < K; ++i) ord[(size_t)i] = i;
+	std::sort(ord.begin(), ord.end(), [&](int a, int b){
+		return keyhs_lt(keys[(size_t)a], keys[(size_t)b]);
+	});
+	std::vector<KeyHS> keys_sorted((size_t)K);
+	std::vector<int>   pos((size_t)K);
+	for (int r = 0; r < K; ++r) {
+		const int i = ord[(size_t)r];
+		keys_sorted[(size_t)r] = keys[(size_t)i];
+		pos[(size_t)r] = i;
+	}
+
+	// 2) Materialize IntegerMatrix views once to avoid R access in threads
+	std::vector<Rcpp::IntegerMatrix> mats((size_t)nbtree);
+	for (int k = 0; k < nbtree; ++k) {
+		mats[(size_t)k] = Rcpp::IntegerMatrix(el[k]);
+	}
+
+	// 3) Batch setup (discard remainder)
+	const int batch_size = nbtree / nbatch;
+	if (batch_size < 1) Rcpp::stop("Too few trees (%d) for nbatch=%d", nbtree, nbatch);
+	const int n_use = batch_size * nbatch;
+
+	// per-batch sums: rows=nbatch, cols=K
+	Rcpp::NumericMatrix batch_sums(nbatch, K);
+	BatchEdgesWorker worker(mats, keys_sorted, pos, K, nTips, tipH, batch_size, n_use, batch_sums);
+	RcppParallel::parallelFor(0, (size_t)nbatch, worker);
+
+	// 4) Compute p_hat and batch means
+	Rcpp::NumericVector p_hat(K);
+	Rcpp::NumericVector se(K);
+
+	for (int i = 0; i < K; ++i) {
+		// mean across batches of (batch_sum / batch_size)
+		double mean_bm = 0.0;
+		for (int b = 0; b < nbatch; ++b) mean_bm += batch_sums(b, i) / (double)batch_size;
+		mean_bm /= (double)nbatch;
+		p_hat[i] = mean_bm;
+
+		// sample variance of batch means
+		double ss = 0.0;
+		for (int b = 0; b < nbatch; ++b) {
+			double bm = batch_sums(b, i) / (double)batch_size;
+			double d = bm - mean_bm;
+			ss += d * d;
+		}
+		// var(mean) ≈ var(batch_means) / nbatch
+		double var_bm = (nbatch > 1) ? (ss / (double)(nbatch - 1)) : 0.0;
+		double var_mean = var_bm / (double)nbatch;
+		se[i] = std::sqrt(std::max(0.0, var_mean));
+	}
+
+	return Rcpp::List::create(
+		Rcpp::Named("prop") = p_hat,
+		Rcpp::Named("se") = se,
+		Rcpp::Named("nbatch") = nbatch,
+		Rcpp::Named("batch_size") = batch_size,
+		Rcpp::Named("n_use") = n_use,
+		Rcpp::Named("n_total") = nbtree
+	);
 }
