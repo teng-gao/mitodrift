@@ -224,6 +224,7 @@ if (!dir.exists(opts$outdir)) {
 # Define output file paths
 ml_trace_file <- file.path(opts$outdir, "tree_ml_trace.qs2")
 mcmc_trace_file <- file.path(opts$outdir, "tree_mcmc_trace.qs2")
+mcmc_diag_file <- file.path(opts$outdir, "tree_mcmc_diag.rds")
 annot_tree_file <- file.path(opts$outdir, "tree_annotated.newick")
 mitodrift_object_file <- file.path(opts$outdir, "mitodrift_object.rds")
 
@@ -358,6 +359,7 @@ md$run_mcmc(
     diag = opts$tree_mcmc_diag,
     conv_thres = opts$conv_thres,
     outfile = mcmc_trace_file,
+    diagfile = mcmc_diag_file,
     resume = opts$resume
 )
 

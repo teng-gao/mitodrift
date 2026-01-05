@@ -17,6 +17,7 @@
 #' @field tree_annot Annotated tree with clade frequencies
 #' @field ml_trace_file File path for ML trace
 #' @field mcmc_trace_file File path for MCMC trace
+#' @field mcmc_diag_file File path for MCMC diagnostics
 #' @field param_trace_file File path for parameter fitting trace
 #' @export
 MitoDrift <- R6::R6Class("MitoDrift",
@@ -37,6 +38,7 @@ MitoDrift <- R6::R6Class("MitoDrift",
         tree_annot = NULL,
         ml_trace_file = NULL,
         mcmc_trace_file = NULL,
+        mcmc_diag_file = NULL,
         param_trace_file = NULL,
         
         #' @description Initialize MitoDrift object
@@ -463,6 +465,7 @@ MitoDrift <- R6::R6Class("MitoDrift",
         #' @param use_nj Whether to use NJ tree instead of ML tree as initial tree (default: FALSE)
         #' @param batch_size Batch size for MCMC (default: 1000)
         #' @param diag Whether to compute ASDSF diagnostics (default: TRUE)
+        #' @param diagfile File path for saving ASDSF diagnostics (RDS)
         #' @return MCMC result object
         run_mcmc = function(
             max_iter = 10000,
@@ -474,11 +477,16 @@ MitoDrift <- R6::R6Class("MitoDrift",
             outfile = NULL,
             resume = FALSE,
             diag = TRUE,
-            use_nj = FALSE
+            use_nj = FALSE,
+            diagfile = NULL
         ) {
 
             if (!is.null(outfile)) {
                 self$mcmc_trace_file <- normalizePath(outfile, mustWork = FALSE)
+            }
+
+            if (!is.null(diagfile)) {
+                self$mcmc_diag_file <- normalizePath(diagfile, mustWork = FALSE)
             }
             
             # Check if model components are initialized
@@ -514,7 +522,8 @@ MitoDrift <- R6::R6Class("MitoDrift",
                 outfile = self$mcmc_trace_file,
                 resume = resume,
                 diag = diag,
-                batch_size = batch_size
+                batch_size = batch_size,
+                diagfile = diagfile
             )
             
             message('Phylogenetic MCMC completed!')
@@ -595,7 +604,7 @@ MitoDrift <- R6::R6Class("MitoDrift",
             # List of all fields to copy
             all_fields <- c("tree_init", "A", "leaf_likelihoods", "logA", "logP", 
                            "tree_ml", "tree_annot", "mcmc_trace", "tree_list",
-                           "ml_trace_file", "mcmc_trace_file", "param_trace_file")
+                           "ml_trace_file", "mcmc_trace_file", "mcmc_diag_file", "param_trace_file")
             
             # Copy over all fields
             for (field in all_fields) {

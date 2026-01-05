@@ -1261,10 +1261,9 @@ safe_read_chain = function(path, ncores = 1) {
 # to fix: apparently the init tree has to be rooted otherwise to_phylo_reoder won't work. 
 #' @export
 run_tree_mcmc_batch = function(
-    phy_init, logP_list, logA_vec, outfile, max_iter = 100, nchains = 1, ncores = 1, ncores_qs = 1,
-    batch_size = 1000, diag = TRUE, conv_thres = NULL, resume = FALSE
+    phy_init, logP_list, logA_vec, outfile, diagfile = NULL, diag = TRUE, max_iter = 100, nchains = 1, ncores = 1, ncores_qs = 1,
+    batch_size = 1000, conv_thres = NULL, resume = FALSE
 ) {
-
 
     RhpcBLASctl::blas_set_num_threads(1)
     RhpcBLASctl::omp_set_num_threads(1)
@@ -1273,9 +1272,10 @@ run_tree_mcmc_batch = function(
     ncores_qs <- if (isTRUE(qs2:::check_TBB())) ncores_qs else 1L
     message('Using ', ncores_qs, ' cores for saving/writing MCMC trace')
 
-    if (!is.null(conv_thres) && !diag) {
-        warning('conv_thres provided but diag = FALSE; enabling diagnostics to monitor convergence')
-        diag <- TRUE
+    if (!is.null(diagfile) && file.exists(diagfile)) {
+        diag_history = readRDS(diagfile)
+    } else {
+        diag_history = data.frame()
     }
 
     chains = 1:nchains
@@ -1306,34 +1306,34 @@ run_tree_mcmc_batch = function(
     }
     names(edge_list_all) = as.character(chains)
 
-    chain_lengths = vapply(edge_list_all, length, integer(1))
-    if (length(unique(chain_lengths)) != 1L) {
-        stop('run_tree_mcmc_batch assumes all chains have the same length. Please regenerate or clean the saved state before resuming.')
-    }
-    completed_iters = chain_lengths[1] - 1L
+    completed_iters = length(edge_list_all[[1]]) - 1L
 
     if (is.null(conv_thres)) {
         remaining = max_iter - completed_iters
         message('Remaining iterations per chain: ', remaining)
         if (remaining <= 0L) {
             message('All chains have completed the requested iterations.')
-            qs2::qd_save(edge_list_all, outfile, nthreads = ncores_qs)
             return(edge_list_all)
         }
         total_batches = ceiling(remaining / batch_size)
         message('Running MCMC with ', length(chains), ' chains in up to ', total_batches, ' batches of ', batch_size)
     } else {
+        if (nrow(diag_history) > 0) {
+            last_asdsf <- tail(diag_history$asdsf, 1)
+            if (last_asdsf <= conv_thres) {
+                message('Convergence threshold (ASDSF) already reached (', signif(last_asdsf, 4), '). Nothing to run.')
+                return(edge_list_all)
+            } else {
+                message('Last recorded ASDSF: ', signif(last_asdsf, 4))
+            }
+        }
         message('Running MCMC with ', length(chains), ' chains until ASDSF <= ', conv_thres,
                 ' (batch size ', batch_size, ')')
     }
 
     batch_idx = 0L
     repeat {
-        chain_lengths = vapply(edge_list_all, length, integer(1))
-        if (length(unique(chain_lengths)) != 1L) {
-            stop('run_tree_mcmc_batch assumes all chains have the same length. Found inconsistent lengths during execution.')
-        }
-        completed_iters = chain_lengths[1] - 1L
+        completed_iters = length(edge_list_all[[1]]) - 1L
 
         if (is.null(conv_thres)) {
             remaining = max_iter - completed_iters
@@ -1377,19 +1377,26 @@ run_tree_mcmc_batch = function(
 
         qs2::qd_save(edge_list_all, outfile, nthreads = ncores_qs)
 
-        if (diag) {
-            asdsf <- compute_target_tree_asdsf(
-                phy_target = phy_init,
-                edge_list_chains = edge_list_all,
-                min_freq = 0,
-                rooted = TRUE,
-                ncores = ncores
+        asdsf <- compute_target_tree_asdsf(
+            phy_target = phy_init,
+            edge_list_chains = edge_list_all,
+            min_freq = 0,
+            rooted = TRUE,
+            ncores = ncores
+        )
+        message('ASDSF (target clades) after ', batch_label, ': ', signif(asdsf, 4))
+        if (!is.null(diagfile)) {
+            diag_entry = data.frame(
+                batch = batch_idx,
+                completed_iters = length(edge_list_all[[1]]) - 1L,
+                asdsf = asdsf
             )
-            message('ASDSF (target clades) after ', batch_label, ': ', signif(asdsf, 4))
-            if (!is.null(conv_thres) && !is.na(asdsf) && asdsf <= conv_thres) {
-                message('Convergence threshold (ASDSF) reached. Stopping MCMC.')
-                break
-            }
+            diag_history = bind_rows(diag_history, diag_entry)
+            saveRDS(diag_history, diagfile)
+        }
+        if (!is.null(conv_thres) && !is.na(asdsf) && asdsf <= conv_thres) {
+            message('Convergence threshold (ASDSF) reached. Stopping MCMC.')
+            break
         }
 
         batch_time <- proc.time() - ptm
