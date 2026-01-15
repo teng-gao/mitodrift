@@ -1,10 +1,14 @@
+#' @param node_scores Optional named numeric vector of node/tip scores used to color tree branches.
+#'   Names may be tip labels, internal node labels, or numeric node IDs.
+#' @param show_variant_names Logical. If `TRUE`, show variant tick labels on the VAF heatmap; hide when `FALSE`.
+#' @param annot_title_size Numeric size for annotation strip titles.
 #' @export 
 plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = TRUE, dot_size = 1, ylim = NULL,
-    tip_annot = NULL, annot_scale = NULL, feature_mat = NULL, feature_limits = c(-2,2), rescale = FALSE,
+    tip_annot = NULL, annot_scale = NULL, feature_mat = NULL, feature_limits = c(-2,2), feature_scale = NULL, rescale = FALSE,
     title = NULL, label_site = FALSE, cell_annot = NULL, tip_lab = FALSE, node_lab = FALSE, layered = FALSE, annot_bar_height = 0.1, clade_bar_height = 1, feature_height = 1,
     het_max = 0.1, conf_min = 0, conf_max = 1, conf_label = FALSE, branch_length = TRUE, node_conf = FALSE, annot_pal = NULL, annot_legend = FALSE, label_group = FALSE,
-    annot_legend_title = '', text_size = 3, node_label_size = 1, mut = NULL, mark_low_cov = FALSE, facet_by_group = FALSE, flip = TRUE, ladderize = TRUE,
-    variants_highlight = NULL) {
+    annot_legend_title = '', text_size = 3, annot_title_size = text_size, node_label_size = 1, mut = NULL, mark_low_cov = FALSE, facet_by_group = FALSE, flip = TRUE, ladderize = TRUE,
+    node_scores = NULL, variants_highlight = NULL, show_variant_names = TRUE) {
 
     if (inherits(gtree, 'tbl_graph')) {
         phylo = to_phylo_reorder(gtree)
@@ -21,14 +25,14 @@ plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = T
         ggtree(ladderize = ladderize, linewidth = branch_width, right = flip) + 
         theme_bw() +
         theme(
-            plot.margin = margin(0, 0, 0, 0, unit = "mm"), 
+            plot.margin = margin(l = 0, r = 0, t = 0, b = 0.25, unit = "mm"), 
             axis.title.x = element_blank(), 
             axis.line.x = element_blank(), 
             axis.ticks.x = element_blank(), 
             axis.text.x = element_blank(),
-            axis.text.y = element_text(), 
+            axis.text.y = element_blank(), 
             axis.line.y = element_line(),
-            axis.ticks.y = element_line(), 
+            axis.ticks.y = element_blank(), 
             axis.ticks.length.x = unit(0, "pt"),
             panel.background = element_rect(fill = "transparent", colour = NA), 
             plot.background = element_rect(fill = "transparent", color = NA),
@@ -38,6 +42,15 @@ plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = T
         scale_x_reverse(expand = expansion(mult = 0.05)) +
         scale_y_continuous(expand = expansion(add = 1)) +
         ggtitle(title)
+
+    if (!is.null(node_scores)) {
+        branch_df <- data.frame(node = names(node_scores), score = unname(node_scores)) %>%
+            mutate(node = as.integer(node))
+        p_tree <- p_tree %<+% branch_df + 
+            aes(color = score) +
+            scale_color_gradient2(low = "blue", mid = 'gray60', high = "red", limits = c(-4,4), oob = scales::oob_squish, na.value = 'gray80')
+        p_tree <- p_tree + ggnewscale::new_scale_color()
+    }
 
     # plot mutation VAF
     if (!is.null(mut)) {
@@ -119,11 +132,10 @@ plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = T
         geom_raster() +
         theme_bw() + 
         theme(
-            plot.margin = margin(0, 1, 0, 0, unit = "mm"), 
+            plot.margin = margin(t = 0.25, r = 0, b = 0, l = 0, unit = "mm"), 
             axis.text.x = element_blank(),
             axis.ticks.x = element_blank(),
             axis.ticks.y = element_blank(),
-            axis.text.y = element_text(size = text_size),
             panel.background = element_rect(fill = "transparent", colour = NA), 
             plot.background = element_rect(fill = "transparent"),
             # panel.grid.minor.y = element_blank(),
@@ -134,8 +146,14 @@ plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = T
         scale_y_discrete(expand = expansion(mult = 0.01)) +
         scale_fill_gradient(low = 'white', high = 'red', limits = c(0,het_max), oob = scales::oob_squish) +
         guides(fill = guide_colorbar(title = 'VAF')) +
-        xlab(paste0('cells (n=', length(cell_order), ')')) +
-        ylab(paste0('variants (n=', length(unique(df_var$variant)), ')'))
+        xlab(paste0('Cells (n=', length(cell_order), ')')) +
+        ylab(paste0('Variants (n=', length(unique(df_var$variant)), ')'))
+
+    if (show_variant_names) {
+        p_heatmap = p_heatmap + theme(axis.text.y = element_text(size = text_size))
+    } else {
+        p_heatmap = p_heatmap + theme(axis.text.y = element_blank())
+    }
 
     # Optionally highlight specified variants in bold on y-axis
     if (!is.null(variants_highlight)) {
@@ -193,11 +211,15 @@ plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = T
                 mitodrift:::annot_bar(
                     legend = annot_legend, 
                     label_group = label_group, 
-                    label_size = text_size,
+                    label_size = annot_title_size,
                     annot_pal = pal,
                     annot_scale = annot_scale,
                     legend_title = bar_title, 
-                    layered = layered)
+                    layered = layered) +
+                theme(
+                    plot.margin = margin(t = 0.25, r = 0, b = 0.25, l = 0, unit = 'mm'),
+                    panel.border = element_rect(size = 0.25, color = 'black', fill = NA)
+                )
         }, cell_annot, annot_pal, annot_titles, SIMPLIFY = FALSE)
 
     }
@@ -210,7 +232,6 @@ plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = T
             mutate(feature = factor(feature, rev(rownames(feature_mat)))) %>%
             reshape2::melt(id.vars = 'feature', variable.name = 'cell', value.name = 'value') %>%
             mutate(cell = factor(cell, cell_order))
-
         
         if (rescale) {
             df_feature = df_feature %>%
@@ -225,13 +246,18 @@ plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = T
             theme_bw() +
             theme(axis.text.x = element_blank(), 
                 axis.text.y = element_text(size = text_size),
-                plot.margin = margin(t = 1, r = 0, b = 0, l = 0, unit = "mm"),
+                plot.margin = margin(t = 1, r = 0, b = 1, l = 0, unit = "mm"),
                 axis.ticks.x = element_blank(),
                 axis.title.x = element_blank(),
             ) +
             scale_x_discrete(expand = expansion(add = 1), drop = F) +
-            scale_y_discrete(expand = expansion(add = 0)) +
-            scale_fill_gradient2(low = 'blue', mid = 'white', high = 'red', limits = feature_limits, oob = scales::oob_squish)
+            scale_y_discrete(expand = expansion(add = 0))
+
+        if (is.null(feature_scale)) {
+            p_feature = p_feature + scale_fill_gradient2(low = 'blue', mid = 'white', high = 'red', limits = feature_limits, oob = scales::oob_squish)
+        } else {
+            p_feature = p_feature + feature_scale
+        }
     }
 
     # Determine heights based on components
@@ -283,7 +309,7 @@ annot_bar = function(
             strip.background = element_blank(),
             strip.text = element_blank(),
             # axis.text = element_text(size = 8),
-            axis.text.y = element_text(size = label_size, hjust = 0.5, vjust = 0.5),
+            axis.text.y = element_text(size = label_size, hjust = 1, vjust = 0.5),
             axis.text.x = element_blank(),
             axis.title.y = element_blank(),
             plot.margin = margin(0.1,0,0.1,0, unit = 'mm')
@@ -412,6 +438,7 @@ order_muts <- function(cell_order, mut_dat) {
 #' @param ladderize Logical. If `TRUE`, ladderizes the tree.
 #' @param open_angle Numeric. Angle of the opening in the fan layout.
 #' @param feature_axis_label Logical. If `TRUE`, show feature heatmap axis labels; hide when `FALSE`.
+#' @param feature_axis_angle Numeric. Rotation angle (degrees) for feature axis text.
 #'
 #' @return A `ggtree` plot object.
 #' @export
@@ -419,7 +446,8 @@ plot_phylo_circ = function(gtree, cell_annot = NULL, tip_annot = NULL, feature_m
     node_conf = FALSE, conf_label = FALSE, title = '', pwidth_annot = 0.25, pwidth_feature = 0.25,
     branch_width = 0.3, dot_size = 1, conf_min = 0, conf_max = 0.5, annot_pal = NULL, offset = 0.05, width = 0.8,
     label_size = 2, rescale = FALSE, limits = c(-2,2), annot_legend_title = 'Group', feature_legend_title = 'Score', flip = TRUE,
-    legend = FALSE, layered = FALSE, smooth_k = 0, ladderize = TRUE, open_angle = 0, feature_axis_label = TRUE) {
+    legend = FALSE, layered = FALSE, smooth_k = 0, ladderize = TRUE, open_angle = 0, feature_axis_label = TRUE,
+    feature_axis_angle = 30) {
 
     p_tree = ggtree(gtree, 
             ladderize = ladderize, layout = 'fan', open.angle = open_angle,
@@ -511,10 +539,11 @@ plot_phylo_circ = function(gtree, cell_annot = NULL, tip_annot = NULL, feature_m
             }
             
             # Add custom palette if provided; use the per-annotation name as legend title
+            na_col = 'gray60'
             if (!is.null(pal)) {
-                p_tree = p_tree + scale_fill_manual(name = bar_title, values = pal, na.value = 'gray30')
+                p_tree = p_tree + scale_fill_manual(name = bar_title, values = pal, na.value = na_col)
             } else {
-                p_tree = p_tree + scale_fill_discrete(name = bar_title, na.value = 'gray30')
+                p_tree = p_tree + scale_fill_discrete(name = bar_title, na.value = na_col)
             }
         }
     }
@@ -559,7 +588,7 @@ plot_phylo_circ = function(gtree, cell_annot = NULL, tip_annot = NULL, feature_m
                 # linewidth = 0.3,
                 axis.params = list(
                     axis       = axis_flag, 
-                    text.angle = 30,
+                    text.angle = feature_axis_angle,
                     text.size  = axis_text_size,
                     vjust      = 0.5,
                     hjust = 1
@@ -569,39 +598,57 @@ plot_phylo_circ = function(gtree, cell_annot = NULL, tip_annot = NULL, feature_m
             ) + 
             scale_fill_gradient2(name = feature_legend_title, low = "blue", high = "red", limits = limits, oob = scales::oob_squish)
 
-        if (!is.null(tip_annot)) {
-            cts = unique(tip_annot$annot)
-            n_cts = length(cts)
-            max_set1 = RColorBrewer::brewer.pal.info['Set1','maxcolors']
-            if (n_cts <= max_set1) {
-                annot_cols = RColorBrewer::brewer.pal(n_cts, 'Set1') %>% setNames(cts)
-            } else {
-                base_cols = RColorBrewer::brewer.pal(max_set1, 'Set1')
-                annot_cols = grDevices::colorRampPalette(base_cols)(n_cts) %>% setNames(cts)
-            }
+        # if (!is.null(tip_annot)) {
+        #     cts = unique(tip_annot$annot)
+        #     n_cts = length(cts)
+        #     max_set1 = RColorBrewer::brewer.pal.info['Set1','maxcolors']
+        #     if (n_cts <= max_set1) {
+        #         annot_cols = RColorBrewer::brewer.pal(n_cts, 'Set1') %>% setNames(cts)
+        #     } else {
+        #         base_cols = RColorBrewer::brewer.pal(max_set1, 'Set1')
+        #         annot_cols = grDevices::colorRampPalette(base_cols)(n_cts) %>% setNames(cts)
+        #     }
 
-            p_tree = p_tree +
-                scale_color_manual(
-                    name   = "Annotation",   
-                    values = annot_cols,
-                    
-                ) +
-                geom_point(
-                    data       = data.frame(annot = names(annot_cols)),
-                    aes(colour  = annot),
-                    x          = 0,      # plotted off the panel
-                    y          = 0,
-                    size = 0, stroke = 0,
-                    show.legend= TRUE
-                )  +
-                guides(color = guide_legend(override.aes = list('size' = 2), ncol = 2)) 
-        }
+        #     p_tree = p_tree +
+        #         scale_color_manual(
+        #             name   = "Annotation",   
+        #             values = annot_cols
+        #         ) +
+        #         geom_point(
+        #             data       = data.frame(annot = names(annot_cols)),
+        #             aes(colour  = annot),
+        #             x          = 0,      # plotted off the panel
+        #             y          = 0,
+        #             size = 0, stroke = 0,
+        #             show.legend= TRUE
+        #         )  +
+        #         guides(color = guide_legend(override.aes = list('size' = 2), ncol = 2)) 
+        # }
     }
 
     return(p_tree)
 }
 
 
+##
+#' Moving-average smoothing across matrix rows
+#'
+#' Applies a fixed-width moving average independently to every row of a matrix.
+#' Missing values can be optionally ignored, and the `edge` argument controls how
+#' windows at the matrix boundaries are handled. With `edge = "partial"`
+#' (default), windows that extend past the matrix edge shrink to the available
+#' cells, while `edge = "full"` enforces the full window size by returning
+#' `NA` when a complete window cannot be formed.
+#'
+#' @param M Numeric matrix to smooth (rows are independent series).
+#' @param k Integer window width (must be >= 1).
+#' @param na_rm Logical; if `TRUE`, compute means ignoring `NA`s, otherwise only
+#'   windows containing no `NA` values contribute.
+#' @param edge Either ``"partial"`` or ``"full"``; governs boundary handling as
+#'   described above.
+#'
+#' @return Matrix of the same dimensions as `M` containing smoothed values.
+#' @keywords internal
 row_smooth <- function(M, k, na_rm = FALSE, edge = c("partial", "full")) {
 	edge <- match.arg(edge)
 	if (!is.matrix(M)) stop("M must be a matrix.")
