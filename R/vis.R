@@ -2,13 +2,15 @@
 #'   Names may be tip labels, internal node labels, or numeric node IDs.
 #' @param show_variant_names Logical. If `TRUE`, show variant tick labels on the VAF heatmap; hide when `FALSE`.
 #' @param annot_title_size Numeric size for annotation strip titles.
+#' @param show_tree_y_axis Logical. If `TRUE`, show y-axis tick marks and tick labels on the ggtree panel.
+#' @param feature_legend Logical. If `TRUE`, display the legend for the feature heatmap; otherwise hide it.
 #' @export 
-plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = TRUE, dot_size = 1, ylim = NULL,
+plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = TRUE, dot_size = 1, ylim = NULL, min_cells = 1,
     tip_annot = NULL, annot_scale = NULL, feature_mat = NULL, feature_limits = c(-2,2), feature_scale = NULL, rescale = FALSE,
-    title = NULL, label_site = FALSE, cell_annot = NULL, tip_lab = FALSE, node_lab = FALSE, layered = FALSE, annot_bar_height = 0.1, clade_bar_height = 1, feature_height = 1,
+    title = NULL, ytitle = NULL, xtitle = NULL, label_site = FALSE, cell_annot = NULL, tip_lab = FALSE, node_lab = FALSE, layered = FALSE, annot_bar_height = 0.1, clade_bar_height = 1, feature_height = 1,
     het_max = 0.1, conf_min = 0, conf_max = 1, conf_label = FALSE, branch_length = TRUE, node_conf = FALSE, annot_pal = NULL, annot_legend = FALSE, label_group = FALSE,
     annot_legend_title = '', text_size = 3, annot_title_size = text_size, node_label_size = 1, mut = NULL, mark_low_cov = FALSE, facet_by_group = FALSE, flip = TRUE, ladderize = TRUE,
-    node_scores = NULL, variants_highlight = NULL, show_variant_names = TRUE) {
+    node_scores = NULL, variants_highlight = NULL, show_variant_names = TRUE, show_tree_y_axis = FALSE, feature_legend = TRUE) {
 
     if (inherits(gtree, 'tbl_graph')) {
         phylo = to_phylo_reorder(gtree)
@@ -43,6 +45,10 @@ plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = T
         scale_y_continuous(expand = expansion(add = 1)) +
         ggtitle(title)
 
+    if (show_tree_y_axis) {
+        p_tree = p_tree + theme(axis.text.y = element_text(size = 6, hjust = 1), axis.ticks.y = element_line())
+    }
+
     if (!is.null(node_scores)) {
         branch_df <- data.frame(node = names(node_scores), score = unname(node_scores)) %>%
             mutate(node = as.integer(node))
@@ -76,7 +82,7 @@ plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = T
             p_tree = p_tree %<+% 
                 dat + 
                 geom_nodepoint(aes(fill = conf, subset = !isTip & !isRoot, x = branch), size = dot_size, pch = 22, stroke = 0) +
-                scale_fill_gradient(low = 'white', high = 'firebrick', limits = c(conf_min, conf_max), oob = scales::oob_squish)
+                scale_fill_gradient(name = 'Conf', low = 'white', high = 'firebrick', limits = c(conf_min, conf_max), oob = scales::oob_squish)
 
             if (conf_label) {
                 p_tree = p_tree + 
@@ -122,7 +128,13 @@ plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = T
     
     df_var = df_var %>% filter(cell %in% cell_order) %>%
         mutate(variant = factor(variant, rev(mut_order))) %>%
-        mutate(cell = factor(as.integer(factor(cell, cell_order)), 1:length(cell_order)))
+        mutate(cell = factor(as.integer(factor(cell, cell_order)), 1:length(cell_order))) %>%
+        group_by(variant) %>%
+        filter(sum(vaf>0)>=min_cells) %>%
+        ungroup()
+
+    xtitle = ifelse(is.null(xtitle), paste0('Cells (n=', length(cell_order), ')'), xtitle)
+    ytitle = ifelse(is.null(ytitle), paste0('Variants (n=', length(unique(df_var$variant)), ')'), ytitle)
 
     p_heatmap = df_var %>% 
         # filter(vaf > 0) %>%
@@ -146,8 +158,8 @@ plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = T
         scale_y_discrete(expand = expansion(mult = 0.01)) +
         scale_fill_gradient(low = 'white', high = 'red', limits = c(0,het_max), oob = scales::oob_squish) +
         guides(fill = guide_colorbar(title = 'VAF')) +
-        xlab(paste0('Cells (n=', length(cell_order), ')')) +
-        ylab(paste0('Variants (n=', length(unique(df_var$variant)), ')'))
+        xlab(xtitle) +
+        ylab(ytitle)
 
     if (show_variant_names) {
         p_heatmap = p_heatmap + theme(axis.text.y = element_text(size = text_size))
@@ -242,13 +254,14 @@ plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = T
 
         p_feature = df_feature %>%
             ggplot(aes(x = cell, y = feature, fill = value)) +
-            geom_raster(show.legend = TRUE) +
+            geom_raster(show.legend = feature_legend) +
             theme_bw() +
             theme(axis.text.x = element_blank(), 
                 axis.text.y = element_text(size = text_size),
                 plot.margin = margin(t = 1, r = 0, b = 1, l = 0, unit = "mm"),
                 axis.ticks.x = element_blank(),
                 axis.title.x = element_blank(),
+                axis.title.y = element_blank(),
             ) +
             scale_x_discrete(expand = expansion(add = 1), drop = F) +
             scale_y_discrete(expand = expansion(add = 0))
@@ -429,7 +442,6 @@ order_muts <- function(cell_order, mut_dat) {
 #' @param label_size Numeric. Size of text labels.
 #' @param rescale Logical. If `TRUE`, rescales features (z-score) for the heatmap.
 #' @param limits Numeric vector of length 2. Limits for the feature heatmap color scale.
-#' @param annot_legend_title Character string. Title for the annotation legend.
 #' @param feature_legend_title Character string. Title for the feature heatmap legend.
 #' @param flip Logical. If `TRUE`, flips the tree direction.
 #' @param legend Logical. If `TRUE`, shows legends.
@@ -445,7 +457,7 @@ order_muts <- function(cell_order, mut_dat) {
 plot_phylo_circ = function(gtree, cell_annot = NULL, tip_annot = NULL, feature_mat = NULL, branch_scores = NULL,
     node_conf = FALSE, conf_label = FALSE, title = '', pwidth_annot = 0.25, pwidth_feature = 0.25,
     branch_width = 0.3, dot_size = 1, conf_min = 0, conf_max = 0.5, annot_pal = NULL, offset = 0.05, width = 0.8,
-    label_size = 2, rescale = FALSE, limits = c(-2,2), annot_legend_title = 'Group', feature_legend_title = 'Score', flip = TRUE,
+    label_size = 2, rescale = FALSE, limits = c(-2,2), feature_legend_title = 'Score', flip = TRUE,
     legend = FALSE, layered = FALSE, smooth_k = 0, ladderize = TRUE, open_angle = 0, feature_axis_label = TRUE,
     feature_axis_angle = 30) {
 
@@ -598,6 +610,7 @@ plot_phylo_circ = function(gtree, cell_annot = NULL, tip_annot = NULL, feature_m
             ) + 
             scale_fill_gradient2(name = feature_legend_title, low = "blue", high = "red", limits = limits, oob = scales::oob_squish)
 
+        # create fake legend for tip annotation
         # if (!is.null(tip_annot)) {
         #     cts = unique(tip_annot$annot)
         #     n_cts = length(cts)
