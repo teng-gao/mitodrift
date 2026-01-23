@@ -5,7 +5,7 @@
 #' @param show_tree_y_axis Logical. If `TRUE`, show y-axis tick marks and tick labels on the ggtree panel.
 #' @param feature_legend Logical. If `TRUE`, display the legend for the feature heatmap; otherwise hide it.
 #' @export 
-plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = TRUE, dot_size = 1, ylim = NULL, min_cells = 1,
+plot_phylo_heatmap2 = function(gtree, df_var = NULL, branch_width = 0.25, root_edge = TRUE, dot_size = 1, ylim = NULL, min_cells = 1,
     tip_annot = NULL, annot_scale = NULL, feature_mat = NULL, feature_limits = c(-2,2), feature_scale = NULL, rescale = FALSE,
     title = NULL, ytitle = NULL, xtitle = NULL, label_site = FALSE, cell_annot = NULL, tip_lab = FALSE, node_lab = FALSE, layered = FALSE, annot_bar_height = 0.1, clade_bar_height = 1, feature_height = 1,
     het_max = 0.1, conf_min = 0, conf_max = 1, conf_label = FALSE, branch_length = TRUE, node_conf = FALSE, annot_pal = NULL, annot_legend = FALSE, label_group = FALSE,
@@ -54,7 +54,7 @@ plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = T
             mutate(node = as.integer(node))
         p_tree <- p_tree %<+% branch_df + 
             aes(color = score) +
-            scale_color_gradient2(low = "blue", mid = 'gray60', high = "red", limits = c(-4,4), oob = scales::oob_squish, na.value = 'gray80')
+            scale_color_gradient2(low = "blue", mid = 'gray60', high = "red", limits = c(-4,4), oob = scales::oob_squish, na.value = 'gray60')
         p_tree <- p_tree + ggnewscale::new_scale_color()
     }
 
@@ -117,77 +117,77 @@ plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = T
             )
     }
 
-    if (!'vaf' %in% colnames(df_var)) {
-        df_var = df_var %>% mutate(vaf = a/d)
-    }
-
     cell_order = p_tree$data %>% filter(isTip) %>% arrange(y) %>% 
         pull(label)
 
-    mut_order = order_muts(cell_order, df_var)
-    
-    df_var = df_var %>% filter(cell %in% cell_order) %>%
-        mutate(variant = factor(variant, rev(mut_order))) %>%
-        mutate(cell = factor(as.integer(factor(cell, cell_order)), 1:length(cell_order))) %>%
-        group_by(variant) %>%
-        filter(sum(vaf>0)>=min_cells) %>%
-        ungroup()
+    p_heatmap <- NULL
 
-    xtitle = ifelse(is.null(xtitle), paste0('Cells (n=', length(cell_order), ')'), xtitle)
-    ytitle = ifelse(is.null(ytitle), paste0('Variants (n=', length(unique(df_var$variant)), ')'), ytitle)
-
-    p_heatmap = df_var %>% 
-        # filter(vaf > 0) %>%
-        ggplot(
-            aes(x = cell, y = variant, fill = vaf)
-        ) +
-        geom_raster() +
-        theme_bw() + 
-        theme(
-            plot.margin = margin(t = 0.25, r = 0, b = 0, l = 0, unit = "mm"), 
-            axis.text.x = element_blank(),
-            axis.ticks.x = element_blank(),
-            axis.ticks.y = element_blank(),
-            panel.background = element_rect(fill = "transparent", colour = NA), 
-            plot.background = element_rect(fill = "transparent"),
-            # panel.grid.minor.y = element_blank(),
-            # panel.grid.major.y = element_blank(),
-            panel.grid = element_blank()
-        ) +
-        scale_x_discrete(expand = expansion(add = 1), drop = F) +
-        scale_y_discrete(expand = expansion(mult = 0.01)) +
-        scale_fill_gradient(low = 'white', high = 'red', limits = c(0,het_max), oob = scales::oob_squish) +
-        guides(fill = guide_colorbar(title = 'VAF')) +
-        xlab(xtitle) +
-        ylab(ytitle)
-
-    if (show_variant_names) {
-        p_heatmap = p_heatmap + theme(axis.text.y = element_text(size = text_size))
-    } else {
-        p_heatmap = p_heatmap + theme(axis.text.y = element_blank())
-    }
-
-    # Optionally highlight specified variants in bold on y-axis
-    if (!is.null(variants_highlight)) {
-        vh <- intersect(as.character(unique(df_var$variant)), variants_highlight)
-        if (length(vh) > 0) {
-            lab_expr <- function(v) sapply(v, function(x) if (x %in% vh) paste0('bold("', x, '")') else paste0('"', x, '"'))
-            p_heatmap <- p_heatmap +
-                scale_y_discrete(labels = function(v) parse(text = lab_expr(v)))
+    if (!is.null(df_var)) {
+        if (!'vaf' %in% colnames(df_var)) {
+            df_var = df_var %>% mutate(vaf = a/d)
         }
-    }
 
-    if (facet_by_group) {
-        p_heatmap = p_heatmap + facet_grid(group~., scales = 'free_y', space = 'free_y') +
-            theme(panel.spacing.y = unit(0,'mm'))
-    }
-    
-    if (mark_low_cov) {
-        p_heatmap = p_heatmap + geom_point(
-            data = df_var %>% filter(d < 10),
-            pch = 4,
-            size = dot_size
-        )
+        mut_order = order_muts(cell_order, df_var)
+        
+        df_var = df_var %>% filter(cell %in% cell_order) %>%
+            group_by(variant) %>%
+            filter(sum(vaf>0, na.rm = TRUE)>=min_cells) %>%
+            ungroup() %>%
+            mutate(variant = factor(variant, rev(mut_order))) %>%
+            mutate(cell = factor(as.integer(factor(cell, cell_order)), 1:length(cell_order)))
+
+        xtitle = ifelse(is.null(xtitle), paste0('Cells (n=', length(cell_order), ')'), xtitle)
+        ytitle = ifelse(is.null(ytitle), paste0('Variants (n=', length(unique(df_var$variant)), ')'), ytitle)
+
+        p_heatmap = df_var %>% 
+            ggplot(
+                aes(x = cell, y = variant, fill = vaf)
+            ) +
+            geom_raster() +
+            theme_bw() + 
+            theme(
+                plot.margin = margin(t = 0.25, r = 0, b = 0, l = 0, unit = "mm"), 
+                axis.text.x = element_blank(),
+                axis.ticks.x = element_blank(),
+                axis.ticks.y = element_blank(),
+                panel.background = element_rect(fill = "transparent", colour = NA), 
+                plot.background = element_rect(fill = "transparent"),
+                panel.grid = element_blank()
+            ) +
+            scale_x_discrete(expand = expansion(add = 1), drop = F) +
+            scale_y_discrete(expand = expansion(mult = 0.01)) +
+            scale_fill_gradient(low = 'white', high = 'red', limits = c(0,het_max), oob = scales::oob_squish) +
+            guides(fill = guide_colorbar(title = 'VAF')) +
+            xlab(xtitle) +
+            ylab(ytitle)
+
+        if (show_variant_names) {
+            p_heatmap = p_heatmap + theme(axis.text.y = element_text(size = text_size))
+        } else {
+            p_heatmap = p_heatmap + theme(axis.text.y = element_blank())
+        }
+
+        if (!is.null(variants_highlight)) {
+            vh <- intersect(as.character(unique(df_var$variant)), variants_highlight)
+            if (length(vh) > 0) {
+                lab_expr <- function(v) sapply(v, function(x) if (x %in% vh) paste0('bold("', x, '")') else paste0('"', x, '"'))
+                p_heatmap <- p_heatmap +
+                    scale_y_discrete(labels = function(v) parse(text = lab_expr(v)))
+            }
+        }
+
+        if (facet_by_group) {
+            p_heatmap = p_heatmap + facet_grid(group~., scales = 'free_y', space = 'free_y') +
+                theme(panel.spacing.y = unit(0,'mm'))
+        }
+        
+        if (mark_low_cov) {
+            p_heatmap = p_heatmap + geom_point(
+                data = df_var %>% filter(d < 10),
+                pch = 4,
+                size = dot_size
+            )
+        }
     }
 
     if (!is.null(cell_annot)) {
@@ -289,8 +289,10 @@ plot_phylo_heatmap2 = function(gtree, df_var, branch_width = 0.25, root_edge = T
         heights <- c(heights, feature_height)
     }
     
-    plot_components <- c(plot_components, list(p_heatmap))
-    heights <- c(heights, 2)
+    if (!is.null(p_heatmap)) {
+        plot_components <- c(plot_components, list(p_heatmap))
+        heights <- c(heights, 2)
+    }
     
     # Combine plots
     wrap_plots(plot_components) + plot_layout(heights = heights, guides = 'collect')
