@@ -4,13 +4,16 @@
 #' @param annot_title_size Numeric size for annotation strip titles.
 #' @param show_tree_y_axis Logical. If `TRUE`, show y-axis tick marks and tick labels on the ggtree panel.
 #' @param feature_legend Logical. If `TRUE`, display the legend for the feature heatmap; otherwise hide it.
+#' @param raster Logical. If `TRUE`, rasterize each plot panel (tree, heatmap, annotations, features) via `ggrastr`.
+#' @param raster_dpi Numeric DPI to use when rasterizing panels.
 #' @export 
 plot_phylo_heatmap2 = function(gtree, df_var = NULL, branch_width = 0.25, root_edge = TRUE, dot_size = 1, ylim = NULL, min_cells = 1,
     tip_annot = NULL, annot_scale = NULL, feature_mat = NULL, feature_limits = c(-2,2), feature_scale = NULL, rescale = FALSE,
     title = NULL, ytitle = NULL, xtitle = NULL, label_site = FALSE, cell_annot = NULL, tip_lab = FALSE, node_lab = FALSE, layered = FALSE, annot_bar_height = 0.1, clade_bar_height = 1, feature_height = 1,
     het_max = 0.1, conf_min = 0, conf_max = 1, conf_label = FALSE, branch_length = TRUE, node_conf = FALSE, annot_pal = NULL, annot_legend = FALSE, label_group = FALSE,
     annot_legend_title = '', text_size = 3, annot_title_size = text_size, node_label_size = 1, mut = NULL, mark_low_cov = FALSE, facet_by_group = FALSE, flip = TRUE, ladderize = TRUE,
-    node_scores = NULL, variants_highlight = NULL, show_variant_names = TRUE, show_tree_y_axis = FALSE, feature_legend = TRUE) {
+    node_scores = NULL, variants_highlight = NULL, show_variant_names = TRUE, show_tree_y_axis = FALSE, feature_legend = TRUE,
+    raster = FALSE, raster_dpi = 300) {
 
     if (inherits(gtree, 'tbl_graph')) {
         phylo = to_phylo_reorder(gtree)
@@ -188,6 +191,10 @@ plot_phylo_heatmap2 = function(gtree, df_var = NULL, branch_width = 0.25, root_e
                 size = dot_size
             )
         }
+
+        if (raster) {
+            p_heatmap = ggrastr::rasterize(p_heatmap, dpi = raster_dpi, layers = 'Raster')
+        }
     }
 
     if (!is.null(cell_annot)) {
@@ -220,14 +227,17 @@ plot_phylo_heatmap2 = function(gtree, df_var = NULL, branch_width = 0.25, root_e
         p_bars <- mapply(function(annot, pal, bar_title) {
             annot %>%
                 mutate(cell = factor(cell, cell_order)) %>%  
-                mitodrift:::annot_bar(
+                annot_bar(
                     legend = annot_legend, 
                     label_group = label_group, 
                     label_size = annot_title_size,
                     annot_pal = pal,
                     annot_scale = annot_scale,
                     legend_title = bar_title, 
-                    layered = layered) +
+                    layered = layered,
+                    raster = raster,
+                    raster_dpi = raster_dpi
+                ) +
                 theme(
                     plot.margin = margin(t = 0.25, r = 0, b = 0.25, l = 0, unit = 'mm'),
                     panel.border = element_rect(size = 0.25, color = 'black', fill = NA)
@@ -271,6 +281,10 @@ plot_phylo_heatmap2 = function(gtree, df_var = NULL, branch_width = 0.25, root_e
         } else {
             p_feature = p_feature + feature_scale
         }
+
+        if (raster) {
+            p_feature = ggrastr::rasterize(p_feature, dpi = raster_dpi, layers = 'Raster')
+        }
     }
 
     # Determine heights based on components
@@ -293,7 +307,7 @@ plot_phylo_heatmap2 = function(gtree, df_var = NULL, branch_width = 0.25, root_e
         plot_components <- c(plot_components, list(p_heatmap))
         heights <- c(heights, 2)
     }
-    
+
     # Combine plots
     wrap_plots(plot_components) + plot_layout(heights = heights, guides = 'collect')
 }
@@ -302,7 +316,7 @@ plot_phylo_heatmap2 = function(gtree, df_var = NULL, branch_width = 0.25, root_e
 #' @keywords internal
 annot_bar = function(
     D, transpose = FALSE, legend = TRUE, legend_title = '', size = 0.05, label_group = FALSE, label_size = 5,
-    annot_pal = NULL, annot_scale = NULL, raster = FALSE, layered = FALSE
+    annot_pal = NULL, annot_scale = NULL, raster = FALSE, raster_dpi = 300, layered = FALSE
 ) {
 
     if (layered) {
@@ -357,7 +371,7 @@ annot_bar = function(
     }
 
     if (raster) {
-        p = ggrastr::rasterize(p, layers = 'Tile', dpi = 300)
+        p = ggrastr::rasterize(p, layers = 'Raster', dpi = raster_dpi)
     }
 
     return(p)
