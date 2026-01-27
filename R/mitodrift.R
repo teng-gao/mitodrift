@@ -1614,6 +1614,18 @@ phylo_to_gtree = function(phy) {
     return(gtree)
 }
 
+#' Collapse weak clades below a confidence threshold.
+#'
+#' Given a fully binary phylogeny with per-node confidence scores stored in
+#' `tree$node.label`, this helper collapses every internal node whose confidence
+#' falls below `conf`, effectively pruning low-support clades while retaining
+#' higher-confidence structure.
+#'
+#' @param tree A binary `phylo` object whose `node.label` vector stores
+#'   posterior/confidence values for internal nodes.
+#' @param conf Numeric threshold in $[0,1]$. Internal nodes with confidence below
+#'   this value are collapsed.
+#' @return A renumbered `phylo` object with low-confidence nodes collapsed.
 #' @export
 trim_tree = function(tree, conf) {
     if (!is.binary(tree)) {stop("Tree must be binary")}
@@ -1661,6 +1673,18 @@ trim_tree_size = function(tree, min_conf = 0, min_frac = 0, max_frac = Inf, meth
     return(tree)
 }
 
+#' Collapse branches with high expected mis-assignments.
+#'
+#' Computes the expected number of incorrectly assigned tips for each internal
+#' branch (based on $(1 - p) \times$ clade size, where $p$ is the branch
+#' confidence) and collapses branches whose expectation exceeds a tolerance
+#' derived from the total number of tips.
+#'
+#' @param tree A binary `phylo` object with internal node confidence scores in
+#'   `tree$node.label`.
+#' @param tol Numeric tolerance expressed as a fraction of total tips; the
+#'   threshold is `length(tree$tip.label) * tol` expected errors.
+#' @return A renumbered `phylo` object with overly uncertain branches collapsed.
 #' @export
 trim_tree_exp = function(tree, tol) {
 	

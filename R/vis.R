@@ -11,8 +11,8 @@ plot_phylo_heatmap2 = function(gtree, df_var = NULL, branch_width = 0.25, root_e
     tip_annot = NULL, annot_scale = NULL, feature_mat = NULL, feature_limits = c(-2,2), feature_scale = NULL, rescale = FALSE,
     title = NULL, ytitle = NULL, xtitle = NULL, label_site = FALSE, cell_annot = NULL, tip_lab = FALSE, node_lab = FALSE, layered = FALSE, annot_bar_height = 0.1, clade_bar_height = 1, feature_height = 1,
     het_max = 0.1, conf_min = 0, conf_max = 1, conf_label = FALSE, branch_length = TRUE, node_conf = FALSE, annot_pal = NULL, annot_legend = FALSE, label_group = FALSE,
-    annot_legend_title = '', text_size = 3, annot_title_size = text_size, node_label_size = 1, mut = NULL, mark_low_cov = FALSE, facet_by_group = FALSE, flip = TRUE, ladderize = TRUE,
-    node_scores = NULL, variants_highlight = NULL, show_variant_names = TRUE, show_tree_y_axis = FALSE, feature_legend = TRUE,
+    text_size = 3, annot_title_size = text_size, node_label_size = 1, mut = NULL, mark_low_cov = FALSE, facet_by_group = FALSE, flip = TRUE, ladderize = TRUE,
+    node_scores = NULL, node_score_limits = c(-4,4), variants_highlight = NULL, show_variant_names = TRUE, show_tree_y_axis = FALSE, feature_legend = TRUE,
     raster = FALSE, raster_dpi = 300) {
 
     if (inherits(gtree, 'tbl_graph')) {
@@ -36,7 +36,7 @@ plot_phylo_heatmap2 = function(gtree, df_var = NULL, branch_width = 0.25, root_e
             axis.ticks.x = element_blank(), 
             axis.text.x = element_blank(),
             axis.text.y = element_blank(), 
-            axis.line.y = element_line(),
+            axis.line.y = element_blank(),
             axis.ticks.y = element_blank(), 
             axis.ticks.length.x = unit(0, "pt"),
             panel.background = element_rect(fill = "transparent", colour = NA), 
@@ -57,7 +57,7 @@ plot_phylo_heatmap2 = function(gtree, df_var = NULL, branch_width = 0.25, root_e
             mutate(node = as.integer(node))
         p_tree <- p_tree %<+% branch_df + 
             aes(color = score) +
-            scale_color_gradient2(low = "blue", mid = 'gray60', high = "red", limits = c(-4,4), oob = scales::oob_squish, na.value = 'gray60')
+            scale_color_gradient2(low = "blue", mid = 'gray60', high = "red", limits = node_score_limits, oob = scales::oob_squish, na.value = 'gray60')
         p_tree <- p_tree + ggnewscale::new_scale_color()
     }
 
@@ -126,13 +126,16 @@ plot_phylo_heatmap2 = function(gtree, df_var = NULL, branch_width = 0.25, root_e
     p_heatmap <- NULL
 
     if (!is.null(df_var)) {
+
         if (!'vaf' %in% colnames(df_var)) {
             df_var = df_var %>% mutate(vaf = a/d)
         }
 
+        df_var = df_var %>% filter(cell %in% cell_order)
+
         mut_order = order_muts(cell_order, df_var)
         
-        df_var = df_var %>% filter(cell %in% cell_order) %>%
+        df_var = df_var %>%
             group_by(variant) %>%
             filter(sum(vaf>0, na.rm = TRUE)>=min_cells) %>%
             ungroup() %>%
@@ -224,7 +227,7 @@ plot_phylo_heatmap2 = function(gtree, df_var = NULL, branch_width = 0.25, root_e
         annot_titles <- names(cell_annot)
 
         # Create separate bars for each annotation with its own palette
-        p_bars <- mapply(function(annot, pal, bar_title) {
+        p_bars <- mapply(function(annot, pal, bar_title, legend_title) {
             annot %>%
                 mutate(cell = factor(cell, cell_order)) %>%  
                 annot_bar(
@@ -233,7 +236,7 @@ plot_phylo_heatmap2 = function(gtree, df_var = NULL, branch_width = 0.25, root_e
                     label_size = annot_title_size,
                     annot_pal = pal,
                     annot_scale = annot_scale,
-                    legend_title = bar_title, 
+                    legend_title = legend_title, 
                     layered = layered,
                     raster = raster,
                     raster_dpi = raster_dpi
@@ -242,7 +245,7 @@ plot_phylo_heatmap2 = function(gtree, df_var = NULL, branch_width = 0.25, root_e
                     plot.margin = margin(t = 0.25, r = 0, b = 0.25, l = 0, unit = 'mm'),
                     panel.border = element_rect(size = 0.25, color = 'black', fill = NA)
                 )
-        }, cell_annot, annot_pal, annot_titles, SIMPLIFY = FALSE)
+        }, cell_annot, annot_pal, annot_titles, annot_titles, SIMPLIFY = FALSE)
 
     }
 
@@ -334,11 +337,11 @@ annot_bar = function(
         theme(
             panel.spacing = unit(0.1, 'mm'),
             panel.border = element_rect(size = 0, color = 'black', fill = NA),
-            panel.background = element_rect(fill = 'white'),
+            panel.background = element_rect(fill = '#CACACA'),
             strip.background = element_blank(),
             strip.text = element_blank(),
             # axis.text = element_text(size = 8),
-            axis.text.y = element_text(size = label_size, hjust = 1, vjust = 0.5),
+            axis.text.y = element_text(size = label_size, hjust = 1, vjust = 0.5, margin = margin(r = 0.5, unit = 'mm')),
             axis.text.x = element_blank(),
             axis.title.y = element_blank(),
             plot.margin = margin(0.1,0,0.1,0, unit = 'mm')
@@ -474,7 +477,7 @@ plot_phylo_circ = function(gtree, cell_annot = NULL, tip_annot = NULL, feature_m
     node_conf = FALSE, conf_label = FALSE, title = '', pwidth_annot = 0.25, pwidth_feature = 0.25,
     branch_width = 0.3, dot_size = 1, conf_min = 0, conf_max = 0.5, annot_pal = NULL, offset = 0.05, width = 0.8,
     label_size = 2, rescale = FALSE, limits = c(-2,2), feature_legend_title = 'Score', flip = TRUE,
-    legend = FALSE, layered = FALSE, smooth_k = 0, ladderize = TRUE, open_angle = 0, feature_axis_label = TRUE,
+    annot_legend = TRUE, feature_legend = TRUE, layered = FALSE, smooth_k = 0, ladderize = TRUE, open_angle = 0, feature_axis_label = TRUE,
     feature_axis_angle = 30) {
 
     p_tree = ggtree(gtree, 
@@ -555,7 +558,7 @@ plot_phylo_circ = function(gtree, cell_annot = NULL, tip_annot = NULL, feature_m
                     pwidth = pwidth_annot,
                     offset = offset,
                     mapping = aes(y = cell, fill = annot, x = annot),
-                    show.legend = legend)
+                    show.legend = annot_legend)
             } else {
                 p_tree = p_tree + geom_fruit(
                     data = annot_data,
@@ -563,7 +566,7 @@ plot_phylo_circ = function(gtree, cell_annot = NULL, tip_annot = NULL, feature_m
                     pwidth = pwidth_annot,
                     offset = offset,
                     mapping = aes(y = cell, fill = annot, x = 1),
-                    show.legend = legend)
+                    show.legend = annot_legend)
             }
             
             # Add custom palette if provided; use the per-annotation name as legend title
@@ -622,7 +625,7 @@ plot_phylo_circ = function(gtree, cell_annot = NULL, tip_annot = NULL, feature_m
                     hjust = 1
                 ),
                 mapping = aes(x = feature, y = cell, fill = value),
-                show.legend = TRUE
+                show.legend = feature_legend
             ) + 
             scale_fill_gradient2(name = feature_legend_title, low = "blue", high = "red", limits = limits, oob = scales::oob_squish)
 
