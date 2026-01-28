@@ -79,6 +79,13 @@ option_list <- list(
         metavar = "INTEGER"
     ),
     make_option(
+        c("--ncores_annot"),
+        type = "integer",
+        default = NA_integer_,
+        help = "Number of cores to use for clade annotation (default: same as --ncores)",
+        metavar = "INTEGER"
+    ),
+    make_option(
         c("-k", "--k"),
         type = "integer",
         default = 20,
@@ -194,6 +201,11 @@ option_list <- list(
 
 opt_parser <- OptionParser(option_list = option_list)
 opts <- parse_args(opt_parser)
+
+# Default annotation cores to ncores if not set.
+if (is.na(opts$ncores_annot)) {
+    opts$ncores_annot <- opts$ncores
+}
 
 # Print parameters
 message("=== MitoDrift Analysis Parameters ===")
@@ -368,7 +380,7 @@ saveRDS(md, mitodrift_object_file)
 message("\n=== Annotating tree with clade frequencies ===")
 md$annotate_tree(
     burnin = opts$tree_mcmc_burnin,
-    ncores = opts$ncores,
+    ncores = opts$ncores_annot,
     ncores_qs = opts$ncores_qs
 )
 
@@ -376,4 +388,3 @@ write.tree(md$tree_annot, annot_tree_file)
 saveRDS(md, mitodrift_object_file)
 
 message("\n=== MitoDrift analysis completed successfully! ===")
-
