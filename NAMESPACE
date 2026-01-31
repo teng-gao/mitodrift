@@ -3,6 +3,7 @@
 export(MitoDrift)
 export(add_clade_freq)
 export(add_conf)
+export(assign_clones_polytomy)
 export(collect_chains)
 export(compute_target_tree_asdsf)
 export(compute_target_tree_asdsf_sliding)

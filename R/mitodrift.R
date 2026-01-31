@@ -1298,7 +1298,7 @@ run_tree_mcmc_batch = function(
                 break
             }
             iter_this_batch = min(batch_size, remaining)
-            batch_label = paste('batch', batch_idx + 1L, 'of', ceiling(remaining / batch_size))
+            batch_label = paste('batch', batch_idx + 1L, '; remaining: ', ceiling(remaining / batch_size))
         } else {
             iter_this_batch = batch_size
             batch_label = paste('batch', batch_idx + 1L)
@@ -1533,7 +1533,12 @@ add_clade_freq = function(phy, edge_list, rooted = TRUE, ncores = 1) {
     RhpcBLASctl::omp_set_num_threads(1)
     RcppParallel::setThreadOptions(numThreads = ncores)
     phy = reorder_phylo(phy) # prop_clades_par requires phylo in postorder
-    freqs = prop_clades_par(phy$edge, edge_list, rooted = rooted, normalize = TRUE)
+
+    if (isTRUE(rooted)) {
+        freqs = prop_clades_par(phy$edge, edge_list, rooted = TRUE, normalize = TRUE)
+    } else {
+        freqs = prop_clades_unrooted_par(phy$edge, edge_list, normalize = TRUE)
+    }
     phy$node.label = freqs
     return(phy)
 }

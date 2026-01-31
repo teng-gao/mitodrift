@@ -25,6 +25,19 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// prop_clades_unrooted_par
+Rcpp::NumericVector prop_clades_unrooted_par(Rcpp::IntegerMatrix E_target, SEXP edges, bool normalize);
+RcppExport SEXP _mitodrift_prop_clades_unrooted_par(SEXP E_targetSEXP, SEXP edgesSEXP, SEXP normalizeSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Rcpp::IntegerMatrix >::type E_target(E_targetSEXP);
+    Rcpp::traits::input_parameter< SEXP >::type edges(edgesSEXP);
+    Rcpp::traits::input_parameter< bool >::type normalize(normalizeSEXP);
+    rcpp_result_gen = Rcpp::wrap(prop_clades_unrooted_par(E_target, edges, normalize));
+    return rcpp_result_gen;
+END_RCPP
+}
 // compute_node_edge_stats_bp2
 Rcpp::List compute_node_edge_stats_bp2(arma::Col<int> E, const std::vector< std::vector<double> >& logP_list, const std::vector<double>& logA);
 RcppExport SEXP _mitodrift_compute_node_edge_stats_bp2(SEXP ESEXP, SEXP logP_listSEXP, SEXP logASEXP) {
@@ -307,6 +320,7 @@ END_RCPP
 
 static const R_CallMethodDef CallEntries[] = {
     {"_mitodrift_prop_clades_par", (DL_FUNC) &_mitodrift_prop_clades_par, 4},
+    {"_mitodrift_prop_clades_unrooted_par", (DL_FUNC) &_mitodrift_prop_clades_unrooted_par, 3},
     {"_mitodrift_compute_node_edge_stats_bp2", (DL_FUNC) &_mitodrift_compute_node_edge_stats_bp2, 3},
     {"_mitodrift_get_leaf_liks_mat_cpp", (DL_FUNC) &_mitodrift_get_leaf_liks_mat_cpp, 6},
     {"_mitodrift_reorderRcpp", (DL_FUNC) &_mitodrift_reorderRcpp, 1},

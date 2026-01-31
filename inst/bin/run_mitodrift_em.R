@@ -86,6 +86,13 @@ option_list <- list(
         metavar = "INTEGER"
     ),
     make_option(
+        c("--clade_support"),
+        type = "character",
+        default = "rooted",
+        help = "Clade support mode for tree annotation: 'rooted' (default) or 'unrooted'. Unrooted counts unrooted bipartitions (ape::prop.clades(rooted=FALSE)) and removes the root-adjacent singleton/outgroup artifact.",
+        metavar = "CHARACTER"
+    ),
+    make_option(
         c("-k", "--k"),
         type = "integer",
         default = 20,
@@ -206,6 +213,8 @@ opts <- parse_args(opt_parser)
 if (is.na(opts$ncores_annot)) {
     opts$ncores_annot <- opts$ncores
 }
+
+opts$clade_support <- match.arg(opts$clade_support, c("rooted", "unrooted"))
 
 # Print parameters
 message("=== MitoDrift Analysis Parameters ===")
@@ -381,7 +390,8 @@ message("\n=== Annotating tree with clade frequencies ===")
 md$annotate_tree(
     burnin = opts$tree_mcmc_burnin,
     ncores = opts$ncores_annot,
-    ncores_qs = opts$ncores_qs
+    ncores_qs = opts$ncores_qs,
+    clade_support = opts$clade_support
 )
 
 write.tree(md$tree_annot, annot_tree_file)

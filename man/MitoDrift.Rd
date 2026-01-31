@@ -44,6 +44,8 @@ A class for mitochondrial drift analysis with tree-based inference
 
 \item{\code{mcmc_trace_file}}{File path for MCMC trace}
 
+\item{\code{mcmc_diag_file}}{File path for MCMC diagnostics}
+
 \item{\code{param_trace_file}}{File path for parameter fitting trace}
 }
 \if{html}{\out{</div>}}
@@ -311,7 +313,8 @@ Run phylogenetic MCMC sampling
   outfile = NULL,
   resume = FALSE,
   diag = TRUE,
-  use_nj = FALSE
+  use_nj = FALSE,
+  diagfile = NULL
 )}\if{html}{\out{</div>}}
 }
 
@@ -337,6 +340,8 @@ Run phylogenetic MCMC sampling
 \item{\code{diag}}{Whether to compute ASDSF diagnostics (default: TRUE)}
 
 \item{\code{use_nj}}{Whether to use NJ tree instead of ML tree as initial tree (default: FALSE)}
+
+\item{\code{diagfile}}{File path for saving ASDSF diagnostics (RDS)}
 }
 \if{html}{\out{</div>}}
 }
