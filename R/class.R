@@ -539,8 +539,7 @@ MitoDrift <- R6::R6Class("MitoDrift",
         #' @param mcmc_trace_file MCMC result file (optional, uses stored file if NULL)
         #' @param ncores Number of cores to use (default: 1)
         #' @param ncores_qs Number of cores to use for QS operations (default: 1)
-        #' @param rooted Whether to compute rooted clade support (default: TRUE). See also `clade_support`.
-        #' @param clade_support Alternative to `rooted`: `"rooted"` or `"unrooted"`. If provided, overrides `rooted`.
+        #' @param rooted Whether to compute rooted clade support (default: TRUE). If FALSE, counts unrooted bipartitions (ape::prop.clades(rooted = FALSE)).
         #' @return Trimmed tree with clade frequencies
         annotate_tree = function(
             burnin = 0,
@@ -549,17 +548,8 @@ MitoDrift <- R6::R6Class("MitoDrift",
             ncores = 1,
             ncores_qs = 1,
             rooted = TRUE,
-            clade_support = NULL,
             mcmc_trace_file = NULL
         ) {
-            
-            if (!is.null(clade_support)) {
-                if (!missing(rooted)) {
-                    message("Both `rooted` and `clade_support` were supplied; using `clade_support`.")
-                }
-                clade_support <- match.arg(clade_support, c("rooted", "unrooted"))
-                rooted <- identical(clade_support, "rooted")
-            }
             
             # Select base tree
             if (use_nj) {
