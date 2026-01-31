@@ -1298,7 +1298,7 @@ run_tree_mcmc_batch = function(
                 break
             }
             iter_this_batch = min(batch_size, remaining)
-            batch_label = paste('batch', batch_idx + 1L, 'of', ceiling(remaining / batch_size))
+            batch_label = paste('batch', batch_idx + 1L, '; remaining:', ceiling(remaining / batch_size))
         } else {
             iter_this_batch = batch_size
             batch_label = paste('batch', batch_idx + 1L)

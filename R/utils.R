@@ -159,14 +159,7 @@ trim_tree_exp = function(tree, tol) {
 #' attached to the root are always singleton clones. Ensures all tips receive
 #' an assignment, warning if late singletons are required.
 #' @export
-assign_clones_polytomy <- function(tree, k = Inf, paraphyletic = FALSE, return_df = TRUE) {
-
-	if (!inherits(tree, "phylo")) {
-		stop("tree must be a 'phylo' object")
-	}
-	if (!is.numeric(k) || length(k) != 1L || k <= 0) {
-		stop("k must be a positive scalar")
-	}
+assign_clones_polytomy <- function(tree, k = Inf, min_side = 2, paraphyletic = FALSE, return_df = TRUE) {
 
 	Ntip <- length(tree$tip.label)
 	if (Ntip == 0L) {
@@ -233,8 +226,11 @@ assign_clones_polytomy <- function(tree, k = Inf, paraphyletic = FALSE, return_d
 		# nd is guaranteed > Ntip here
 		node_tips <- get_subtree_tips(nd)
 
-		# If this whole clade is small enough, make it a single clone
-		if (length(node_tips) <= k) {
+		# If this whole clade is small enough, make it a single clone.
+		# However, do not let a singleton split (min side < min_side) define a clone.
+		clade_size <- length(node_tips)
+		other_size <- Ntip - clade_size
+		if (clade_size <= k && clade_size >= min_side && other_size >= min_side) {
 			assign_tips(node_tips, nd)
 			return(invisible(NULL))
 		}
