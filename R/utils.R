@@ -43,6 +43,30 @@ mat_to_long = function(amat, dmat) {
     return(result)
 }
 
+#' Find the root node ID of a rooted phylogeny.
+#'
+#' The root is identified as the node index that appears as a parent in
+#' `tree$edge[, 1]` but never as a child in `tree$edge[, 2]`.
+#'
+#' @param tree A rooted `phylo` object.
+#' @return Integer node ID for the root.
+find_root = function(tree) {
+	setdiff(tree$edge[, 1], tree$edge[, 2])[1]
+}
+
+#' Get the clade node IDs adjacent to the root.
+#'
+#' Returns the child node IDs of the root (the clades immediately below the
+#' root). For a rooted binary tree this is typically length 2.
+#'
+#' @param tree A rooted `phylo` object.
+#' @return Integer vector of root child node IDs.
+find_root_split = function(tree) {
+	root = find_root(tree)
+	root_children = tree$edge[tree$edge[, 1] == root, 2]
+	return(root_children)
+}
+
 #' Collapse weak clades below a confidence threshold.
 #'
 #' Given a fully binary phylogeny with per-node confidence scores stored in
@@ -54,19 +78,36 @@ mat_to_long = function(amat, dmat) {
 #'   posterior/confidence values for internal nodes.
 #' @param conf Numeric threshold in $[0,1]$. Internal nodes with confidence below
 #'   this value are collapsed.
+#' @param collapse_trivial Logical; if `TRUE`, collapses the trivial
+#'   root-adjacent singleton split (1 tip vs the rest) into a root polytomy.
 #' @return A renumbered `phylo` object with low-confidence nodes collapsed.
 #' @export
-trim_tree = function(tree, conf) {
+trim_tree = function(tree, conf, collapse_trivial = TRUE) {
     if (!is.binary(tree)) {stop("Tree must be binary")}
+    n_tip = length(tree$tip.label)
     node_confs = as.numeric(tree$node.label)
     node_confs[is.na(node_confs)] = 0
-    tree = TreeTools::CollapseNode(tree, which(node_confs < conf) + length(tree$tip.label))
+    collapse_list = which(node_confs < conf) + n_tip
+
+	# Test if trivial split (1 tip vs rest)
+    if (collapse_trivial) {
+        root_children = find_root_split(tree)
+        is_tip = root_children <= n_tip
+		if (any(is_tip)) {
+            internal_root_child = root_children[!is_tip]
+            if (!internal_root_child %in% collapse_list) {
+                collapse_list = c(collapse_list, internal_root_child)
+            }
+		}
+	}
+
+    tree = TreeTools::CollapseNode(tree, collapse_list)
     tree = TreeTools::Renumber(tree)
+
     return(tree)
 }
 
 
-#' @export
 trim_tree_size = function(tree, min_conf = 0, min_frac = 0, max_frac = Inf, method = 'union') {
     node_confs = as.numeric(tree$node.label)
     node_confs[is.na(node_confs)] = 0
@@ -158,8 +199,7 @@ trim_tree_exp = function(tree, tol) {
 #' nodes, and assigns clone IDs whenever a clade has `<= k` tips. Tips directly
 #' attached to the root are always singleton clones. Ensures all tips receive
 #' an assignment, warning if late singletons are required.
-#' @export
-assign_clones_polytomy <- function(tree, k = Inf, min_side = 2, paraphyletic = FALSE, return_df = TRUE) {
+assign_clones_polytomy <- function(tree, k = Inf, paraphyletic = FALSE, return_df = TRUE) {
 
 	Ntip <- length(tree$tip.label)
 	if (Ntip == 0L) {
@@ -226,11 +266,8 @@ assign_clones_polytomy <- function(tree, k = Inf, min_side = 2, paraphyletic = F
 		# nd is guaranteed > Ntip here
 		node_tips <- get_subtree_tips(nd)
 
-		# If this whole clade is small enough, make it a single clone.
-		# However, do not let a singleton split (min side < min_side) define a clone.
-		clade_size <- length(node_tips)
-		other_size <- Ntip - clade_size
-		if (clade_size <= k && clade_size >= min_side && other_size >= min_side) {
+		# If this whole clade is small enough, make it a single clone
+		if (length(node_tips) <= k) {
 			assign_tips(node_tips, nd)
 			return(invisible(NULL))
 		}
