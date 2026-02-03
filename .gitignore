@@ -1,0 +1,14 @@
+# Build artifacts
+src/*.o
+src/*.so
+src/*.dll
+
+# macOS
+.DS_Store
+
+# pkgdown generated site
+docs/
+
+# R build/check artifacts
+*.Rcheck/
+*.tar.gz
