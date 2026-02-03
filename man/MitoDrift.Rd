@@ -56,10 +56,8 @@ A class for mitochondrial drift analysis with tree-based inference
 \item \href{#method-MitoDrift-new}{\code{MitoDrift$new()}}
 \item \href{#method-MitoDrift-print}{\code{MitoDrift$print()}}
 \item \href{#method-MitoDrift-make_model}{\code{MitoDrift$make_model()}}
-\item \href{#method-MitoDrift-fit_params_mcmc}{\code{MitoDrift$fit_params_mcmc()}}
 \item \href{#method-MitoDrift-fit_params_em}{\code{MitoDrift$fit_params_em()}}
 \item \href{#method-MitoDrift-optimize_tree}{\code{MitoDrift$optimize_tree()}}
-\item \href{#method-MitoDrift-optimize_tree_em}{\code{MitoDrift$optimize_tree_em()}}
 \item \href{#method-MitoDrift-run_mcmc}{\code{MitoDrift$run_mcmc()}}
 \item \href{#method-MitoDrift-annotate_tree}{\code{MitoDrift$annotate_tree()}}
 \item \href{#method-MitoDrift-copy}{\code{MitoDrift$copy()}}
@@ -139,43 +137,6 @@ None
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-MitoDrift-fit_params_mcmc"></a>}}
-\if{latex}{\out{\hypertarget{method-MitoDrift-fit_params_mcmc}{}}}
-\subsection{Method \code{fit_params_mcmc()}}{
-Fit tree parameters using MCMC
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{MitoDrift$fit_params_mcmc(
-  nsteps = 500,
-  nchains = 1,
-  ncores = 1,
-  keep = 100,
-  check_conv = FALSE,
-  outfile = NULL
-)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{nsteps}}{Number of MCMC steps (default: 500)}
-
-\item{\code{nchains}}{Number of MCMC chains (default: 1)}
-
-\item{\code{ncores}}{Number of cores to use (default: 1)}
-
-\item{\code{keep}}{Number of samples to keep at the end of the chain (default: 100)}
-
-\item{\code{check_conv}}{whether to check convergence of parameter fitting}
-
-\item{\code{outfile}}{Output file for MCMC results (optional)}
-}
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-MCMC result object
-}
-}
-\if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-MitoDrift-fit_params_em"></a>}}
 \if{latex}{\out{\hypertarget{method-MitoDrift-fit_params_em}{}}}
 \subsection{Method \code{fit_params_em()}}{
@@ -249,52 +210,6 @@ Optimize tree using C++ implementation
 }
 \subsection{Returns}{
 Optimization result object
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-MitoDrift-optimize_tree_em"></a>}}
-\if{latex}{\out{\hypertarget{method-MitoDrift-optimize_tree_em}{}}}
-\subsection{Method \code{optimize_tree_em()}}{
-Alternating ML optimization and EM parameter updates until convergence
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{MitoDrift$optimize_tree_em(
-  total_iter = 100,
-  ncores = 1,
-  outfile = NULL,
-  resume = FALSE,
-  trace_interval = 5,
-  em_max_iter = 100,
-  em_epsilon = 0.001,
-  em_ncores = 1,
-  em_lower_bounds = c(ngen = 1, log_eps = log(1e-12), log_err = log(1e-12)),
-  em_upper_bounds = c(ngen = 1000, log_eps = log(0.2), log_err = log(0.2))
-)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{total_iter}}{Upper bound for ML iterations per optimization phase (default: 100)}
-
-\item{\code{ncores}}{Number of cores for ML optimization (default: 1)}
-
-\item{\code{outfile}}{Output file for ML optimization trace (optional)}
-
-\item{\code{resume}}{Whether to resume ML optimization from existing trace (default: FALSE)}
-
-\item{\code{trace_interval}}{Interval for saving ML trace (default: 5)}
-
-\item{\code{em_max_iter}}{EM iterations per EM step (default: 5)}
-
-\item{\code{em_epsilon}}{Convergence tolerance for EM (default: 1e-3)}
-
-\item{\code{em_ncores}}{Number of cores for EM E-step (default: 1)}
-
-\item{\code{em_lower_bounds}}{Lower bounds for EM parameters in transformed space}
-
-\item{\code{em_upper_bounds}}{Upper bounds for EM parameters in transformed space}
-}
-\if{html}{\out{</div>}}
 }
 }
 \if{html}{\out{<hr>}}

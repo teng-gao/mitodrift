@@ -1,6 +1,9 @@
-pandoc: '2.12'
+pandoc: 3.8.3
 pkgdown: 2.1.1
 pkgdown_sha: ~
 articles:
   tutorial: tutorial.html
-last_built: 2025-03-20T17:32Z
+last_built: 2026-02-03T18:34Z
+urls:
+  reference: https://teng-gao.github.io/mitodrift/reference
+  article: https://teng-gao.github.io/mitodrift/articles

@@ -50,6 +50,8 @@ mat_to_long = function(amat, dmat) {
 #'
 #' @param tree A rooted `phylo` object.
 #' @return Integer node ID for the root.
+#' @keywords internal
+#' @noRd
 find_root = function(tree) {
 	if (!ape::is.rooted(tree)) {
 		stop("tree must be rooted")
@@ -64,6 +66,8 @@ find_root = function(tree) {
 #'
 #' @param tree A rooted `phylo` object.
 #' @return Integer vector of root child node IDs.
+#' @keywords internal
+#' @noRd
 find_root_split = function(tree) {
 	root = find_root(tree)
 	root_children = tree$edge[tree$edge[, 1] == root, 2]
@@ -108,42 +112,6 @@ trim_tree = function(tree, conf, collapse_trivial = TRUE) {
     tree = TreeTools::CollapseNode(tree, collapse_list)
     tree = TreeTools::Renumber(tree)
 
-    return(tree)
-}
-
-
-trim_tree_size = function(tree, min_conf = 0, min_frac = 0, max_frac = Inf, method = 'union') {
-    node_confs = as.numeric(tree$node.label)
-    node_confs[is.na(node_confs)] = 0
-    
-    ntip = length(tree$tip.label)
-    node_ids = (ntip + 1):(ntip + tree$Nnode)
-    max_size = ceiling(ntip * max_frac)
-    min_size = ceiling(ntip * min_frac)
-    
-    # Calculate clade sizes
-    if (requireNamespace("phangorn", quietly = TRUE)) {
-         sizes = lengths(phangorn::Descendants(tree, node_ids, type = "tips"))
-    } else {
-         sizes = sapply(node_ids, function(x) length(ape::extract.clade(tree, x)$tip.label))
-    }
-    
-    if (method == 'union') {
-        # Collapse if EITHER criteria is failed (strict filtering)
-        # i.e. keep only if conf >= min_conf AND size >= min_size AND size <= max_size
-        to_collapse = which(node_confs < min_conf | sizes < min_size | sizes > max_size)
-    } else if (method == 'intersection') {
-        # Collapse only if BOTH criteria are failed (lenient filtering)
-        # i.e. keep if conf >= min_conf OR (size >= min_size AND size <= max_size)
-        to_collapse = which(node_confs < min_conf & (sizes < min_size | sizes > max_size))
-    } else {
-        stop("method must be 'union' or 'intersection'")
-    }
-    
-    if (length(to_collapse) > 0) {
-        tree = TreeTools::CollapseNode(tree, node_ids[to_collapse])
-        tree = TreeTools::Renumber(tree)
-    }
     return(tree)
 }
 
@@ -360,7 +328,11 @@ assign_clones_polytomy <- function(tree, k = Inf, paraphyletic = FALSE, return_d
 #'
 #' @param tree A phylo object
 #' @param prefix Character prefix for node names (default "Node")
+#' @param start_from_tip Logical; if `TRUE` (default), node numbering starts
+#'   from `ntip + 1` (standard ape convention); if `FALSE`, numbering starts
+#'   from 1.
 #' @return The same phylo object, with tree$node.label set to prefix + node numbers
+#' @export
 add_node_names <- function(tree, prefix = "Node", start_from_tip = TRUE) {
   if (!inherits(tree, "phylo")) {
     stop("`tree` must be a phylo object")

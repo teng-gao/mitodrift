@@ -23,7 +23,9 @@ get_leaf_liks_mat_cpp <- function(amat, dmat, vafs, eps = 0.0, ncores = 1L, log 
     .Call('_mitodrift_get_leaf_liks_mat_cpp', PACKAGE = 'mitodrift', amat, dmat, vafs, eps, ncores, log)
 }
 
-#' definitions for logSumExp function
+#' Internal C++ utilities
+#' @name cpp-internals  
+#' @keywords internal
 NULL
 
 reorderRcpp <- function(E) {
@@ -47,14 +49,6 @@ score_tree_bp <- function(E, logP, logA, n, C, m, root) {
     .Call('_mitodrift_score_tree_bp', PACKAGE = 'mitodrift', E, logP, logA, n, C, m, root)
 }
 
-score_tree_bp_wrapper <- function(E, logP_list, logA) {
-    .Call('_mitodrift_score_tree_bp_wrapper', PACKAGE = 'mitodrift', E, logP_list, logA)
-}
-
-score_tree_bp2 <- function(E, logP, logA, n, C, m, root) {
-    .Call('_mitodrift_score_tree_bp2', PACKAGE = 'mitodrift', E, logP, logA, n, C, m, root)
-}
-
 score_tree_bp_wrapper2 <- function(E, logP_list, logA) {
     .Call('_mitodrift_score_tree_bp_wrapper2', PACKAGE = 'mitodrift', E, logP_list, logA)
 }
@@ -67,10 +61,6 @@ score_tree_bp_wrapper_multi <- function(E, logP_list, logA_list) {
     .Call('_mitodrift_score_tree_bp_wrapper_multi', PACKAGE = 'mitodrift', E, logP_list, logA_list)
 }
 
-nni_cpp_parallel <- function(E, logP, logA) {
-    .Call('_mitodrift_nni_cpp_parallel', PACKAGE = 'mitodrift', E, logP, logA)
-}
-
 nni_cpp_parallel_cached <- function(E, logP, logA) {
     .Call('_mitodrift_nni_cpp_parallel_cached', PACKAGE = 'mitodrift', E, logP, logA)
 }
@@ -79,20 +69,8 @@ nni_cpp_parallel_multi <- function(E, logP, logA) {
     .Call('_mitodrift_nni_cpp_parallel_multi', PACKAGE = 'mitodrift', E, logP, logA)
 }
 
-tree_mcmc_cpp <- function(E, logP, logA, max_iter = 100L, seed = -1L) {
-    .Call('_mitodrift_tree_mcmc_cpp', PACKAGE = 'mitodrift', E, logP, logA, max_iter, seed)
-}
-
-tree_mcmc_cpp_cached <- function(E, logP, logA, max_iter = 100L, seed = -1L) {
-    .Call('_mitodrift_tree_mcmc_cpp_cached', PACKAGE = 'mitodrift', E, logP, logA, max_iter, seed)
-}
-
 tree_mcmc_cpp_cached_threadsafe <- function(E, logP, logA, max_iter = 100L, seed = -1L, reorder = TRUE) {
     .Call('_mitodrift_tree_mcmc_cpp_cached_threadsafe', PACKAGE = 'mitodrift', E, logP, logA, max_iter, seed, reorder)
-}
-
-tree_mcmc_parallel <- function(E, logP, logA, max_iter, nchains) {
-    .Call('_mitodrift_tree_mcmc_parallel', PACKAGE = 'mitodrift', E, logP, logA, max_iter, nchains)
 }
 
 tree_mcmc_parallel_seeded <- function(start_edges, logP, logA, max_iter_vec, seeds) {

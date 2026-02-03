@@ -105,36 +105,6 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
-// score_tree_bp_wrapper
-double score_tree_bp_wrapper(arma::Col<int> E, const std::vector< std::vector<double> >& logP_list, const std::vector<double>& logA);
-RcppExport SEXP _mitodrift_score_tree_bp_wrapper(SEXP ESEXP, SEXP logP_listSEXP, SEXP logASEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< arma::Col<int> >::type E(ESEXP);
-    Rcpp::traits::input_parameter< const std::vector< std::vector<double> >& >::type logP_list(logP_listSEXP);
-    Rcpp::traits::input_parameter< const std::vector<double>& >::type logA(logASEXP);
-    rcpp_result_gen = Rcpp::wrap(score_tree_bp_wrapper(E, logP_list, logA));
-    return rcpp_result_gen;
-END_RCPP
-}
-// score_tree_bp2
-double score_tree_bp2(const arma::Col<int>& E, const std::vector<double>& logP, const std::vector<double>& logA, const int n, const int C, const int m, const int root);
-RcppExport SEXP _mitodrift_score_tree_bp2(SEXP ESEXP, SEXP logPSEXP, SEXP logASEXP, SEXP nSEXP, SEXP CSEXP, SEXP mSEXP, SEXP rootSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< const arma::Col<int>& >::type E(ESEXP);
-    Rcpp::traits::input_parameter< const std::vector<double>& >::type logP(logPSEXP);
-    Rcpp::traits::input_parameter< const std::vector<double>& >::type logA(logASEXP);
-    Rcpp::traits::input_parameter< const int >::type n(nSEXP);
-    Rcpp::traits::input_parameter< const int >::type C(CSEXP);
-    Rcpp::traits::input_parameter< const int >::type m(mSEXP);
-    Rcpp::traits::input_parameter< const int >::type root(rootSEXP);
-    rcpp_result_gen = Rcpp::wrap(score_tree_bp2(E, logP, logA, n, C, m, root));
-    return rcpp_result_gen;
-END_RCPP
-}
 // score_tree_bp_wrapper2
 double score_tree_bp_wrapper2(arma::Col<int> E, const std::vector< std::vector<double> >& logP_list, const std::vector<double>& logA);
 RcppExport SEXP _mitodrift_score_tree_bp_wrapper2(SEXP ESEXP, SEXP logP_listSEXP, SEXP logASEXP) {
@@ -174,19 +144,6 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
-// nni_cpp_parallel
-NumericVector nni_cpp_parallel(arma::Col<int> E, const std::vector<std::vector<double>> logP, const std::vector<double> logA);
-RcppExport SEXP _mitodrift_nni_cpp_parallel(SEXP ESEXP, SEXP logPSEXP, SEXP logASEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< arma::Col<int> >::type E(ESEXP);
-    Rcpp::traits::input_parameter< const std::vector<std::vector<double>> >::type logP(logPSEXP);
-    Rcpp::traits::input_parameter< const std::vector<double> >::type logA(logASEXP);
-    rcpp_result_gen = Rcpp::wrap(nni_cpp_parallel(E, logP, logA));
-    return rcpp_result_gen;
-END_RCPP
-}
 // nni_cpp_parallel_cached
 NumericVector nni_cpp_parallel_cached(arma::Col<int> E, const std::vector<std::vector<double>>& logP, const std::vector<double>& logA);
 RcppExport SEXP _mitodrift_nni_cpp_parallel_cached(SEXP ESEXP, SEXP logPSEXP, SEXP logASEXP) {
@@ -213,36 +170,6 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
-// tree_mcmc_cpp
-std::vector<arma::Col<int>> tree_mcmc_cpp(arma::Col<int> E, const std::vector< std::vector<double> >& logP, const std::vector<double>& logA, int max_iter, int seed);
-RcppExport SEXP _mitodrift_tree_mcmc_cpp(SEXP ESEXP, SEXP logPSEXP, SEXP logASEXP, SEXP max_iterSEXP, SEXP seedSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< arma::Col<int> >::type E(ESEXP);
-    Rcpp::traits::input_parameter< const std::vector< std::vector<double> >& >::type logP(logPSEXP);
-    Rcpp::traits::input_parameter< const std::vector<double>& >::type logA(logASEXP);
-    Rcpp::traits::input_parameter< int >::type max_iter(max_iterSEXP);
-    Rcpp::traits::input_parameter< int >::type seed(seedSEXP);
-    rcpp_result_gen = Rcpp::wrap(tree_mcmc_cpp(E, logP, logA, max_iter, seed));
-    return rcpp_result_gen;
-END_RCPP
-}
-// tree_mcmc_cpp_cached
-std::vector<arma::Col<int>> tree_mcmc_cpp_cached(arma::Col<int> E, const std::vector< std::vector<double> >& logP, const std::vector<double>& logA, int max_iter, int seed);
-RcppExport SEXP _mitodrift_tree_mcmc_cpp_cached(SEXP ESEXP, SEXP logPSEXP, SEXP logASEXP, SEXP max_iterSEXP, SEXP seedSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< arma::Col<int> >::type E(ESEXP);
-    Rcpp::traits::input_parameter< const std::vector< std::vector<double> >& >::type logP(logPSEXP);
-    Rcpp::traits::input_parameter< const std::vector<double>& >::type logA(logASEXP);
-    Rcpp::traits::input_parameter< int >::type max_iter(max_iterSEXP);
-    Rcpp::traits::input_parameter< int >::type seed(seedSEXP);
-    rcpp_result_gen = Rcpp::wrap(tree_mcmc_cpp_cached(E, logP, logA, max_iter, seed));
-    return rcpp_result_gen;
-END_RCPP
-}
 // tree_mcmc_cpp_cached_threadsafe
 std::vector<arma::Col<int>> tree_mcmc_cpp_cached_threadsafe(arma::Col<int> E, const std::vector< std::vector<double> >& logP, const std::vector<double>& logA, int max_iter, int seed, bool reorder);
 RcppExport SEXP _mitodrift_tree_mcmc_cpp_cached_threadsafe(SEXP ESEXP, SEXP logPSEXP, SEXP logASEXP, SEXP max_iterSEXP, SEXP seedSEXP, SEXP reorderSEXP) {
@@ -256,21 +183,6 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< int >::type seed(seedSEXP);
     Rcpp::traits::input_parameter< bool >::type reorder(reorderSEXP);
     rcpp_result_gen = Rcpp::wrap(tree_mcmc_cpp_cached_threadsafe(E, logP, logA, max_iter, seed, reorder));
-    return rcpp_result_gen;
-END_RCPP
-}
-// tree_mcmc_parallel
-std::vector< std::vector<arma::Col<int>> > tree_mcmc_parallel(arma::Col<int> E, const std::vector< std::vector<double> >& logP, const std::vector<double>& logA, int max_iter, int nchains);
-RcppExport SEXP _mitodrift_tree_mcmc_parallel(SEXP ESEXP, SEXP logPSEXP, SEXP logASEXP, SEXP max_iterSEXP, SEXP nchainsSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< arma::Col<int> >::type E(ESEXP);
-    Rcpp::traits::input_parameter< const std::vector< std::vector<double> >& >::type logP(logPSEXP);
-    Rcpp::traits::input_parameter< const std::vector<double>& >::type logA(logASEXP);
-    Rcpp::traits::input_parameter< int >::type max_iter(max_iterSEXP);
-    Rcpp::traits::input_parameter< int >::type nchains(nchainsSEXP);
-    rcpp_result_gen = Rcpp::wrap(tree_mcmc_parallel(E, logP, logA, max_iter, nchains));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -313,18 +225,12 @@ static const R_CallMethodDef CallEntries[] = {
     {"_mitodrift_nnin_cpp", (DL_FUNC) &_mitodrift_nnin_cpp, 2},
     {"_mitodrift_logSumExp", (DL_FUNC) &_mitodrift_logSumExp, 1},
     {"_mitodrift_score_tree_bp", (DL_FUNC) &_mitodrift_score_tree_bp, 7},
-    {"_mitodrift_score_tree_bp_wrapper", (DL_FUNC) &_mitodrift_score_tree_bp_wrapper, 3},
-    {"_mitodrift_score_tree_bp2", (DL_FUNC) &_mitodrift_score_tree_bp2, 7},
     {"_mitodrift_score_tree_bp_wrapper2", (DL_FUNC) &_mitodrift_score_tree_bp_wrapper2, 3},
     {"_mitodrift_score_trees_parallel", (DL_FUNC) &_mitodrift_score_trees_parallel, 3},
     {"_mitodrift_score_tree_bp_wrapper_multi", (DL_FUNC) &_mitodrift_score_tree_bp_wrapper_multi, 3},
-    {"_mitodrift_nni_cpp_parallel", (DL_FUNC) &_mitodrift_nni_cpp_parallel, 3},
     {"_mitodrift_nni_cpp_parallel_cached", (DL_FUNC) &_mitodrift_nni_cpp_parallel_cached, 3},
     {"_mitodrift_nni_cpp_parallel_multi", (DL_FUNC) &_mitodrift_nni_cpp_parallel_multi, 3},
-    {"_mitodrift_tree_mcmc_cpp", (DL_FUNC) &_mitodrift_tree_mcmc_cpp, 5},
-    {"_mitodrift_tree_mcmc_cpp_cached", (DL_FUNC) &_mitodrift_tree_mcmc_cpp_cached, 5},
     {"_mitodrift_tree_mcmc_cpp_cached_threadsafe", (DL_FUNC) &_mitodrift_tree_mcmc_cpp_cached_threadsafe, 6},
-    {"_mitodrift_tree_mcmc_parallel", (DL_FUNC) &_mitodrift_tree_mcmc_parallel, 5},
     {"_mitodrift_tree_mcmc_parallel_seeded", (DL_FUNC) &_mitodrift_tree_mcmc_parallel_seeded, 5},
     {"_mitodrift_save_qd_cpp", (DL_FUNC) &_mitodrift_save_qd_cpp, 5},
     {NULL, NULL, 0}

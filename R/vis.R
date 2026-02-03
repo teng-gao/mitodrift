@@ -362,8 +362,27 @@ plot_phylo_heatmap2 = function(phylo, df_var = NULL, branch_width = 0.25, root_e
     wrap_plots(plot_components) + plot_layout(heights = heights, guides = 'collect')
 }
 
-# expect columns cell and annot
+#' Create an annotation bar plot
+#'
+#' Builds a ggplot annotation bar (horizontal colored tiles) from a data
+#' frame with `cell` and `annot` columns.
+#'
+#' @param D Data frame with at least columns `cell` and `annot`.
+#' @param transpose Logical; if `TRUE`, flip the bar orientation.
+#' @param legend Logical; if `TRUE`, show fill legend.
+#' @param legend_title Character legend title.
+#' @param size Numeric; not currently used (retained for API compatibility).
+#' @param label_group Logical; if `TRUE`, add text labels for each group.
+#' @param label_size Numeric text size for group labels and axis text.
+#' @param annot_pal Optional named color vector for `scale_fill_manual`.
+#' @param annot_scale Optional ggplot fill scale override.
+#' @param raster Logical; if `TRUE`, rasterize via `ggrastr`.
+#' @param raster_dpi Numeric DPI for rasterization.
+#' @param layered Logical; if `TRUE`, plot annotations as layered tiles
+#'   instead of a single row.
+#' @return A ggplot object.
 #' @keywords internal
+#' @noRd
 annot_bar = function(
     D, transpose = FALSE, legend = TRUE, legend_title = '', size = 0.05, label_group = FALSE, label_size = 5,
     annot_pal = NULL, annot_scale = NULL, raster = FALSE, raster_dpi = 300, layered = FALSE
@@ -427,28 +446,16 @@ annot_bar = function(
     return(p)
 }
 
-
-
-order_muts_binary = function(cell_order, mut_dat) {
-    
-    vaf_mat = mut_dat %>% reshape2::dcast(variant ~ cell, value.var = 'vaf') %>%
-        tibble::column_to_rownames('variant')
-    
-    pres <- vaf_mat > 0
-    tip_idx   <- seq_along(cell_order)
-    names(tip_idx) <- cell_order
-    
-    # weighted-average tip for each variant
-    avg_tip_pos <- sapply(rownames(vaf_mat), function(v) {
-      cells <- which(pres[v,])
-      mean(tip_idx[ colnames(vaf_mat)[cells] ])
-    })
-    
-    mut_order <- names(sort(avg_tip_pos))
-
-    return(mut_order)
-}
-
+#' Order mutations by weighted-median tip position
+#'
+#' Sorts variants by the VAF-weighted median tip position, producing a
+#' heatmap ordering that aligns with the tree layout.
+#'
+#' @param cell_order Character vector of cell names in tree-tip order.
+#' @param mut_dat Data frame with columns `variant`, `cell`, and `vaf`.
+#' @return Character vector of variant names in sorted order.
+#' @keywords internal
+#' @noRd
 order_muts <- function(cell_order, mut_dat) {
   
   # 1) cast to a variant × cell matrix of continuous VAFs
@@ -769,64 +776,4 @@ row_smooth <- function(M, k, na_rm = FALSE, edge = c("partial", "full")) {
 		out[i, ] <- res
 	}
 	out
-}
-
-#' Smooth feature matrix over phylogenetic neighbors
-#'
-#' @param phylo A phylo object
-#' @param feature_mat A matrix with features as rows and cells as columns
-#' @param k Number of nearest neighbors (including self) to smooth over
-#' @param ties_method Method to handle ties in distance: "min" (include all ties, default), "random", or "first"
-#' @return A smoothed matrix
-#' @export
-smooth_features_phylo <- function(feature_mat, phylo, k = 5, ties_method = "random") {
-    # Ensure feature_mat columns match phylo tips
-    common_cells <- intersect(phylo$tip.label, colnames(feature_mat))
-    if (length(common_cells) == 0) stop("No common cells between tree and feature matrix")
-    
-    # Subset and align
-    phylo <- ape::keep.tip(phylo, common_cells)
-    feature_mat <- feature_mat[, common_cells, drop = FALSE]
-    
-    # If no branch lengths, assume unit length
-    if (is.null(phylo$edge.length)) {
-        phylo$edge.length <- rep(1, nrow(phylo$edge))
-    }
-
-    # Compute cophenetic distance
-    dist_mat <- cophenetic(phylo)
-    
-    # Initialize output
-    smoothed_mat <- feature_mat
-    smoothed_mat[] <- NA
-    
-    # For each cell, find kNN and average
-    cells <- colnames(feature_mat)
-    
-    for (cell in cells) {
-        # Get distances for this cell
-        dists <- dist_mat[cell, ]
-        
-        # Identify neighbors based on tie handling method
-        if (ties_method == "min") {
-            # Include all neighbors with rank <= k (ties get same min rank)
-            # This may include > k neighbors if ties exist at the boundary
-            neighbors <- names(dists)[rank(dists, ties.method = "min") <= k]
-        } else if (ties_method == "random") {
-            # Randomly break ties to get exactly k neighbors
-            neighbors <- names(dists)[rank(dists, ties.method = "random") <= k]
-        } else {
-            # "first" or default sort behavior (deterministic based on tip order)
-            neighbors <- names(sort(dists)[1:k])
-        }
-        
-        # Average the features for these neighbors
-        if (length(neighbors) > 1) {
-            smoothed_mat[, cell] <- rowMeans(feature_mat[, neighbors, drop = FALSE], na.rm = TRUE)
-        } else {
-            smoothed_mat[, cell] <- feature_mat[, neighbors]
-        }
-    }
-    
-    return(smoothed_mat)
 }

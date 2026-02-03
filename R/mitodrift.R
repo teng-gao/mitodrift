@@ -10,10 +10,30 @@
 #' @useDynLib mitodrift
 NULL
 
-# to fix: apparently the init tree has to be rooted otherwise to_phylo_reoder won't work.
-#' @export 
+#' Optimize tree topology using C++ NNI moves
+#'
+#' Performs nearest-neighbor interchange (NNI) hill-climbing to find the
+#' tree topology that maximizes the belief-propagation score. Uses compiled
+#' C++ routines for speed.
+#'
+#' @param tree_init A rooted `phylo` object used as the starting tree.
+#'   Ignored when resuming from an existing trace.
+#' @param logP A list of log-probability vectors (one per locus), as returned
+#'   by [convert_logliks_to_logP_list()] or [convert_logliks_to_logP_list_colmajor()].
+#' @param logA A numeric vector (or list of vectors) of log transition
+#'   probabilities, flattened column-major from the transition matrix.
+#' @param max_iter Integer; maximum number of NNI iterations.
+#' @param outfile Optional file path for saving the tree trace (qs2 format).
+#' @param resume Logical; if `TRUE` and `outfile` exists, resume from the
+#'   last saved tree instead of starting fresh.
+#' @param ncores Integer; number of threads for parallel NNI scoring.
+#' @param trace_interval Integer; save the trace to `outfile` every this many
+#'   iterations.
+#' @return A `multiPhylo` list of trees visited during optimization, each
+#'   carrying a `logZ` element with the log-partition-function score.
+#' @export
 optimize_tree_cpp = function(
-    tree_init = NULL, logP, logA, max_iter = 100, 
+    tree_init = NULL, logP, logA, max_iter = 100,
     outfile = NULL, resume = FALSE, ncores = 1, trace_interval = 5
 ) {
 
@@ -94,91 +114,13 @@ optimize_tree_cpp = function(
     return(tree_list)
 }
 
-# R version of the function
-# to fix: apparently the init tree has to be rooted otherwise to_phylo_reoder won't work. 
-#' @export
-optimize_tree = function(
-    gtree_init, A, liks, max_iter = 100, ncores = 1, trace = TRUE, outfile = NULL,
-    trace_interval = 5, polytomy = FALSE, d = Inf, method = 'nni_multi', resume = FALSE
-) {
-
-    if (resume) {
-        if (is.null(outfile)) {
-            stop('Outfile must be provided if resume = FALSE')
-        }
-        message('Resuming from saved outfile')
-        tree_list = readRDS(outfile)
-        gtree = tree_list %>% .[[length(.)]]
-        score = sum(gtree$logZ)
-        # liks = res$params$A
-        # A = res$params$liks
-    } else {
-        gtree = gtree_init
-        tree_list = list()
-    }
-
-    runtime = c(0,0,0)
-
-    for (i in 1:max_iter) {
-
-        ptm = proc.time()
-
-        if (trace) {
-            tree_list = c(tree_list, list(gtree))
-            if (!is.null(outfile)) {
-                if (i == 1 | i %% trace_interval == 0) {
-                    qs2::qd_save(tree_list, outfile)
-                }
-            }
-        }
-
-        score = sum(gtree$logZ)
-
-        message(paste(i, round(score, 4), paste0('(', signif(unname(runtime[3]),2), 's', ')')))
-
-        if (polytomy) {
-            if (method == 'nni_multi') {
-                nei = nni_multi(as.phylo(gtree), d = d)
-            } else {
-                nei = nnt(as.phylo(gtree))
-            }
-        } else {
-            nei = TreeSearch::NNI(as.phylo(gtree), edgeToBreak = -1)
-        }
-        
-        gtrees_nei = mclapply(
-            nei,
-            mc.cores = ncores,
-            function(tn) {
-                decode_tree(tn, A, liks, score_only = TRUE)
-            }
-        )
-
-        scores_nei = sapply(
-            gtrees_nei,
-            function(gtree) {
-                sum(gtree$logZ)
-            }
-        )
-
-        if (max(scores_nei) > score) {
-            gtree = gtrees_nei[[which.max(scores_nei)]]
-        } else {
-            break()
-        }
-
-        runtime = proc.time() - ptm
-        
-    }
-
-    if (trace) {
-        return(tree_list)
-    } else {
-        return(gtree)
-    }
-}
-
-
+#' Reorder a phylo object to postorder
+#'
+#' Creates a deep copy of the phylogeny and reorders its edge matrix to
+#' postorder using the compiled C++ helper `reorderRcpp`.
+#'
+#' @param phy A `phylo` object.
+#' @return A new `phylo` object with edges in postorder.
 #' @export
 reorder_phylo = function(phy) {
     phy_new = rlang::duplicate(phy, shallow = FALSE)
@@ -186,164 +128,16 @@ reorder_phylo = function(phy) {
     return(phy_new)
 }
 
+#' Convert log-likelihood matrices to a log-probability list (row-major)
+#'
+#' Like [convert_liks_to_logP_list()] but expects inputs already on the log
+#' scale. Produces flat log-probability vectors in row-major layout.
+#'
+#' @param logliks Named list of log-likelihood matrices (one per variant),
+#'   each of dimension `k x n_cells`.
+#' @param phy A `phylo` object whose tip labels determine column ordering.
+#' @return A named list of numeric vectors, each of length `k * n_nodes`.
 #' @export
-get_leaf_liks = function(mut_dat, vafs, eps = 0, ncores = 1, log = FALSE) {
-
-    variants = unique(mut_dat$variant)
-
-    liks = mut_dat %>% 
-        mutate(vaf = a/d) %>%
-        mutate(variant = factor(variant, variants)) %>%
-        tidyr::complete(variant, cell, fill = list(vaf = 0, d = 0, a = 0)) %>%
-        split(.$variant) %>%
-        mclapply(
-            mc.cores = ncores,
-            function(mut_dat_var) {
-                mut_dat_var %>%
-                group_by(cell, variant) %>%
-                group_modify(
-                    function(x, key) {
-                        l = sapply(vafs,
-                            function(v) {
-                                dbinom(x = x$a, size = x$d, prob = pmin(v + eps, 1 - eps), log = log)
-                        })
-                        tibble(l, vaf = vafs)
-                }) %>%
-                ungroup()
-        }) %>%
-        bind_rows()
-
-    if (log) {
-        na_fill = 0
-    } else {
-        na_fill = 1
-    }
-        
-    liks = liks %>%
-        split(.$variant) %>%
-        mclapply(
-            mc.cores = ncores,
-            function(V) {
-                V %>% reshape2::dcast(vaf ~ cell, value.var = 'l', fill = na_fill) %>%
-                tibble::column_to_rownames('vaf') %>%
-                as.matrix
-            }
-        )
-
-    return(liks)
-}
-
-#' get leaft likelihoods given mutation data in matrix format
-#' @param amat matrix of allele counts
-#' @param dmat matrix of total counts
-#' @param vafs vector of VAFs
-#' @param eps error rate
-#' @param log whether to return log likelihoods
-#' @return list of likelihood matrices
-#' @export
-get_leaf_liks_mat = function(amat, dmat, vafs, eps = 0, ncores = 1, log = FALSE) {
-	# Precompute clamped probabilities for all VAF bins once
-	p <- pmin(vafs + eps, 1 - eps)
-	K <- length(p)
-	variants <- rownames(amat)
-	ncells <- ncol(amat)
-	cell_names <- colnames(amat)
-
-	# Use at most one core per variant
-	nc <- min(ncores, length(variants))
-
-	liks <- mclapply(
-		variants,
-		mc.cores = nc,
-		function(v) {
-			# Extract counts for this variant (length = #cells)
-			x <- amat[v, ]
-			n <- dmat[v, ]
-
-			# Vectorized dbinom over all VAFs x cells in one call:
-			# replicate x,n for each VAF (row-major by VAF), replicate p across cells
-			X <- rep(x, each = K)
-			N <- rep(n, each = K)
-			P <- rep(p, times = ncells)
-
-			val <- dbinom(x = X, size = N, prob = P, log = log)
-
-			# Reshape to [K x #cells] so that rows=VAFs, cols=cells
-			m <- matrix(val, nrow = K, ncol = ncells, byrow = FALSE)
-			rownames(m) <- vafs
-			colnames(m) <- cell_names
-			m
-		}
-	)
-
-	names(liks) <- variants
-	return(liks)
-}
-
-#' get leaft likelihoods given mutation data in matrix format
-#' @param amat matrix of allele counts
-#' @param dmat matrix of total counts
-#' @param vafs vector of VAFs
-#' @param eps error rate
-#' @param log whether to return log likelihoods
-#' @return list of likelihood matrices
-#' @export
-get_leaf_liks_mat_old = function(amat, dmat, vafs, eps = 0, ncores = 1, log = FALSE) {
-
-    variants = rownames(amat)
-
-    liks = mclapply(
-        variants,
-        mc.cores = ncores,
-        function(v) {
-            m = sapply(
-                    vafs,
-                    function(vaf) {
-                        dbinom(x = amat[v,], 
-                            size = dmat[v,],
-                            prob = pmin(vaf + eps, 1 - eps),
-                            log = log)
-                    }
-                )
-            colnames(m) = vafs
-            return(t(m))
-        }) %>% setNames(variants)
-    
-    return(liks)
-}
-
-
-#' @export 
-convert_liks_to_logP_list <- function(liks, phy) {
-    
-    E <- reorder_phylo(phy)$edge
-    phy$node.label <- NULL
-    
-    P_all <- lapply(liks, function(liks_mut) {
-        n_tips <- length(phy$tip.label)
-        n_nodes <- phy$Nnode
-        root_node <- E[nrow(E), 1]
-        k <- nrow(liks_mut)
-        
-        P <- matrix(nrow = k, ncol = n_tips + n_nodes)
-        rownames(P) <- rownames(liks_mut)
-
-        # Tip likelihoods, internal node likelihoods, root node set up
-        P[, 1:n_tips] <- liks_mut[, phy$tip.label]
-        P[, (n_tips + 1):(n_tips + n_nodes)] <- 1/k
-        P[, root_node] <- c(1, rep(0, k - 1))
-        
-        return(P)
-    })
-
-    logP_list <- lapply(P_all, function(P) {
-        as.vector(t(log(P)))
-    })
-    
-    return(logP_list)
-}
-
-#' @export 
 convert_logliks_to_logP_list <- function(logliks, phy) {
     
     E <- reorder_phylo(phy)$edge
@@ -373,94 +167,21 @@ convert_logliks_to_logP_list <- function(logliks, phy) {
     return(logP_list)
 }
 
-#' @export 
-convert_logliks_to_logP_list_colmajor <- function(logliks, phy) {
-	# Build a column-major (C x n) flattened logP_list:
-	# for each locus, states (rows) are contiguous per node (column),
-	# so the flattened index is node * C + state (0-based).
-	E <- reorder_phylo(phy)$edge
-	phy$node.label <- NULL
-
-	logP_list_cm <- lapply(logliks, function(liks_mut) {
-		n_tips <- length(phy$tip.label)
-		n_nodes <- phy$Nnode
-		root_node <- E[nrow(E), 1]
-		k <- nrow(liks_mut)
-
-		# Matrix shape: C x n (states x nodes); R uses column-major by default.
-		P <- matrix(nrow = k, ncol = n_tips + n_nodes)
-		rownames(P) <- rownames(liks_mut)
-
-		# Tip log-likelihoods, internal nodes prior, and root node clamp
-		P[, 1:n_tips] <- liks_mut[, phy$tip.label]
-		P[, (n_tips + 1):(n_tips + n_nodes)] <- log(1 / k)
-		P[, root_node] <- c(0, rep(-Inf, k - 1))  # log(c(1, 0, ...))
-
-		# Flatten in column-major order (default in R), yielding node-major layout.
-		as.vector(P)
-	})
-
-	return(logP_list_cm)
-}
-
-
-
-
-#' @export 
+#' Generate VAF bin midpoints
+#'
+#' Creates `k + 2` evenly spaced VAF bins spanning \[0, 1\] (including
+#' boundary bins at 0 and 1) and returns their midpoints.
+#'
+#' @param k Integer; number of interior VAF bins. The total number of bins
+#'   is `k + 2`.
+#' @return Numeric vector of bin midpoints of length `k + 2`.
+#' @export
 get_vaf_bins = function(k) {
     bins = seq(0, 1, 1/k)
     bins = c(0,bins,1)
     vafs = sapply(1:(length(bins)-1), function(i){(bins[i] + bins[i+1])/2})
     return(vafs)
 }
-
-#' @export 
-get_transition_mat_wf = function(k, eps = 0.01, N = 100, n_rep = 1e4, ngen = 100) {
-
-    A = matrix(NA, ncol = k + 2, k + 2)
-    bins = seq(0, 1, 1/k)
-    bins = c(0,bins,1)
-
-    for(i in 1:(length(bins)-1)) {
-
-        p = mean(c(bins[i], bins[i+1]))
-
-        p_gen = p
-        for (gen in 1:ngen) {
-            x = rbinom(n_rep, N, p_gen)
-            p_gen = x/N   
-        }
-        
-        for(j in 1:(length(bins)-1)) {
-            
-            xstart = as.integer(N*bins[j]) + 1
-            xend = as.integer(N*bins[j+1])
-            xstart = min(xend, xstart)
-
-            if (j == (length(bins)-2)) {
-                xend = xend - 1
-            }
-
-            A[i, j] = length(x[x >= xstart & x <= xend])/n_rep
-
-        }
-    }
-    
-    A[1,] = c(1-eps, rep(eps/(ncol(A)-1), ncol(A)-1))
-    A[nrow(A),] = rev(A[1,])
-
-    if (ngen == 0) {
-        A = diag(k+2)
-    }
-
-    vs = sapply(1:(length(bins)-1), function(i){(bins[i] + bins[i+1])/2})
-    colnames(A) = vs
-    rownames(A) = vs
-
-    return(A)
-
-}
-
 
 # Caching environments for transition matrices
 .mitodrift_T_cache <- new.env(parent = emptyenv())
@@ -548,9 +269,12 @@ get_transition_mat_wf_hmm <- function(k, eps, N, ngen, safe = FALSE) {
 #' @param k number of VAF bins
 #' @param eps error rate
 #' @param N population size
-#' @param ngen number of generations
+#' @param ngen number of generations (may be non-integer)
+#' @param safe Logical; if `TRUE`, replace zero entries with a small floor
+#'   value to avoid numerical issues.
 #' @return transition matrix
-#' @export
+#' @keywords internal
+#' @noRd
 get_transition_mat_wf_hmm_wrapper = function(k, eps, N, ngen, safe = FALSE) {
     
     # Check if ngen is an integer
@@ -595,25 +319,31 @@ make_rooted_nj = function(vmat, dist_method = 'manhattan', ncores = 1) {
     return(nj_tree)
 }
 
-modify_A = function(A, eps) {
-    A[1,] = c(1-eps, rep(eps/(ncol(A)-1), ncol(A)-1))
-    A[nrow(A),] = rev(A[1,])
-    return(A)
-}
-
-scale_eps <- function(eps, f, mu = 1) {
-  logit <- function(p) log(p / (1 - p))
-  logistic <- function(x) 1 / (1 + exp(-x))
-  logistic(logit(eps) + mu * f)
-}
-
-copy_crf = function(crf) {
-    crf_copy <- rlang::env_clone(crf)
-    attributes(crf_copy) <- attributes(crf)
-    return(crf_copy)
-}
-
-#' @export 
+#' Decode a tree using CRF belief propagation (R version)
+#'
+#' Constructs a conditional random field (CRF) on the tree with a single
+#' shared transition matrix and computes per-variant marginal beliefs via
+#' tree belief propagation. Optionally returns posterior means, MAP
+#' assignments, or the full CRF objects.
+#'
+#' @param tn A `phylo` object representing the tree topology.
+#' @param A Transition matrix (square, `k x k`) with VAF bin midpoints as
+#'   row/column names.
+#' @param liks Named list of likelihood matrices (one per variant), each
+#'   `k x n_cells`.
+#' @param post_max Logical; if `TRUE`, also compute MAP (Viterbi) decoding.
+#' @param store_bels Logical; if `TRUE`, store per-variant node and edge
+#'   beliefs in the output.
+#' @param store_crfs Logical; if `TRUE`, store a copy of the CRF object for
+#'   each variant.
+#' @param debug Logical; if `TRUE`, return a detailed list instead of just
+#'   the `tbl_graph`.
+#' @param score_only Logical; if `TRUE`, skip posterior computation and only
+#'   attach log-partition scores.
+#' @return A `tbl_graph` tree with per-variant posterior means (columns
+#'   `p_<variant>`) and a `logZ` vector of log-partition-function values.
+#'   When `debug = TRUE`, a list with additional diagnostic components.
+#' @export
 decode_tree = function(
     tn, A, liks, post_max = FALSE, store_bels = FALSE, store_crfs = FALSE, debug = FALSE,
     score_only = FALSE
@@ -718,357 +448,18 @@ decode_tree = function(
     return(gtree)
 }
 
-# allow A to vary across mutations
-#' @export 
-decode_tree_brl = function(
-    tn, As, liks, root_eps = 1e-2, post_max = FALSE, store_bels = FALSE, store_crfs = FALSE, debug = FALSE,
-    score_only = FALSE
-) {
-
-    if (!inherits(tn, "igraph")) {
-        Gn = as.igraph(tn)
-        E(Gn)$length = tn$edge.length
-    } else {
-        Gn = tn
-        if (is.null(E(Gn)$length)) {
-            stop('No edge length in tree')
-        }
-    }
-    
-    k = ncol(As[[1]])
-    vafs = as.numeric(colnames(As[[1]]))
-    
-    gtree = as_tbl_graph(Gn)
-    root_node = gtree %>% filter(node_is_root()) %>% pull(name) %>% as.character
-
-    adj_n = as_adjacency_matrix(Gn)
-    crf = make.crf(adj_n, k)
-
-    # add edge potentials
-    elist = Gn %>% as_edgelist(names = F)
-
-    flip_df = data.frame(
-            from = pmin(elist[,1], elist[,2]),
-            to = pmax(elist[,1], elist[,2]),
-            flip = elist[,1] > elist[,2],
-            length = E(Gn)$length
-        ) %>%
-        arrange(from, to)
-
-    crf$edge.pot = lapply(
-        1:nrow(flip_df),
-        function(i){
-
-            flip = flip_df[i,]$flip
-            ngen = flip_df[i,]$length
-
-            A = interpolate_matrices(As, ngen, min_index = 1e-5)
-
-            if (flip) {
-                t(A)
-            } else {
-                A
-            }
-
-    })
-
-    # add note potentials
-    vnames = names(V(Gn))
-    crf$node.labels = vnames
-    rownames(crf$node.pot) = vnames
-
-    logZ = c()
-    ebels = list()
-    nbels = list()
-    crfs = list()
-
-    for (mut in names(liks)) {
-
-        crf$node.pot[colnames(liks[[mut]]),] = t(liks[[mut]])
-        crf$node.pot[!vnames %in% colnames(liks[[mut]]),] = 1/k
-        # root node doesn't have to clean
-        crf$node.pot[root_node,] = c(1-root_eps, rep(root_eps/(k-1), k-1))
-        
-        # decoding
-        res_mar = infer.tree(crf)
-        
-        if (!score_only) {
-            # append posterior mean to graph tree
-            p_dat = res_mar$node.bel %*% diag(vafs) %>% rowSums
-            p_dat = p_dat %>% data.frame(vnames, .) %>%
-                setNames(c('name', paste0('p_', mut)))
-            
-            gtree = gtree %>% activate(nodes) %>%
-                select(-any_of(c(paste0('p_', mut)))) %>% 
-                left_join(p_dat, by = join_by(name))
-
-            if (post_max) {
-                res_max = decode.tree(crf)
-                z_dat = data.frame(vnames, vafs[res_max]) %>% setNames(c('name', paste0('z_', mut))) 
-
-                gtree = gtree %>% activate(nodes) %>%
-                    select(-any_of(c(paste0('z_', mut)))) %>% 
-                    left_join(z_dat, by = join_by(name))
-            } else {
-                res_max = NULL
-            }
-        }
-
-        logZ = c(logZ, res_mar$logZ)
-
-        if (store_bels) {
-            ebels[[mut]] = res_mar$edge.bel
-            nbels[[mut]] = res_mar$node.bel
-        }
-
-        if (store_crfs) {
-            crf_copy <- rlang::env_clone(crf)
-            attributes(crf_copy) <- attributes(crf)
-            crfs[[mut]] = crf_copy
-        }
-    }
-
-    logZ = setNames(logZ, names(liks))
-    gtree$logZ = logZ
-
-    if (debug) {
-        return(list('gtree' = gtree, 'crfs' = crfs, 'Gn' = Gn, 
-        'res_mar' = res_mar))
-    }
-
-    return(gtree)
-}
-
-interpolate_matrices <- function(As, index, min_index = 1e-5) {
-
-    index = max(min_index, index)
-
-    # Get the list of provided indices
-    provided_indices <- as.numeric(names(As))
-    min_index <- min(provided_indices)
-    max_index <- max(provided_indices)
-
-    # If index is below the minimum, return the matrix at the minimum index
-    if (index <= min_index) {
-        return(As[[as.character(min_index)]])
-    }
-
-    # If index is above the maximum, return the matrix at the maximum index
-    if (index >= max_index) {
-        return(As[[as.character(max_index)]])
-    }
-
-
-    # If the index exactly matches one of the provided indices, return the corresponding matrix directly
-    if (index %in% provided_indices) return(As[[as.character(index)]])
-
-    # Find the closest lower and upper indices for interpolation
-    lower_index <- max(provided_indices[provided_indices < index])
-    upper_index <- min(provided_indices[provided_indices > index])
-
-    # Calculate the weight for interpolation
-    weight <- (index - lower_index) / (upper_index - lower_index)
-
-    # Retrieve matrices for interpolation
-    A_lower <- As[[as.character(lower_index)]]
-    A_upper <- As[[as.character(upper_index)]]
-
-    # Ensure the matrices are the same dimensions
-    if (!all(dim(A_lower) == dim(A_upper))) stop("Matrices must have the same dimensions.")
-
-    # Perform linear interpolation
-    interpolated_matrix <- (1 - weight) * A_lower + weight * A_upper
-
-    # Normalize each row to sum to 1
-    interpolated_matrix <- interpolated_matrix / rowSums(interpolated_matrix)
-
-    return(interpolated_matrix)
-}
-
-estimate_brl = function(phy, liks, As, height = NULL, init = 1) {
-
-    if (length(init) == 1) {
-        init = rep(init, length(phy$edge.length))
-    }
-
-    G = igraph::as.igraph(phy)
-    
-    fit = optim(
-        fn = function(x) {
-
-            phy$edge.length = x
-            
-            gtree = decode_tree_brl(
-                tn = phy,
-                As,
-                liks, score_only = T)
-            
-            E(G)$weight = x
-            dists = distances_to_root_tips(G)
-
-            if (is.null(height)) {
-                height = mean(dists)
-            }
-
-            mse = mean((dists - height)^2)
-            
-            -sum(gtree$logZ) + mse
-            
-        },
-        method = 'L-BFGS-B',
-        par = init,
-        lower = 1,
-        upper = 100
-    )
-
-    phy$edge.length = fit$par
-
-    return(phy)
-}
-
-# Use internal branch representation for ultrametric tree
-# see https://github.com/NickWilliamsSanger/rtreefit
-estimate_brl_recode = function(phy, As, liks, htotal, init = 0.1) {
-
-    if (length(init) == 1) {
-        init = rep(init, phy$Nnode)
-    }
-
-    phy = reorder(phy)
-
-    G = igraph::as.igraph(phy)
-    
-    fit = optim(
-        fn = function(x) {
-
-            G = x_to_length(G, x, htotal = htotal)
-            
-            gtree = decode_tree_brl(
-                tn = G,
-                As,
-                liks, score_only = T)
-        
-            -sum(gtree$logZ)
-            
-        },
-        method = 'L-BFGS-B',
-        par = init,
-        lower = 0,
-        upper = 1
-    )
-
-    G = x_to_length(G, fit$par, htotal = htotal)
-
-    phy$edge.length = E(G)$length
-
-    return(phy)
-}
-
-
-# Use internal branch representation for ultrametric tree
-# see https://github.com/NickWilliamsSanger/rtreefit
-#' @export 
-estimate_brl_par = function(tree, As, liks, htotal, x_init = 0.1, change_h = FALSE) {
-
-    if (!'tbl_graph' %in% class(tree)) {
-        tree = reorder(tree)
-        G = igraph::as.igraph(tree)
-    } else {
-        G = tree
-    }
-
-    n_nodes = sum(degree(G, mode = "all") > 1)
-    
-    if (length(x_init) == 1) {
-        x_init = rep(x_init, n_nodes)
-    }
-
-    if (change_h) {
-
-        fn = function(x) {
-            
-            G = x_to_length(G, x[-1], htotal = x[1])
-            
-            gtree = decode_tree_brl(
-                tn = G,
-                As,
-                liks, score_only = TRUE)
-        
-            -sum(gtree$logZ)
-            
-        }
-
-        fit = optimParallel(
-            fn = fn,
-            method = 'L-BFGS-B',
-            par = c(htotal, x_init),
-            lower = c(1, rep(0, n_nodes)),
-            upper = c(2000, rep(1, n_nodes))
-        )
-
-        G = x_to_length(G, fit$par[-1], htotal = fit$par[1])
-        
-    } else {
-
-        fn = function(x) {
-
-            G = x_to_length(G, x, htotal = htotal)
-            
-            gtree = decode_tree_brl(
-                tn = G,
-                As,
-                liks, score_only = TRUE)
-        
-            -sum(gtree$logZ)
-            
-        }
-
-        fit = optimParallel(
-                fn = fn,
-                method = 'L-BFGS-B',
-                par = x_init,
-                lower = 0,
-                upper = 1
-            )
-
-        G = x_to_length(G, fit$par, htotal = htotal)
-
-    }
-
-    return(G)
-}
-
-
 ################################### MCMC ######################################
 
-
-#' @export 
-run_tree_mcmc_cpp = function(phy, logP_list, logA_vec, max_iter = 100, nchains = 1, ncores = 1) {
-
-    RhpcBLASctl::blas_set_num_threads(1)
-    RhpcBLASctl::omp_set_num_threads(1)
-    RcppParallel::setThreadOptions(numThreads = ncores)
-    
-    edge_lists = tree_mcmc_parallel(phy$edge, logP_list, logA_vec, max_iter = max_iter, nchains = nchains)
-
-    res = edge_lists %>%
-        lapply(function(elist) {
-                phylist = lapply(
-                    elist,
-                    function(edges){
-                    phy_new = attach_edges(phy, edges)
-                    return(phy_new)
-                })
-
-                class(phylist) = 'multiPhylo'
-
-                return(phylist)
-            }
-        )
-    
-    return(res)
-}
-
+#' Attach a new edge matrix to a phylo object
+#'
+#' Replaces the edge matrix of a `phylo` object with a new one (e.g. from
+#' an MCMC sample).
+#'
+#' @param phy A `phylo` object serving as the template.
+#' @param edges Integer vector to be reshaped into a 2-column edge matrix.
+#' @return A `phylo` object with the updated edge matrix.
+#' @keywords internal
+#' @noRd
 attach_edges = function(phy, edges) {
 
     phy_new = phy
@@ -1078,135 +469,16 @@ attach_edges = function(phy, edges) {
     return(phy_new)
 }
 
-# to fix: apparently the init tree has to be rooted otherwise to_phylo_reoder won't work. 
-#' @export 
-run_tree_mcmc_r = function(
-    gtree_init, A, liks, max_iter = 100, nchains = 1, ncores = 1, trace = TRUE, outfile = NULL,
-    move_type = 'NNI_multi'
-) {
-
-    # Rearrangements have to be unrooted
-    if (move_type == 'NNI') {
-        propose_tree = TreeSearch::NNI
-    } else if (move_type == 'NNI_multi') {
-        propose_tree = rNNI_multi
-    } else if (move_type == 'NNT') {
-        propose_tree = rNNT
-    } else {
-        stop('Invalid move type')
-    }
-
-    res = mclapply(
-        1:nchains,
-        mc.cores = ncores,
-        function(s) {
-
-            set.seed(s)
-
-            # need to change this to pre-allocation
-            phy_list = vector("list", max_iter + 1)
-            l_0 = sum(gtree_init$logZ)
-            phy_list[[1]] = as.phylo(gtree_init)
-
-            for (i in 1:max_iter) {
-                
-                phy_new = propose_tree(phy_list[[i]])
-                gtree_new = decode_tree(phy_new, A, liks, score_only = TRUE)
-                
-                l_1 = sum(gtree_new$logZ)
-                probab = exp(l_1 - l_0)
-
-                if (runif(1) < probab) {
-                    phy_list[[i+1]] = phy_new
-                    l_0 = l_1
-                } else {
-                    phy_list[[i+1]] = phy_list[[i]]
-                }
-            }
-
-            if (trace &!is.null(outfile)) {
-                outdir = dirname(outfile)
-                fname = basename(outfile)
-                saveRDS(phy_list, glue('{outdir}/chain{s}_{fname}'))
-            }
-
-            return(phy_list)
-        }
-    )
-
-    return(res)
-}
-
-# to fix: apparently the init tree has to be rooted otherwise to_phylo_reoder won't work. 
-#' @export
-run_tree_mcmc = function(
-    phy_init, logP_list, logA_vec, max_iter = 100, nchains = 1, ncores = 1, outfile = NULL, resume = FALSE
-) {
-
-    chains = 1:nchains
-
-    if (!is.null(outfile)) {
-        outdir = dirname(outfile)
-        fname = basename(outfile)
-
-        if (!dir.exists(outdir)) {
-            dir.create(outdir, recursive = TRUE)
-        }
-        
-        if (resume) {
-            done = sapply(chains, function(s) {file.exists(glue('{outdir}/chain{s}_{fname}'))})
-            chains = chains[!done]
-        }
-    }
-
-    message('Running MCMC with ', length(chains), ' chains')
-
-
-
-    res = mclapply(
-        chains,
-        mc.cores = ncores,
-        function(s) {
-
-            elist = tree_mcmc_cpp(phy_init$edge, logP_list, logA_vec, max_iter = max_iter, seed = s)
-
-            tree_list = lapply(
-                elist,
-                function(edges){
-                    attach_edges(phy_init, edges)
-            })
-
-            class(tree_list) = 'multiPhylo'
-
-            if (!is.null(outfile)) {
-                saveRDS(tree_list, glue('{outdir}/chain{s}_{fname}'))
-            }
-
-            return(tree_list)
-        }
-    )
-
-    if (resume & !is.null(outfile)) {
-
-        chains_prev = setdiff(1:nchains, chains)
-
-        res_prev = mclapply(
-            chains_prev,
-            mc.cores = ncores,
-            function(s) {
-                readRDS(glue('{outdir}/chain{s}_{fname}'))
-            }
-        )
-        res = c(res_prev, res)
-
-    }
-
-    saveRDS(res, outfile)
-
-    return(res)
-}
-
-# Minimal guard: safe read for possibly truncated/partial RDS
+#' Safely read a qs2 chain file
+#'
+#' Reads a qs2-serialized chain file with error handling for truncated or
+#' missing files.
+#'
+#' @param path Character file path.
+#' @param ncores Integer; number of threads for `qs2::qd_read`.
+#' @return The deserialized object, or `NULL` on failure.
+#' @keywords internal
+#' @noRd
 safe_read_chain = function(path, ncores = 1) {
     if (!file.exists(path)) return(NULL)
     fi = file.info(path)
@@ -1214,7 +486,31 @@ safe_read_chain = function(path, ncores = 1) {
     tryCatch(qs2::qd_read(path, nthreads = ncores), error = function(e) NULL)
 }
 
-# to fix: apparently the init tree has to be rooted otherwise to_phylo_reoder won't work. 
+#' Run tree-topology MCMC in batches with convergence monitoring
+#'
+#' Runs MCMC sampling in fixed-size batches, computing ASDSF convergence
+#' diagnostics between batches. Supports automatic stopping when ASDSF
+#' drops below a threshold and resume from a previous run.
+#'
+#' @param phy_init A rooted `phylo` object used as the starting tree.
+#' @param logP_list List of log-probability vectors (one per locus).
+#' @param logA_vec Numeric vector of log transition probabilities.
+#' @param outfile File path for saving/resuming the full edge-list trace
+#'   (qs2 format).
+#' @param diagfile Optional file path for saving convergence diagnostics
+#'   (RDS format).
+#' @param diag Logical; whether to compute diagnostics (currently unused,
+#'   diagnostics are always computed).
+#' @param max_iter Integer; total number of MCMC iterations per chain
+#'   (ignored when `conv_thres` is set).
+#' @param nchains Integer; number of independent chains.
+#' @param ncores Integer; number of threads for C++ MCMC sampling.
+#' @param ncores_qs Integer; number of threads for qs2 serialization.
+#' @param batch_size Integer; number of iterations per batch.
+#' @param conv_thres Numeric or `NULL`; if set, run until the ASDSF drops
+#'   below this threshold instead of using `max_iter`.
+#' @param resume Logical; if `TRUE`, resume from existing `outfile`.
+#' @return A list of edge-list chains (one list of edge matrices per chain).
 #' @export
 run_tree_mcmc_batch = function(
     phy_init, logP_list, logA_vec, outfile, diagfile = NULL, diag = TRUE, max_iter = 100, nchains = 1, ncores = 1, ncores_qs = 1,
@@ -1364,10 +660,35 @@ run_tree_mcmc_batch = function(
     return(edge_list_all)
 }
 
+#' Restore edge-list vectors to 2-column matrices
+#'
+#' Converts a list of flat integer vectors (from C++ output) back into
+#' proper 2-column edge matrices.
+#'
+#' @param elist List of integer vectors, each representing a flattened
+#'   edge matrix.
+#' @return List of 2-column integer matrices.
+#' @keywords internal
+#' @noRd
 restore_elist = function(elist) {
     lapply(elist, function(edges){matrix(edges, ncol = 2)})
 }
 
+#' Collect MCMC chains into a multiPhylo object
+#'
+#' Reconstructs `phylo` trees from raw edge-list chains, applies burn-in
+#' removal and iteration truncation, then pools all chains into a single
+#' `multiPhylo` object.
+#'
+#' @param edge_list_all List of chains, each a list of 2-column integer
+#'   edge matrices.
+#' @param phy_init The initial `phylo` object whose tip labels and metadata
+#'   are used to reconstruct full `phylo` objects.
+#' @param burnin Integer; number of initial samples to discard from each
+#'   chain.
+#' @param max_iter Numeric; maximum iteration to retain (samples beyond this
+#'   are dropped).
+#' @return A `multiPhylo` object containing the pooled post-burn-in trees.
 #' @export
 collect_chains = function(edge_list_all, phy_init, burnin = 0, max_iter = Inf) {
 
@@ -1397,6 +718,18 @@ collect_chains = function(edge_list_all, phy_init, burnin = 0, max_iter = Inf) {
     
 }
 
+#' Collect raw edge matrices from MCMC chains
+#'
+#' Pools edge matrices from all chains after applying burn-in removal and
+#' iteration truncation. Unlike [collect_chains()], does not reconstruct
+#' full `phylo` objects.
+#'
+#' @param edge_list_all List of chains, each a list of edge matrices.
+#' @param burnin Integer; number of initial samples to discard.
+#' @param max_iter Numeric; maximum iteration to retain.
+#' @return A flat list of 2-column edge matrices.
+#' @keywords internal
+#' @noRd
 collect_edges = function(edge_list_all, burnin = 0, max_iter = Inf) {
 
     if (max_iter < burnin) {
@@ -1408,113 +741,6 @@ collect_edges = function(edge_list_all, burnin = 0, max_iter = Inf) {
         }) %>% unlist(recursive = F)
 
     return(mcmc_edges)
-}
-
-#' @export
-add_conf = function(gtree, phylist) {
-
-    if (!'multiPhylo' %in% class(phylist) & is.list(phylist)) {
-        class(phylist) = 'multiPhylo'
-    }
-
-    if (!'tbl_graph' %in% class(gtree)) {
-        gtree$node.label = NULL
-        gtree = as_tbl_graph(gtree)
-    }
-    
-    conf_dict = to_phylo_reorder(gtree) %>%
-        add_clade_freq(phylist) %>%
-        parse_conf()
-
-    gtree = gtree %>% activate(nodes) %>% mutate(conf = conf_dict[name])
-
-    return(gtree)
-    
-}
-
-# reorder and preserves node labels
-#' @export
-to_phylo_reorder = function(graph) {
-    df <- igraph::as_data_frame(graph)
-    node_counts <- table(c(df$to, df$from))
-    tips <- names(node_counts)[node_counts == 1]
-    nodes <- names(node_counts)[node_counts > 1]
-    attr <- igraph::vertex_attr(graph)
-    tipn <- 1:length(tips)
-    names(tipn) <- tips
-    noden <- (length(tips) + 1):(length(tips) + length(nodes))
-    names(noden) <- nodes
-    renumber <- c(tipn, noden)
-    df$from <- as.numeric(renumber[df$from])
-    df$to <- as.numeric(renumber[df$to])
-    phylo <- list()
-    phylo$edge <- matrix(cbind(df$from, df$to), ncol = 2)
-    phylo$edge.length <- as.numeric(df$length)
-    phylo$tip.label <- tips
-    phylo$node.label <- nodes
-    phylo$Nnode <- length(nodes)
-    class(phylo) <- "phylo"
-    nnodes <- length(renumber)
-    phylo$nodes <- lapply(1:nnodes, function(x) {
-        n <- list()
-        n$id <- names(renumber[renumber == x])
-        n
-    })
-    phylo = reorder(phylo)
-    if (length(phylo$edge.length) == 0) {
-        phylo$edge.length = NULL
-    }
-    return(phylo)
-}
-
-
-#' Parallelized Clade Support Calculation
-#'
-#' Computes the support for each clade in a reference phylogeny (`phy`) across a list of phylogenetic trees (`phy_list`).
-#' The calculation can be parallelized across multiple cores for efficiency.
-#'
-#' @param phy A reference phylogeny of class \code{phylo}.
-#' @param phy_list A list of phylogenetic trees (of class \code{phylo}) to compare against the reference tree.
-#' @param rooted Logical; whether to treat the trees as rooted. Default is \code{FALSE}.
-#' @param ncores Integer; number of cores to use for parallel computation. Default is \code{1} (no parallelization).
-#' @param normalize Logical; if \code{TRUE}, the support values are normalized to the range [0, 1] by dividing by the number of trees. Default is \code{TRUE}.
-#'
-#' @return A numeric vector of clade support values, in the same order as the internal nodes of \code{phy}.
-#'         If \code{normalize = TRUE}, values are proportions; otherwise, they are counts.
-#'
-#' @export
-prop.clades.par <- function(phy, phy_list, rooted = FALSE,
-                            ncores = 1, 
-                            normalize = TRUE) {
-
-    nT <- length(phy_list)
-    if (nT == 0) stop("Need at least one tree in the tree list")
-
-    # If ncores = 1, skip chunking and parallel processing
-    if (ncores == 1) {
-        support <- prop.clades(phy, phy_list, rooted = rooted)
-    } else {
-        # split indices into mc.cores chunks
-        chunks <- split(seq_len(nT), cut(seq_len(nT), breaks = ncores, labels = FALSE))
-
-        # for each chunk, compute support counts
-        partials <- mclapply(chunks, function(idxs) {
-            pc = prop.clades(phy, phy_list[idxs], rooted = rooted)
-            pc[is.na(pc)] = 0
-            return(pc)
-        }, mc.cores = ncores)
-
-        # sum support across chunks
-        support <- Reduce(`+`, partials)
-    }
-
-    if (normalize) {
-        support <- support / nT
-    }
-
-    support[is.na(support)] = 0
-
-    return(support)
 }
 
 #' Add clade frequencies to a phylogenetic tree
@@ -1536,136 +762,4 @@ add_clade_freq = function(phy, edge_list, rooted = TRUE, ncores = 1) {
     freqs = prop_clades_par(phy$edge, edge_list, rooted = rooted, normalize = TRUE)
     phy$node.label = freqs
     return(phy)
-}
-
-#' @export
-parse_conf = function(phy) {
-    nodes = unname(unlist(phy$nodes))
-    nodes = nodes[!nodes %in% phy$tip.label]
-    conf_dict = setNames(phy$node.label, nodes)
-    return(conf_dict)
-}
-
-#' @export
-get_consensus = function(phylist, p = 0.5, check_labels = FALSE, rooted = TRUE, conf = FALSE) {
-    phy_cons = ape::consensus(phylist, p = p, rooted = rooted, check.labels = check_labels)
-    gtree_cons = phylo_to_gtree(phy_cons) %>% rename(conf = label)
-    return(gtree_cons)
-}
-
-#' @export
-getConfidentClades <- function(pp, p = 0.9, max_size = Inf, labels = TRUE, singletons = TRUE) {
-    # extract clade sizes and confidences
-    tip_labels   <- attr(pp, "labels")
-    sizes <- vapply(pp, length, integer(1))
-    nums  <- attr(pp, "number")
-    nt    <- nums[1]
-    if (is.null(nums)) {
-        stop("prop.part object must have 'number' attribute")
-    }
-    confs <- nums / nt
-
-    # exclude the trivial partition (all cells) and too‐large clades
-    trivial_idx   <- which(sizes == max(sizes))
-    candidate_idx <- setdiff(seq_along(pp), trivial_idx)
-    candidate_idx <- candidate_idx[sizes[candidate_idx] <= max_size]
-
-    # 1) iterative selection of confident, disjoint clades
-    selected_idx <- list()
-    remaining   <- candidate_idx
-    repeat {
-        # rank remaining by descending size
-        ord  <- remaining[order(sizes[remaining], decreasing = TRUE)]
-        # pick first with conf > p
-        keep <- ord[confs[ord] > p]
-        if (length(keep) == 0) break
-        pick <- keep[1]
-        selected_idx[[length(selected_idx) + 1]] <- pp[[pick]]
-        # remove any clades overlapping this pick
-        pick_cells <- pp[[pick]]
-        remaining  <- remaining[
-            vapply(remaining, function(i) {
-                length(intersect(pp[[i]], pick_cells)) == 0
-            }, logical(1))
-        ]
-    }
-
-    # 2) identify all tips and add singletons for any unassigned tips
-    if (singletons) {
-        all_tips_idx <- seq_along(tip_labels)
-        assigned     <- unique(unlist(selected_idx))
-        unassigned   <- setdiff(all_tips_idx, assigned)
-        # add each unassigned tip as a singleton clade
-        selected_idx <- c(
-            selected_idx,
-            lapply(unassigned, function(i) i)
-        )
-    }
-
-    # 3) optionally map indices to labels
-    if (labels) {
-        selected <- lapply(selected_idx, function(cl) tip_labels[cl])
-    } else {
-        selected <- selected_idx
-    }
-
-    return(selected)
-}
-
-
-map_cell_to_tree = function(tree, cell, logliks, logA_vec, leaf_only = FALSE, ncores = 1) {
-
-    RhpcBLASctl::blas_set_num_threads(1)
-    RhpcBLASctl::omp_set_num_threads(1)
-    RcppParallel::setThreadOptions(numThreads = ncores)
-
-    tree = TreeTools::Renumber(tree)
-    
-    if (leaf_only) {
-        nodes = 1:length(tree$tip.label)
-        labels = tree$tip.label
-    } else {
-        nodes = 1:(length(tree$tip.label) + tree$Nnode)
-        tree = add_node_names(tree)
-        labels = c(tree$tip.label, tree$node.label)
-    }
-
-    # check if all cells are in logliks
-    if (!all(c(cell, tree$tip.label) %in% colnames(logliks[[1]]))) {
-        stop(glue('Some cells not found in logliks'))
-    }
-
-    # generate all possible assignment to nodes
-    trees_new = lapply(
-        nodes,
-        function(i) {
-            TreeTools::AddTip(tree, where = i, label = cell)
-        })
-
-    edges_new = lapply(
-        trees_new, 
-        function(tree) {
-            reorderRcpp(tree$edge)
-        })
-
-    # subset likelihoods
-    logP_list = convert_logliks_to_logP_list(logliks, trees_new[[1]])
-
-    # score assignments
-    scores = score_trees_parallel(edges_new, logP_list, logA_vec)
-    
-    probs = exp(scores - logSumExp(scores))
-    
-    res = data.frame(guide_node = labels, cell_map = cell, probs = probs, scores = scores)
-
-    return(res)
-}
-
-save_qd_par = function(objects, paths, ncores = 1) {
-
-    RhpcBLASctl::blas_set_num_threads(1)
-    RhpcBLASctl::omp_set_num_threads(1)
-    RcppParallel::setThreadOptions(numThreads = ncores)
-
-    save_qd_cpp(objects, paths)
 }

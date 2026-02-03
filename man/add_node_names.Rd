@@ -10,6 +10,10 @@ add_node_names(tree, prefix = "Node", start_from_tip = TRUE)
 \item{tree}{A phylo object}
 
 \item{prefix}{Character prefix for node names (default "Node")}
+
+\item{start_from_tip}{Logical; if \code{TRUE} (default), node numbering starts
+from \code{ntip + 1} (standard ape convention); if \code{FALSE}, numbering starts
+from 1.}
 }
 \value{
 The same phylo object, with tree$node.label set to prefix + node numbers
