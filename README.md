@@ -1,6 +1,6 @@
 # MitoDrift
 
-MitoDrift reconstructs single-cell lineage relationships from mitochondrial DNA (mtDNA) mutations by modeling heteroplasmy drift and measurement noise {using a WF-HMM model}. It produces **confidence-calibrated phylogenies** and downstream summaries (trimmed trees, clade support, and clone partitions). The input to MitoDrift are mtDNA allele counts from single-cell genomics data {add list of protocols, e.g. mtscATAC-seq, ReDeeM, etc}, and outputs are a phylogenetic tree with posterior clade support, a confidence-trimmed tree, and clone-level summaries/visualizations {this is repetitive}
+MitoDrift reconstructs single-cell lineage relationships from mitochondrial DNA (mtDNA) mutations by modeling heteroplasmy drift and measurement noise with a Wright–Fisher hidden Markov Tree (WF-HMT). {add a sentence about the algorithm-EM, MCMC}. It produces **confidence-calibrated phylogenies** with posterior clade support, and downstream summaries such as confidence-trimmed trees and clone partitions. Inputs are mtDNA allele counts from single-cell genomics assays that capture mtDNA variation (e.g., mtscATAC-seq, MAESTER, ReDeeM).
 
 ---
 
@@ -24,19 +24,18 @@ remotes::install_cran("qs2", type = "source", configure.args = "--with-TBB --wit
 
 This uses a tiny example dataset packaged under `inst/extdata/`.
 
-{why are these in comments? should be shell codeblocks}
-# You can run this from a terminal in the package root:
-#
-#   Rscript inst/bin/run_mitodrift_em.R \
-#     --mut_dat inst/extdata/small_test_mut_dat.csv \
-#     --outdir mitodrift_demo \
-#     --tree_mcmc_iter 50 \
-#     --tree_mcmc_chains 2 \
-#     --tree_mcmc_burnin 10
-#
-# Outputs include:
-#   - mitodrift_object.rds
-#   - tree files and diagnostics
+You can run this from a terminal in the package root (these settings are intentionally small/fast for a demo):
+
+```bash
+Rscript inst/bin/run_mitodrift_em.R \
+  --mut_dat inst/extdata/small_test_mut_dat.csv \
+  --outdir mitodrift_demo \
+  --tree_mcmc_iter 50 \
+  --tree_mcmc_chains 2 \
+  --tree_mcmc_burnin 10
+```
+
+Outputs in `mitodrift_demo/` include `mitodrift_object.rds` plus tree files and diagnostics.
 
 Once the run finishes:
 
@@ -59,7 +58,6 @@ plot_phylo_heatmap2(
 )
 ```
 
-
 ## Input data requirements
 
 ### Long format (`mut_dat`)
@@ -68,26 +66,21 @@ One row per cell–variant pair, with counts for alternate allele (`a`) and tota
 | cell      | variant       | a    | d    |
 |-----------|---------------|------|------|
 | PD45534aj | MT_10448_T_C  | 0    | 2348 |
-| PD45534aj | MT_11787_T_C  | 1462 | 2348 |
+| PD45534aj | MT_11787_T_C  | 1462 | 2000 |
+| PD45534aj | MT_1244_T_C  | 2 | 1500 |
+{add one more cell rows}
 
 **Important**: Include rows where `a = 0` so that **every** cell × variant combination is represented (the observation model uses total depth).
 
-### Matrix format (`amat`, `dmat`)
+### Matrix pair format (`amat`, `dmat`)
 Wide matrices with `variant` in the first column and cells in subsequent columns. Use the same layout for `amat` (alt counts) and `dmat` (total depth).
-
-Helper conversion:
-
-```r
-long_dat <- mat_to_long(amat, dmat)
-```
-
 
 ## Inference settings & diagnostics
 
 Key MCMC settings (from `run_mitodrift_em.R`):
 - `tree_mcmc_burnin`: number of initial samples to discard.
-- `tree_mcmc_chains`: number of independent runs (10 typical; 50 for thorough analysis).
-- `tree_mcmc_batch_size`: how often to check convergence.
+- `tree_mcmc_chains`: number of independent runs (recommended: 10-50 chains).
+- `tree_mcmc_batch_size`: how often to save MCMC trace and check convergence.
 
 Convergence diagnostics:
 - ASDSF (`conv_thres`) summarizes agreement across chains.
@@ -98,11 +91,9 @@ Convergence diagnostics:
 ---
 
 ## Core concepts for interpretation
-- **Initial tree topology**: {Constructed using NJ on continuous VAF matrices, we find that this approach recovers the most lienage signal for a full binary tree. this is the point estimate for tree toplogy}
+- **Initial tree topology**: a point-estimate starting tree constructed using neighbor joining (NJ) on continuous VAF matrices. This provides a fully-resolved (binary) initialization that empirically captures strong lineage signal before posterior sampling.
 - **Posterior clade support**: per-node support values in `tree$node.label` (0–1) estimated from MCMC topology sampling.
 - **Confidence trimming**: collapse internal edges below a support cutoff `τ` to obtain a confidence-calibrated lineage tree.
-
----
 
 ---
 
@@ -110,7 +101,8 @@ Convergence diagnostics:
 
 1) **Trim** low-confidence edges:
 ```r
-phy_trim <- trim_tree(phy, conf = τ)
+tau <- 0.5
+phy_trim <- trim_tree(phy, conf = tau)
 ```
 
 2) **Optional**: subset or drop root singletons (if needed for a specific analysis).
@@ -124,8 +116,6 @@ clade_df <- assign_clones_polytomy(phy_trim, k = Inf, return_df = TRUE)
 
 ---
 
----
-
 ## References
 
-Check out our manuscript (preprint/published version will be added here) 
+Manuscript link (preprint/published version) will be added here.
