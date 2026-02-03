@@ -1,6 +1,6 @@
 # MitoDrift
 
-MitoDrift reconstructs single-cell lineage relationships from mitochondrial DNA (mtDNA) mutations by modeling heteroplasmy drift and measurement noise with a Wright–Fisher hidden Markov Tree (WF-HMT). {add a sentence about the algorithm-EM, MCMC}. It produces **confidence-calibrated phylogenies** with posterior clade support, and downstream summaries such as confidence-trimmed trees and clone partitions. Inputs are mtDNA allele counts from single-cell genomics assays that capture mtDNA variation (e.g., mtscATAC-seq, MAESTER, ReDeeM).
+MitoDrift reconstructs single-cell lineage relationships from mitochondrial DNA (mtDNA) mutations by modeling heteroplasmy drift and measurement noise with a Wright–Fisher hidden Markov Tree (WF-HMT). The inference pipeline performs maximum likliehood estimates of drift, mutation, and error rates via expectation-maximization (EM), and then performs phylogenetic MCMC to quantify uncertainty in tree topology. MitoDrift produces **confidence-calibrated phylogenies** with posterior clade support, and downstream summaries such as confidence-trimmed trees and clone partitions. Inputs can be mtDNA allele counts from any single-cell genomics assays that capture mtDNA variation (e.g., mtscATAC-seq, MAESTER, ReDeeM).
 
 ---
 
@@ -67,8 +67,8 @@ One row per cell–variant pair, with counts for alternate allele (`a`) and tota
 |-----------|---------------|------|------|
 | PD45534aj | MT_10448_T_C  | 0    | 2348 |
 | PD45534aj | MT_11787_T_C  | 1462 | 2000 |
-| PD45534aj | MT_1244_T_C  | 2 | 1500 |
-{add one more cell rows}
+| PD45534aj | MT_1244_T_C   | 2    | 1500 |
+| PD45534ak | MT_10448_T_C  | 5    | 2100 |
 
 **Important**: Include rows where `a = 0` so that **every** cell × variant combination is represented (the observation model uses total depth).
 
@@ -111,8 +111,6 @@ phy_trim <- trim_tree(phy, conf = tau)
 ```r
 clade_df <- assign_clones_polytomy(phy_trim, k = Inf, return_df = TRUE)
 ```
-
-**Interpretation**: root singletons reflect unresolved relationships and should not be interpreted as biologically unique clones.
 
 ---
 
