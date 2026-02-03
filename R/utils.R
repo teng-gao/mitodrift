@@ -150,7 +150,7 @@ trim_tree_size = function(tree, min_conf = 0, min_frac = 0, max_frac = Inf, meth
 #' Collapse branches with high expected mis-assignments.
 #'
 #' Computes the expected number of incorrectly assigned tips for each internal
-#' branch (based on $(1 - p) \times$ clade size, where $p$ is the branch
+#' branch (based on (1 - p) * clade size, where p is the branch
 #' confidence) and collapses branches whose expectation exceeds a tolerance
 #' derived from the total number of tips.
 #'
@@ -203,6 +203,7 @@ trim_tree_exp = function(tree, tol) {
 #' nodes, and assigns clone IDs whenever a clade has `<= k` tips. Tips directly
 #' attached to the root are always singleton clones. Ensures all tips receive
 #' an assignment, warning if late singletons are required.
+#' @export
 assign_clones_polytomy <- function(tree, k = Inf, paraphyletic = FALSE, return_df = TRUE) {
 
 	Ntip <- length(tree$tip.label)

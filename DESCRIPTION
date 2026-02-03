@@ -6,6 +6,8 @@ Authors@R:
            comment = c(ORCID = "0000-0002-0196-689X"))
 Description: Reconstructing single-cell lineage history using mitochondrial mutation drift dynamics
 License: MIT + file LICENSE
+URL: https://teng-gao.github.io/mitodrift/, https://github.com/teng-gao/mitodrift
+BugReports: https://github.com/teng-gao/mitodrift/issues
 Encoding: UTF-8
 LazyData: true
 Depends: 

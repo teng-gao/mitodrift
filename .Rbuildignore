@@ -1,2 +1,6 @@
 # Ignore Cursor/AppleDouble checkpoint files in src/ (e.g., src/._foo.cpp or src/sub/._bar.cc)
 ^src/(?:[^/]+/)*\._
+^docs$
+^pkgdown$
+^\\.github$
+^_pkgdown\\.yml$

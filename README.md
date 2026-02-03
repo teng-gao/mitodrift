@@ -1,6 +1,11 @@
 # MitoDrift
 
-MitoDrift reconstructs single-cell lineage relationships from mitochondrial DNA (mtDNA) mutations by modeling heteroplasmy drift and measurement noise with a Wright–Fisher hidden Markov Tree (WF-HMT). The inference pipeline performs maximum likliehood estimates of drift, mutation, and error rates via expectation-maximization (EM), and then performs phylogenetic MCMC to quantify uncertainty in tree topology. MitoDrift produces **confidence-calibrated phylogenies** with posterior clade support, and downstream summaries such as confidence-trimmed trees and clone partitions. Inputs can be mtDNA allele counts from any single-cell genomics assays that capture mtDNA variation (e.g., mtscATAC-seq, MAESTER, ReDeeM).
+<!-- badges: start -->
+[![pkgdown](https://github.com/teng-gao/mitodrift/actions/workflows/pkgdown.yaml/badge.svg)](https://github.com/teng-gao/mitodrift/actions/workflows/pkgdown.yaml)
+[![Docs](https://img.shields.io/badge/docs-pkgdown-blue.svg)](https://teng-gao.github.io/mitodrift/)
+<!-- badges: end -->
+
+MitoDrift reconstructs single-cell lineage relationships from mitochondrial DNA (mtDNA) mutations by modeling heteroplasmy drift and measurement noise with a Wright–Fisher hidden Markov Tree (WF-HMT). It applies population genetics principles (genetic drift) to model mtDNA heteroplasmy in single cells in order to reconstruct high-precision lineage trees from single-cell genomics/multiome data. MitoDrift uses expectation-maximization (EM) to obtain maximum-likelihood estimates of drift, mutation, and error rates, then performs phylogenetic MCMC to quantify the uncertainty in tree topology. The primary output is a *confidence-calibrated phylogeny* with posterior clade support, and downstream summaries such as confidence-trimmed trees and clone partitions. Inputs can be mtDNA allele counts from any single-cell genomics assays that capture mtDNA variation (e.g., mtscATAC-seq, MAESTER, ReDeeM).~
 
 ---
 
@@ -117,3 +122,12 @@ clade_df <- assign_clones_polytomy(phy_trim, k = Inf, return_df = TRUE)
 ## References
 
 Manuscript link (preprint/published version) will be added here.
+
+---
+
+## Documentation site
+
+- Online docs: <https://teng-gao.github.io/mitodrift/>
+- Local preview:
+  - `R -q -e 'pkgdown::build_site()'`
+  - `R -q -e 'pkgdown::preview_site()'`
