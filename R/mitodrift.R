@@ -1547,31 +1547,6 @@ parse_conf = function(phy) {
 }
 
 #' @export
-phylo_to_gtree = function(phy) {
-        
-    tip_nodes <- data.frame(
-        name = phy$tip.label
-    )
-    
-    internal_nodes <- data.frame(
-        name = paste0("Node", seq_len(phy$Nnode))
-    )
-
-    if (!is.null(phy$node.label)) {
-        internal_nodes$label = phy$node.label
-    }
-    
-    nodes <- bind_rows(tip_nodes, internal_nodes)
-    edges <- data.frame(phy$edge)
-    colnames(edges) <- c("from", "to")
-    
-    gtree <- tbl_graph(nodes = nodes, edges = edges, directed = TRUE)
-    
-    return(gtree)
-}
-
-
-#' @export
 get_consensus = function(phylist, p = 0.5, check_labels = FALSE, rooted = TRUE, conf = FALSE) {
     phy_cons = ape::consensus(phylist, p = p, rooted = rooted, check.labels = check_labels)
     gtree_cons = phylo_to_gtree(phy_cons) %>% rename(conf = label)
@@ -1637,30 +1612,6 @@ getConfidentClades <- function(pp, p = 0.9, max_size = Inf, labels = TRUE, singl
     return(selected)
 }
 
-#' Add "Node<n>" labels to the internal nodes of a phylo tree
-#'
-#' @param tree A phylo object
-#' @param prefix Character prefix for node names (default "Node")
-#' @return The same phylo object, with tree$node.label set to prefix + node numbers
-add_node_names <- function(tree, prefix = "Node", start_from_tip = TRUE) {
-  if (!inherits(tree, "phylo")) {
-    stop("`tree` must be a phylo object")
-  }
-  ntip  <- length(tree$tip.label)
-  nnode <- tree$Nnode
-
-  # internal node IDs run from ntip+1 to ntip+nnode
-  if (start_from_tip) {
-    ids <- seq(ntip + 1, ntip + nnode)
-  } else {
-    ids <- seq(1, nnode)
-  }
-
-  # assign labels
-  tree$node.label <- paste0(prefix, ids)
-
-  return(tree)
-}
 
 map_cell_to_tree = function(tree, cell, logliks, logA_vec, leaf_only = FALSE, ncores = 1) {
 

@@ -1,32 +1,73 @@
+#' Plot a phylogenetic tree with VAF heatmap and annotations
+#'
+#' @param tree A `phylo` object or `tbl_graph` tree.
+#' @param df_var Optional data frame of variant calls with columns `cell`, `variant`, and either `vaf`
+#'   or `a`/`d` for computing VAF.
+#' @param branch_width Numeric branch line width for the tree.
+#' @param root_edge Logical; included for compatibility with earlier calls.
+#' @param dot_size Numeric size for tip/node points.
+#' @param ylim Optional y-axis limits (unused in current implementation).
+#' @param min_cells Integer minimum number of cells with VAF > 0 required to keep a variant.
+#' @param tip_annot Optional data frame of tip annotations with columns `cell` and `annot`.
+#' @param annot_scale Optional ggplot scale for annotation colors.
+#' @param feature_mat Optional matrix of features (rows = features, columns = cells) to plot as a heatmap.
+#' @param feature_limits Numeric vector of length 2 giving limits for feature heatmap color scale.
+#' @param feature_scale Optional ggplot scale for feature heatmap colors.
+#' @param rescale Logical; if `TRUE`, z-score features per row before plotting.
+#' @param title Optional plot title.
+#' @param ytitle Optional VAF heatmap y-axis title.
+#' @param xtitle Optional VAF heatmap x-axis title.
+#' @param label_site Logical; included for compatibility with earlier calls.
+#' @param cell_annot Optional data frame or list of data frames for annotation bars.
+#' @param tip_lab Logical; if `TRUE`, show tip labels on the tree.
+#' @param node_lab Logical; if `TRUE`, show internal node labels on the tree.
+#' @param layered Logical; if `TRUE`, render annotation bars as layered tiles.
+#' @param annot_bar_height Numeric height for each annotation bar panel.
+#' @param clade_bar_height Numeric height for clade bar panel (unused in current implementation).
+#' @param feature_height Numeric height for the feature heatmap panel.
+#' @param het_max Numeric maximum VAF for heatmap color scaling.
+#' @param conf_min Numeric minimum value for confidence color scale.
+#' @param conf_max Numeric maximum value for confidence color scale.
+#' @param conf_label Logical; if `TRUE`, label node confidence values.
+#' @param branch_length Logical; if `FALSE`, drop branch lengths before plotting.
+#' @param node_conf Logical; if `TRUE`, plot node confidence (requires `tbl_graph`).
+#' @param annot_pal Optional palette (vector or list) for annotation bars.
+#' @param annot_legend Logical; if `TRUE`, show annotation legends.
+#' @param label_group Logical; if `TRUE`, label groups in annotation bars.
+#' @param text_size Numeric base text size for labels.
+#' @param annot_title_size Numeric size for annotation strip titles.
+#' @param node_label_size Numeric size for node/tip labels.
+#' @param mut Optional mutation column name in `tree` to color nodes by VAF.
+#' @param mark_low_cov Logical; if `TRUE`, mark low-coverage cells on the VAF heatmap.
+#' @param facet_by_group Logical; if `TRUE`, facet VAF heatmap by `group` column.
+#' @param flip Logical; if `TRUE`, flip the tree orientation.
+#' @param ladderize Logical; if `TRUE`, ladderize the tree.
 #' @param node_scores Optional named numeric vector of node/tip scores used to color tree branches.
 #'   Names may be tip labels, internal node labels, or numeric node IDs.
-#' @param show_variant_names Logical. If `TRUE`, show variant tick labels on the VAF heatmap; hide when `FALSE`.
-#' @param annot_title_size Numeric size for annotation strip titles.
-#' @param show_tree_y_axis Logical. If `TRUE`, show y-axis tick marks and tick labels on the ggtree panel.
-#' @param feature_legend Logical. If `TRUE`, display the legend for the feature heatmap; otherwise hide it.
-#' @param raster Logical. If `TRUE`, rasterize each plot panel (tree, heatmap, annotations, features) via `ggrastr`.
+#' @param node_score_limits Numeric vector of length 2 giving limits for node score colors.
+#' @param variants_highlight Optional vector of variant names to bold on the heatmap axis.
+#' @param show_variant_names Logical; if `TRUE`, show variant tick labels on the VAF heatmap; hide when `FALSE`.
+#' @param show_tree_y_axis Logical; if `TRUE`, show y-axis ticks/labels on the tree panel.
+#' @param feature_legend Logical; if `TRUE`, display the legend for the feature heatmap; otherwise hide it.
+#' @param raster Logical; if `TRUE`, rasterize each plot panel via `ggrastr`.
 #' @param raster_dpi Numeric DPI to use when rasterizing panels.
+#'
+#' @return A patchwork/ggplot object combining the tree, annotations, and heatmaps.
 #' @export 
-plot_phylo_heatmap2 = function(gtree, df_var = NULL, branch_width = 0.25, root_edge = TRUE, dot_size = 1, ylim = NULL, min_cells = 1,
+plot_phylo_heatmap2 = function(phylo, df_var = NULL, branch_width = 0.25, root_edge = TRUE, dot_size = 1, ylim = NULL, min_cells = 1,
     tip_annot = NULL, annot_scale = NULL, feature_mat = NULL, feature_limits = c(-2,2), feature_scale = NULL, rescale = FALSE,
     title = NULL, ytitle = NULL, xtitle = NULL, label_site = FALSE, cell_annot = NULL, tip_lab = FALSE, node_lab = FALSE, layered = FALSE, annot_bar_height = 0.1, clade_bar_height = 1, feature_height = 1,
     het_max = 0.1, conf_min = 0, conf_max = 1, conf_label = FALSE, branch_length = TRUE, node_conf = FALSE, annot_pal = NULL, annot_legend = FALSE, label_group = FALSE,
     text_size = 3, annot_title_size = text_size, node_label_size = 1, mut = NULL, mark_low_cov = FALSE, facet_by_group = FALSE, flip = TRUE, ladderize = TRUE,
     node_scores = NULL, node_score_limits = c(-4,4), variants_highlight = NULL, show_variant_names = TRUE, show_tree_y_axis = FALSE, feature_legend = TRUE,
     raster = FALSE, raster_dpi = 300) {
-
-    if (inherits(gtree, 'tbl_graph')) {
-        phylo = to_phylo_reorder(gtree)
-    } else {
-        phylo = gtree
-        node_conf = FALSE
-    }
     
     if (!branch_length) {
         phylo$edge.length = NULL
     }
-
+    
     p_tree = phylo %>%
+        add_node_names() %>%
         ggtree(ladderize = ladderize, linewidth = branch_width, right = flip) + 
         theme_bw() +
         theme(
@@ -61,8 +102,10 @@ plot_phylo_heatmap2 = function(gtree, df_var = NULL, branch_width = 0.25, root_e
         p_tree <- p_tree + ggnewscale::new_scale_color()
     }
 
-    # plot mutation VAF
+    # plot inferred ancestral VAF
     if (!is.null(mut)) {
+
+        gtree = phylo_to_gtree(phylo)
 
         dat = gtree %>% activate(nodes) %>%
             as.data.frame() %>% select(all_of(c('name', p_v = mut)))
@@ -75,13 +118,17 @@ plot_phylo_heatmap2 = function(gtree, df_var = NULL, branch_width = 0.25, root_e
     }
 
     if (node_conf) {
+        
+        gtree = phylo_to_gtree(phylo) %>% mutate(conf = as.numeric(label))
 
         dat = gtree %>% activate(nodes) %>%
             mutate(isRoot = node_is_root()) %>%
+            filter(!is.na(conf)) %>%
             as.data.frame() %>% 
             select(any_of(c('name', 'isRoot', 'conf')))
 
         if ('conf' %in% colnames(dat)) {
+
             p_tree = p_tree %<+% 
                 dat + 
                 geom_nodepoint(aes(fill = conf, subset = !isTip & !isRoot, x = branch), size = dot_size, pch = 22, stroke = 0) +

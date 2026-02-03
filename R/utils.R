@@ -51,6 +51,9 @@ mat_to_long = function(amat, dmat) {
 #' @param tree A rooted `phylo` object.
 #' @return Integer node ID for the root.
 find_root = function(tree) {
+	if (!ape::is.rooted(tree)) {
+		stop("tree must be rooted")
+	}
 	setdiff(tree$edge[, 1], tree$edge[, 2])[1]
 }
 
@@ -86,6 +89,7 @@ trim_tree = function(tree, conf, collapse_trivial = TRUE) {
     if (!is.binary(tree)) {stop("Tree must be binary")}
     n_tip = length(tree$tip.label)
     node_confs = as.numeric(tree$node.label)
+    # treat NA as no confidence
     node_confs[is.na(node_confs)] = 0
     collapse_list = which(node_confs < conf) + n_tip
 
@@ -348,4 +352,63 @@ assign_clones_polytomy <- function(tree, k = Inf, paraphyletic = FALSE, return_d
 			clade_node = clone_node_assign
 		))
 	}
+}
+
+
+#' Add "Node<n>" labels to the internal nodes of a phylo tree
+#'
+#' @param tree A phylo object
+#' @param prefix Character prefix for node names (default "Node")
+#' @return The same phylo object, with tree$node.label set to prefix + node numbers
+add_node_names <- function(tree, prefix = "Node", start_from_tip = TRUE) {
+  if (!inherits(tree, "phylo")) {
+    stop("`tree` must be a phylo object")
+  }
+  ntip  <- length(tree$tip.label)
+  nnode <- tree$Nnode
+
+  # internal node IDs run from ntip+1 to ntip+nnode
+  if (start_from_tip) {
+    ids <- seq(ntip + 1, ntip + nnode)
+  } else {
+    ids <- seq(1, nnode)
+  }
+
+  # assign labels
+  tree$node.label <- paste0(prefix, ids)
+
+  return(tree)
+}
+
+
+#' Convert a `phylo` object to a `tbl_graph`
+#'
+#' Builds a `tbl_graph` with tip nodes labeled by `phy$tip.label` and internal
+#' nodes labeled from `phy$node.label`. If internal labels are missing, they are
+#' created via `add_node_names()`.
+#'
+#' @param phy A `phylo` object.
+#' @return A `tbl_graph` with `nodes` and `edges` from the input tree.
+#' @export
+phylo_to_gtree = function(phy) {
+        
+    tip_nodes <- data.frame(
+        name = phy$tip.label
+    )
+
+	internal_nodes <- data.frame(
+		name = add_node_names(phy)$node.label
+	)
+
+    if (!is.null(phy$node.label)) {
+        internal_nodes$label = phy$node.label
+    }
+    
+    nodes <- bind_rows(tip_nodes, internal_nodes)
+    edges <- data.frame(phy$edge)
+    colnames(edges) <- c("from", "to")
+    
+    gtree <- tbl_graph(nodes = nodes, edges = edges, directed = TRUE)
+    
+    return(gtree)
 }
