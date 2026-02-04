@@ -18,7 +18,6 @@ Imports:
     data.table,
     dplyr,
     expm,
-    fmcmc,
     ggplot2,
     ggnewscale,
     ggraph,
