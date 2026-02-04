@@ -360,7 +360,7 @@ MitoDrift <- R6::R6Class("MitoDrift",
         #' @param mcmc_trace_file MCMC result file (optional, uses stored file if NULL)
         #' @param ncores Number of cores to use (default: 1)
         #' @param ncores_qs Number of cores to use for QS operations (default: 1)
-        #' @return Trimmed tree with clade frequencies
+        #' @return Annotate tree with clade frequencies
         annotate_tree = function(
             burnin = 0,
             max_iter = 1e8,

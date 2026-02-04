@@ -46,3 +46,4 @@ Performs nearest-neighbor interchange (NNI) hill-climbing to find the
 tree topology that maximizes the belief-propagation score. Uses compiled
 C++ routines for speed.
 }
+\keyword{internal}

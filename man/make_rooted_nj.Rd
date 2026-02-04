@@ -19,3 +19,4 @@ A phylo object
 \description{
 Make a rooted NJ tree
 }
+\keyword{internal}

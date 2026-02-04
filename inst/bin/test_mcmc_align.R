@@ -80,7 +80,7 @@ scores <- mclapply(
         utree <- unique_trees[[i]]
         
         # Calculate log likelihood
-        logL <- decode_tree(utree, A, liks, score_only = TRUE)$logZ %>% sum()
+        logL <- mitodrift:::decode_tree(utree, A, liks, score_only = TRUE)$logZ %>% sum()
         
         data.frame(i = i, logL = logL)
     }

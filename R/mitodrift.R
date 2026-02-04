@@ -33,7 +33,7 @@ NULL
 #'   iterations.
 #' @return A `multiPhylo` list of trees visited during optimization, each
 #'   carrying a `logZ` element with the log-partition-function score.
-#' @export
+#' @keywords internal
 optimize_tree_cpp = function(
     tree_init = NULL, logP, logA, max_iter = 100,
     outfile = NULL, resume = FALSE, ncores = 1, trace_interval = 5
@@ -307,7 +307,7 @@ get_transition_mat_wf_hmm_wrapper = function(k, eps, N, ngen, safe = FALSE) {
 #' @param dist_method The distance method to use
 #' @param ncores Number of threads for `parallelDist::parDist` (default: 1)
 #' @return A phylo object
-#' @export
+#' @keywords internal
 make_rooted_nj = function(vmat, dist_method = 'manhattan', ncores = 1) {
     vmat[is.na(vmat)] = 0
     vmat = cbind(vmat, outgroup = 0) %>% as.matrix %>% t
@@ -345,7 +345,7 @@ make_rooted_nj = function(vmat, dist_method = 'manhattan', ncores = 1) {
 #' @return A `tbl_graph` tree with per-variant posterior means (columns
 #'   `p_<variant>`) and a `logZ` vector of log-partition-function values.
 #'   When `debug = TRUE`, a list with additional diagnostic components.
-#' @export
+#' @keywords internal
 decode_tree = function(
     tn, A, liks, post_max = FALSE, store_bels = FALSE, store_crfs = FALSE, debug = FALSE,
     score_only = FALSE
@@ -513,7 +513,7 @@ safe_read_chain = function(path, ncores = 1) {
 #'   below this threshold instead of using `max_iter`.
 #' @param resume Logical; if `TRUE`, resume from existing `outfile`.
 #' @return A list of edge-list chains (one list of edge matrices per chain).
-#' @export
+#' @keywords internal
 run_tree_mcmc_batch = function(
     phy_init, logP_list, logA_vec, outfile, diagfile = NULL, diag = TRUE, max_iter = 100, nchains = 1, ncores = 1, ncores_qs = 1,
     batch_size = 1000, conv_thres = NULL, resume = FALSE
@@ -755,7 +755,7 @@ collect_edges = function(edge_list_all, burnin = 0, max_iter = Inf) {
 #' @param rooted Logical; whether to treat the trees as rooted. Default is \code{TRUE}.
 #' @param ncores Integer; number of cores to use for parallel computation. Default is \code{1} (no parallelization).
 #' @return A phylo object with clade frequencies added as node labels.
-#' @export
+#' @keywords internal
 add_clade_freq = function(phy, edge_list, rooted = TRUE, ncores = 1) {
     RhpcBLASctl::blas_set_num_threads(1)
     RhpcBLASctl::omp_set_num_threads(1)

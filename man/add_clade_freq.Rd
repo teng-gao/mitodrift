@@ -22,3 +22,4 @@ A phylo object with clade frequencies added as node labels.
 Computes the frequency (support) of each clade in a reference phylogeny (\code{phy}) across a list of phylogenetic trees (\code{edge_list}),
 and adds these frequencies as node labels to the reference tree.
 }
+\keyword{internal}
