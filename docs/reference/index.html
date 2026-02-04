@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">mitodrift</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.1.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -50,34 +50,34 @@
         <dd>MitoDrift R6 Class</dd>
       </dl><dl><dt>
 
-          <code><a href="fit_params_em.html">fit_params_em()</a></code>
-
-        </dt>
-        <dd>Fit tree parameters using EM algorithm</dd>
-      </dl><dl><dt>
-
           <code><a href="fit_params_em_cpp.html">fit_params_em_cpp()</a></code>
 
         </dt>
         <dd>Fit tree parameters using EM (BP-backed, native ordering)</dd>
       </dl><dl><dt>
 
-          <code><a href="fit_params_mcmc.html">fit_params_mcmc()</a></code>
+          <code><a href="decode_tree.html">decode_tree()</a></code>
 
         </dt>
-        <dd>Fit tree parameters using MCMC</dd>
-      </dl><dl><dt>
-
-          <code><a href="decode_tree_em.html">decode_tree_em()</a></code>
-
-        </dt>
-        <dd>Decode tree using EM algorithm</dd>
+        <dd>Decode a tree using CRF belief propagation (R version)</dd>
       </dl><dl><dt>
 
           <code><a href="make_rooted_nj.html">make_rooted_nj()</a></code>
 
         </dt>
         <dd>Make a rooted NJ tree</dd>
+      </dl><dl><dt>
+
+          <code><a href="optimize_tree_cpp.html">optimize_tree_cpp()</a></code>
+
+        </dt>
+        <dd>Optimize tree topology using C++ NNI moves</dd>
+      </dl><dl><dt>
+
+          <code><a href="run_tree_mcmc_batch.html">run_tree_mcmc_batch()</a></code>
+
+        </dt>
+        <dd>Run tree-topology MCMC in batches with convergence monitoring</dd>
       </dl></div><div class="section level2">
       <h2 id="clades-and-support">Clades and support<a class="anchor" aria-label="anchor" href="#clades-and-support"></a></h2>
 
@@ -97,30 +97,6 @@
         <dd>Compute ASDSF across chains using clades from a target tree</dd>
       </dl><dl><dt>
 
-          <code><a href="compute_target_tree_asdsf_sliding.html">compute_target_tree_asdsf_sliding()</a></code>
-
-        </dt>
-        <dd>Sliding-window ASDSF for a target tree</dd>
-      </dl><dl><dt>
-
-          <code><a href="get_asdsfs.html">get_asdsfs()</a></code>
-
-        </dt>
-        <dd>Optimized version of <code>get_asdsfs</code> from rwty</dd>
-      </dl><dl><dt>
-
-          <code><a href="get_slide_freq_table.html">get_slide_freq_table()</a></code>
-
-        </dt>
-        <dd>Optimized version of <code>get_slide_freq_table</code> from rwty</dd>
-      </dl><dl><dt>
-
-          <code><a href="prop.clades.par.html">prop.clades.par()</a></code>
-
-        </dt>
-        <dd>Parallelized Clade Support Calculation</dd>
-      </dl><dl><dt>
-
           <code><a href="add_clade_freq.html">add_clade_freq()</a></code>
 
         </dt>
@@ -131,6 +107,12 @@
 
         </dt>
         <dd>Add "Node<n>" labels to the internal nodes of a phylo tree</n></dd>
+      </dl><dl><dt>
+
+          <code><a href="collect_chains.html">collect_chains()</a></code>
+
+        </dt>
+        <dd>Collect MCMC chains into a multiPhylo object</dd>
       </dl></div><div class="section level2">
       <h2 id="trimming-and-clones">Trimming and clones<a class="anchor" aria-label="anchor" href="#trimming-and-clones"></a></h2>
 
@@ -173,22 +155,10 @@
 
       <dl><dt>
 
-          <code><a href="get_leaf_liks_mat.html">get_leaf_liks_mat()</a></code>
-
-        </dt>
-        <dd>get leaft likelihoods given mutation data in matrix format</dd>
-      </dl><dl><dt>
-
           <code><a href="get_leaf_liks_mat_cpp.html">get_leaf_liks_mat_cpp()</a></code>
 
         </dt>
         <dd>Leaf likelihood matrix via C++ backend</dd>
-      </dl><dl><dt>
-
-          <code><a href="get_leaf_liks_mat_old.html">get_leaf_liks_mat_old()</a></code>
-
-        </dt>
-        <dd>get leaft likelihoods given mutation data in matrix format</dd>
       </dl><dl><dt>
 
           <code><a href="get_transition_mat_wf_hmm.html">get_transition_mat_wf_hmm()</a></code>
@@ -197,16 +167,16 @@
         <dd>Get the transition matrix for WF model with HMM (with caching) TODO: add log option for small probabilities</dd>
       </dl><dl><dt>
 
-          <code><a href="get_transition_mat_wf_hmm_wrapper.html">get_transition_mat_wf_hmm_wrapper()</a></code>
+          <code><a href="convert_logliks_to_logP_list.html">convert_logliks_to_logP_list()</a></code>
 
         </dt>
-        <dd>Wrapper function to interpolate non-integer generations</dd>
+        <dd>Convert log-likelihood matrices to a log-probability list (row-major)</dd>
       </dl><dl><dt>
 
-          <code><a href="get_param_lik_cpp.html">get_param_lik_cpp()</a></code>
+          <code><a href="get_vaf_bins.html">get_vaf_bins()</a></code>
 
         </dt>
-        <dd>Compute the likelihood of a tree given model parameters</dd>
+        <dd>Generate VAF bin midpoints</dd>
       </dl><dl><dt>
 
           <code><a href="save_qd_cpp.html">save_qd_cpp()</a></code>
@@ -242,12 +212,6 @@
 
         </dt>
         <dd>Plot a phylogenetic tree with VAF heatmap and annotations</dd>
-      </dl><dl><dt>
-
-          <code><a href="smooth_features_phylo.html">smooth_features_phylo()</a></code>
-
-        </dt>
-        <dd>Smooth feature matrix over phylogenetic neighbors</dd>
       </dl></div><div class="section level2">
       <h2 id="data-utilities">Data utilities<a class="anchor" aria-label="anchor" href="#data-utilities"></a></h2>
 
@@ -273,22 +237,16 @@
         <dd>Convert a long format mutation data frame to a matrix</dd>
       </dl><dl><dt>
 
-          <code><a href="find_root.html">find_root()</a></code>
-
-        </dt>
-        <dd>Find the root node ID of a rooted phylogeny.</dd>
-      </dl><dl><dt>
-
-          <code><a href="find_root_split.html">find_root_split()</a></code>
-
-        </dt>
-        <dd>Get the clade node IDs adjacent to the root.</dd>
-      </dl><dl><dt>
-
           <code><a href="phylo_to_gtree.html">phylo_to_gtree()</a></code>
 
         </dt>
         <dd>Convert a <code>phylo</code> object to a <code>tbl_graph</code></dd>
+      </dl><dl><dt>
+
+          <code><a href="reorder_phylo.html">reorder_phylo()</a></code>
+
+        </dt>
+        <dd>Reorder a phylo object to postorder</dd>
       </dl></div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside></div>

@@ -119,10 +119,6 @@ clade_df <- assign_clones_polytomy(phy_trim, k = Inf, return_df = TRUE)
 
 ---
 
-## References
-
-Manuscript link (preprint/published version) will be added here.
-
 ---
 
 ## Documentation site

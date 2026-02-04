@@ -31,20 +31,17 @@ reference:
   - title: Core workflow
     contents:
       - MitoDrift
-      - fit_params_em
       - fit_params_em_cpp
-      - fit_params_mcmc
-      - decode_tree_em
+      - decode_tree
       - make_rooted_nj
+      - optimize_tree_cpp
+      - run_tree_mcmc_batch
   - title: Clades and support
     contents:
       - compute_target_tree_asdsf
-      - compute_target_tree_asdsf_sliding
-      - get_asdsfs
-      - get_slide_freq_table
-      - prop.clades.par
       - add_clade_freq
       - add_node_names
+      - collect_chains
   - title: Trimming and clones
     contents:
       - trim_tree
@@ -52,23 +49,19 @@ reference:
       - assign_clones_polytomy
   - title: Likelihood helpers
     contents:
-      - get_leaf_liks_mat
       - get_leaf_liks_mat_cpp
-      - get_leaf_liks_mat_old
       - get_transition_mat_wf_hmm
-      - get_transition_mat_wf_hmm_wrapper
-      - get_param_lik_cpp
+      - convert_logliks_to_logP_list
+      - get_vaf_bins
       - save_qd_cpp
       - logSumExp
   - title: Visualization
     contents:
       - plot_phylo_circ
       - plot_phylo_heatmap2
-      - smooth_features_phylo
   - title: Data utilities
     contents:
       - mat_to_long
       - long_to_mat
-      - find_root
-      - find_root_split
       - phylo_to_gtree
+      - reorder_phylo
