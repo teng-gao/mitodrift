@@ -5,7 +5,9 @@
 [![Docs](https://img.shields.io/badge/docs-pkgdown-blue.svg)](https://teng-gao.github.io/mitodrift/)
 <!-- badges: end -->
 
-MitoDrift reconstructs single-cell lineage relationships from mitochondrial DNA (mtDNA) mutations by modeling heteroplasmy drift and measurement noise with a Wright–Fisher hidden Markov Tree (WF-HMT). It applies population genetics principles (genetic drift) to model mtDNA heteroplasmy in single cells in order to reconstruct high-precision lineage trees from single-cell genomics/multiome data. MitoDrift uses expectation-maximization (EM) to obtain maximum-likelihood estimates of drift, mutation, and error rates, then performs phylogenetic MCMC to quantify the uncertainty in tree topology. The primary output is a *confidence-calibrated phylogeny* with posterior clade support, and downstream summaries such as confidence-trimmed trees and clone partitions. Inputs can be mtDNA allele counts from any single-cell genomics assays that capture mtDNA variation (e.g., mtscATAC-seq, MAESTER, ReDeeM).~
+MitoDrift reconstructs single-cell lineage relationships from mitochondrial DNA (mtDNA) mutations by modeling heteroplasmy drift and measurement noise with a Wright–Fisher hidden Markov Tree (WF-HMT). It applies population genetics principles (genetic drift) to model mtDNA heteroplasmy in single cells in order to reconstruct high-precision lineage trees from single-cell genomics/multiome data. MitoDrift uses expectation-maximization (EM) to obtain maximum-likelihood estimates of drift, mutation, and error rates, then performs phylogenetic MCMC to quantify the uncertainty in tree topology. The primary output is a *confidence-calibrated* phylogeny with posterior clade support, and downstream summaries such as confidence-trimmed trees and clone partitions. Inputs can be mtDNA allele counts from any single-cell genomics assays that capture mtDNA variation (e.g., mtscATAC-seq, MAESTER, ReDeeM).
+
+<img src="man/figures/mitodrift_schematic.png" width="100%" />
 
 ---
 
@@ -17,7 +19,7 @@ if (!requireNamespace("devtools", quietly = TRUE)) install.packages("devtools")
 devtools::install_local(".")
 ```
 
-For faster MCMC trace IO, install **qs2** with TBB:
+For faster MCMC trace IO, install `qs2` with TBB:
 
 ```r
 remotes::install_cran("qs2", type = "source", configure.args = "--with-TBB --with-simd=AVX2")
@@ -75,55 +77,68 @@ One row per cell–variant pair, with counts for alternate allele (`a`) and tota
 | PD45534aj | MT_1244_T_C   | 2    | 1500 |
 | PD45534ak | MT_10448_T_C  | 5    | 2100 |
 
-**Important**: Include rows where `a = 0` so that **every** cell × variant combination is represented (the observation model uses total depth).
+IMPORTANT: Include rows where `a = 0` so that every cell × variant combination is represented (the observation model uses total depth).
 
 ### Matrix pair format (`amat`, `dmat`)
 Wide matrices with `variant` in the first column and cells in subsequent columns. Use the same layout for `amat` (alt counts) and `dmat` (total depth).
 
 ## Inference settings & diagnostics
 
-Key MCMC settings (from `run_mitodrift_em.R`):
-- `tree_mcmc_burnin`: number of initial samples to discard.
-- `tree_mcmc_chains`: number of independent runs (recommended: 10-50 chains).
-- `tree_mcmc_batch_size`: how often to save MCMC trace and check convergence.
+### Model parameters (EM fitting)
 
-Convergence diagnostics:
-- ASDSF (`conv_thres`) summarizes agreement across chains.
-- Diagnostics are written to `tree_mcmc_diag.rds`.
-- For interrupted runs, use `--resume TRUE` to continue from saved traces.
+- `--fit_params`: Enable automatic parameter fitting via EM (default: `TRUE`)
+- `--fit_param_max_iter`: Maximum EM iterations (default: 100)
+- `--fit_param_epsilon`: EM convergence threshold on parameter changes (default: 1e-3)
+- `--k`: Number of VAF bins for discretizing heteroplasmy levels (default: 20)
+- `--npop`: Population size for Wright-Fisher model (default: 600)
+- `--eps`: Mutation rate per branch (default: 0.001; auto-fitted if `fit_params=TRUE`)
+- `--err`: Variant detection error rate (default: 0; auto-fitted if `fit_params=TRUE`)
+- `--ngen`: Number of WF generations (default: 100; auto-fitted if `fit_params=TRUE`)
 
+### Phylogenetic MCMC settings
+
+- `--tree_mcmc_chains`: Number of independent MCMC runs (default: 1; recommended 10-50 for robust inference. For large trees e.g., >8000 cells, use less chains to avoid memory limits)
+- `--tree_mcmc_iter`: Maximum iterations per chain (default: 100; can be overridden by automatic termination via ASDSF convergence check)
+- `--conv_thres`: ASDSF threshold for MCMC termination (default: `NULL`; e.g., 0.05-0.1 for auto-convergence). ASDSF (Average Standard Deviation of Split Frequencies) summarizes topology agreement across chains. A lower value indicates good mixing. Values < 0.05 indicate good convergence; < 0.1 is acceptable for exploratory analyses or large trees.
+- `--tree_mcmc_batch_size`: Iteration interval for saving traces and checking convergence (default: 1000)
+- `--tree_mcmc_burnin`: Initial samples to discard from each chain (default: 0; recommended 10-20% of iterations)
+
+### Parallelization options
+
+- `--ncores`: Default number of cores for likelihood computation during tree optimization (default: 1)
+- `--ncores_em`: Cores for parallel EM parameter fitting across variants (default: 1)
+- `--ncores_nj`: Cores for initial NJ tree distance matrix computation via `parallelDist` (default: 1)
+  - NOTE: Different `ncores_nj` values may yield slightly different NJ topologies due to floating-point rounding
+- `--ncores_qs`: Cores for parallel file I/O (`qs2` compression) during MCMC and annotation (default: 1)
+- `--ncores_annot`: Cores for computing clade frequencies from MCMC traces (default: same as `--ncores`)
+
+### Resuming interrupted job
+
+- Use `--resume TRUE` to continue interrupted runs from saved traces
 
 ---
 
 ## Core concepts for interpretation
-- **Initial tree topology**: a point-estimate starting tree constructed using neighbor joining (NJ) on continuous VAF matrices. This provides a fully-resolved (binary) initialization that empirically captures strong lineage signal before posterior sampling.
-- **Posterior clade support**: per-node support values in `tree$node.label` (0–1) estimated from MCMC topology sampling.
-- **Confidence trimming**: collapse internal edges below a support cutoff `τ` to obtain a confidence-calibrated lineage tree.
+
+- Initial tree topology: a point-estimate starting tree constructed using neighbor joining (NJ) on continuous VAF matrices. This provides a fully-resolved (binary) initialization that empirically captures strong lineage signal before posterior sampling.
+- Posterior clade support: per-node support values in `tree$node.label` (0–1) estimated from MCMC topology sampling.
+- Confidence trimming: collapse internal edges below a support cutoff `τ` to obtain a confidence-calibrated lineage tree.
 
 ---
 
 ## Clone assignment workflow
 
-1) **Trim** low-confidence edges:
+1) Trim low-confidence edges:
+
 ```r
 tau <- 0.5
 phy_trim <- trim_tree(phy, conf = tau)
 ```
 
-2) **Optional**: subset or drop root singletons (if needed for a specific analysis).
+2) Assign clones (top-level root-descending clades):
 
-3) **Assign clones** (top-level root-descending clades):
 ```r
 clade_df <- assign_clones_polytomy(phy_trim, k = Inf, return_df = TRUE)
 ```
 
 ---
-
----
-
-## Documentation site
-
-- Online docs: <https://teng-gao.github.io/mitodrift/>
-- Local preview:
-  - `R -q -e 'pkgdown::build_site()'`
-  - `R -q -e 'pkgdown::preview_site()'`

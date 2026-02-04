@@ -110,7 +110,7 @@ option_list <- list(
         c("-s", "--err"),
         type = "double",
         default = 0,
-        help = "Sequencing error rate; automatically fitted using EM if fit_params=TRUE",
+        help = "Variant detection error rate; automatically fitted using EM if fit_params=TRUE",
         metavar = "DOUBLE"
     ),
     make_option(

@@ -53,7 +53,6 @@ reference:
       - get_transition_mat_wf_hmm
       - convert_logliks_to_logP_list
       - get_vaf_bins
-      - save_qd_cpp
       - logSumExp
   - title: Visualization
     contents:

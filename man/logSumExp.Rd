@@ -15,3 +15,4 @@ double logSumExp of x
 \description{
 logSumExp function for a vector
 }
+\keyword{internal}

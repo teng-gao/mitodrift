@@ -17,3 +17,4 @@ Numeric vector of bin midpoints of length \code{k + 2}.
 Creates \code{k + 2} evenly spaced VAF bins spanning [0, 1] (including
 boundary bins at 0 and 1) and returns their midpoints.
 }
+\keyword{internal}

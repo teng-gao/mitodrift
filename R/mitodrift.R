@@ -121,7 +121,7 @@ optimize_tree_cpp = function(
 #'
 #' @param phy A `phylo` object.
 #' @return A new `phylo` object with edges in postorder.
-#' @export
+#' @keywords internal
 reorder_phylo = function(phy) {
     phy_new = rlang::duplicate(phy, shallow = FALSE)
     phy_new$edge = reorderRcpp(phy$edge) %>% matrix(ncol = 2)
@@ -129,6 +129,7 @@ reorder_phylo = function(phy) {
 }
 
 #' Convert log-likelihood matrices to a log-probability list (row-major)
+#' @keywords internal
 #'
 #' Like [convert_liks_to_logP_list()] but expects inputs already on the log
 #' scale. Produces flat log-probability vectors in row-major layout.
@@ -137,7 +138,6 @@ reorder_phylo = function(phy) {
 #'   each of dimension `k x n_cells`.
 #' @param phy A `phylo` object whose tip labels determine column ordering.
 #' @return A named list of numeric vectors, each of length `k * n_nodes`.
-#' @export
 convert_logliks_to_logP_list <- function(logliks, phy) {
     
     E <- reorder_phylo(phy)$edge
@@ -175,7 +175,7 @@ convert_logliks_to_logP_list <- function(logliks, phy) {
 #' @param k Integer; number of interior VAF bins. The total number of bins
 #'   is `k + 2`.
 #' @return Numeric vector of bin midpoints of length `k + 2`.
-#' @export
+#' @keywords internal
 get_vaf_bins = function(k) {
     bins = seq(0, 1, 1/k)
     bins = c(0,bins,1)
@@ -190,12 +190,12 @@ get_vaf_bins = function(k) {
 #' Get the transition matrix for WF model with HMM (with caching)
 #' TODO: add log option for small probabilities
 #' @param k number of VAF bins
-#' @param eps error rate
+#' @param eps Variant detection error rate
 #' @param N population size
 #' @param ngen number of generations
 #' @param safe whether to add small probability to avoid 0s
 #' @return transition matrix
-#' @export
+#' @keywords internal
 get_transition_mat_wf_hmm <- function(k, eps, N, ngen, safe = FALSE) {
 	# Precompute bin boundaries and VAF bin midpoints
 	bin_boundaries <- c(0, seq(0, 1, 1 / k), 1)
@@ -267,7 +267,7 @@ get_transition_mat_wf_hmm <- function(k, eps, N, ngen, safe = FALSE) {
 
 #' Wrapper function to interpolate non-integer generations
 #' @param k number of VAF bins
-#' @param eps error rate
+#' @param eps Variant detection error rate
 #' @param N population size
 #' @param ngen number of generations (may be non-integer)
 #' @param safe Logical; if `TRUE`, replace zero entries with a small floor

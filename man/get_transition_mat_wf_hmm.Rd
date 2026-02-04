@@ -10,7 +10,7 @@ get_transition_mat_wf_hmm(k, eps, N, ngen, safe = FALSE)
 \arguments{
 \item{k}{number of VAF bins}
 
-\item{eps}{error rate}
+\item{eps}{Variant detection error rate}
 
 \item{N}{population size}
 
@@ -25,3 +25,4 @@ transition matrix
 Get the transition matrix for WF model with HMM (with caching)
 TODO: add log option for small probabilities
 }
+\keyword{internal}
