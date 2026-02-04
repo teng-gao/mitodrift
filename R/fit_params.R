@@ -20,7 +20,7 @@
 #' @param epsilon convergence threshold on parameter deltas
 #' @param trace if TRUE, returns trace dataframe
 #' @return either named vector of final params (ngen, eps, err) or list(par=..., trace=...)
-#' @export
+#' @keywords internal
 fit_params_em_cpp <- function(tree_fit, amat, dmat,
 	initial_params = c('ngen' = 100, 'log_eps' = log(1e-3), 'log_err' = log(1e-3)),
 	lower_bounds = c('ngen' = 1, 'log_eps' = log(1e-12), 'log_err' = log(1e-12)),

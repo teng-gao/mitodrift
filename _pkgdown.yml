@@ -28,32 +28,21 @@ articles:
       - tutorial
 
 reference:
+  - title: internal
+    contents:
+      - has_keyword("internal")
+      - trim_tree_exp
   - title: Core workflow
     contents:
       - MitoDrift
-      - fit_params_em_cpp
-      - decode_tree
-      - make_rooted_nj
-      - optimize_tree_cpp
-      - run_tree_mcmc_batch
   - title: Clades and support
     contents:
-      - compute_target_tree_asdsf
       - add_clade_freq
-      - add_node_names
       - collect_chains
   - title: Trimming and clones
     contents:
       - trim_tree
-      - trim_tree_exp
       - assign_clones_polytomy
-  - title: Likelihood helpers
-    contents:
-      - get_leaf_liks_mat_cpp
-      - get_transition_mat_wf_hmm
-      - convert_logliks_to_logP_list
-      - get_vaf_bins
-      - logSumExp
   - title: Visualization
     contents:
       - plot_phylo_circ
@@ -63,4 +52,4 @@ reference:
       - mat_to_long
       - long_to_mat
       - phylo_to_gtree
-      - reorder_phylo
+      - add_node_names

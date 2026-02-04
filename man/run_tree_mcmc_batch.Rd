@@ -60,3 +60,4 @@ Runs MCMC sampling in fixed-size batches, computing ASDSF convergence
 diagnostics between batches. Supports automatic stopping when ASDSF
 drops below a threshold and resume from a previous run.
 }
+\keyword{internal}

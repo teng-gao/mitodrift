@@ -298,7 +298,7 @@ Trim tree using MCMC results
 \if{html}{\out{</div>}}
 }
 \subsection{Returns}{
-Trimmed tree with clade frequencies
+Annotate tree with clade frequencies
 }
 }
 \if{html}{\out{<hr>}}

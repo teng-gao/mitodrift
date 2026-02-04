@@ -57,3 +57,4 @@ to the post-ordered edge list internal to the C++ routine (order is irrelevant
 because we sum over edges).
 }
 }
+\keyword{internal}

@@ -49,3 +49,4 @@ shared transition matrix and computes per-variant marginal beliefs via
 tree belief propagation. Optionally returns posterior means, MAP
 assignments, or the full CRF objects.
 }
+\keyword{internal}

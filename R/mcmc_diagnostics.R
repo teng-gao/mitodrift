@@ -8,7 +8,7 @@
 #' @param min_freq Minimum clade frequency threshold used when averaging SDs. Default `0.1`.
 #'
 #' @return A list with elements `asdsf`, `per_clade_sd`, `keep_mask`, and `freq_matrix`.
-#' @export
+#' @keywords internal
 compute_target_tree_asdsf <- function(phy_target,
                                       edge_list_chains,
                                       rooted = TRUE,
