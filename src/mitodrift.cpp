@@ -273,7 +273,7 @@ std::vector<arma::Col<int>> nnin_cpp(const arma::Col<int>& E, const int n) {
 //'
 //' @param x NumericVector
 //' @return double logSumExp of x
-//' @export
+//' @keywords internal
 // [[Rcpp::export]]
 double logSumExp(const arma::vec& x) {
     unsigned int maxi = x.index_max();

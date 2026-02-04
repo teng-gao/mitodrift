@@ -13,7 +13,7 @@ get_leaf_liks_mat_cpp(amat, dmat, vafs, eps = 0, ncores = 1L, log = FALSE)
 
 \item{vafs}{Numeric vector of VAF grid points (names optional).}
 
-\item{eps}{Error rate to add to each VAF bin (default 0).}
+\item{eps}{Variant detection error rate to add to each VAF bin (default 0).}
 
 \item{ncores}{Number of threads to use (default 1).}
 
@@ -25,3 +25,4 @@ List of matrices, one per variant, with rows = VAF bins and columns = cells.
 \description{
 Leaf likelihood matrix via C++ backend
 }
+\keyword{internal}

@@ -14,18 +14,16 @@ compute_node_edge_stats_bp2 <- function(E, logP_list, logA) {
 #' @param amat Integer matrix of alt counts (variants x cells).
 #' @param dmat Integer matrix of depths (same dimensions as `amat`).
 #' @param vafs Numeric vector of VAF grid points (names optional).
-#' @param eps Error rate to add to each VAF bin (default 0).
+#' @param eps Variant detection error rate to add to each VAF bin (default 0).
 #' @param ncores Number of threads to use (default 1).
 #' @param log Whether to return log-likelihoods instead of probabilities.
 #' @return List of matrices, one per variant, with rows = VAF bins and columns = cells.
-#' @export
+#' @keywords internal
 get_leaf_liks_mat_cpp <- function(amat, dmat, vafs, eps = 0.0, ncores = 1L, log = FALSE) {
     .Call('_mitodrift_get_leaf_liks_mat_cpp', PACKAGE = 'mitodrift', amat, dmat, vafs, eps, ncores, log)
 }
 
-#' Internal C++ utilities
-#' @name cpp-internals  
-#' @keywords internal
+#' definitions for logSumExp function
 NULL
 
 reorderRcpp <- function(E) {
@@ -40,7 +38,7 @@ nnin_cpp <- function(E, n) {
 #'
 #' @param x NumericVector
 #' @return double logSumExp of x
-#' @export
+#' @keywords internal
 logSumExp <- function(x) {
     .Call('_mitodrift_logSumExp', PACKAGE = 'mitodrift', x)
 }
@@ -75,18 +73,5 @@ tree_mcmc_cpp_cached_threadsafe <- function(E, logP, logA, max_iter = 100L, seed
 
 tree_mcmc_parallel_seeded <- function(start_edges, logP, logA, max_iter_vec, seeds) {
     .Call('_mitodrift_tree_mcmc_parallel_seeded', PACKAGE = 'mitodrift', start_edges, logP, logA, max_iter_vec, seeds)
-}
-
-#' Parallel qdata saver
-#' 
-#' @param objects List of data-only R objects to serialize (unsupported types become NULL, mirroring `qd_save`).
-#' @param paths Character vector of output file paths (must match length of `objects`).
-#' @param compress_level Compression level passed to qdata (default 3).
-#' @param shuffle Whether to enable byte shuffling (default TRUE).
-#' @param grain_size Chunk size for parallel processing (default 1).
-#' @return NULL invisibly on success; character vector of error messages otherwise.
-#' @export
-save_qd_cpp <- function(objects, paths, compress_level = 3L, shuffle = TRUE, grain_size = 1L) {
-    .Call('_mitodrift_save_qd_cpp', PACKAGE = 'mitodrift', objects, paths, compress_level, shuffle, grain_size)
 }
 

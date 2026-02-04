@@ -16,6 +16,23 @@ each of dimension \verb{k x n_cells}.}
 A named list of numeric vectors, each of length \code{k * n_nodes}.
 }
 \description{
-Like \code{\link[=convert_liks_to_logP_list]{convert_liks_to_logP_list()}} but expects inputs already on the log
-scale. Produces flat log-probability vectors in row-major layout.
+Convert log-likelihood matrices to a log-probability list (row-major)
 }
+\keyword{Like}
+\keyword{Produces}
+\keyword{[convert_liks_to_logP_list()]}
+\keyword{already}
+\keyword{but}
+\keyword{expects}
+\keyword{flat}
+\keyword{in}
+\keyword{inputs}
+\keyword{internal}
+\keyword{layout.}
+\keyword{log}
+\keyword{log-probability}
+\keyword{on}
+\keyword{row-major}
+\keyword{scale.}
+\keyword{the}
+\keyword{vectors}

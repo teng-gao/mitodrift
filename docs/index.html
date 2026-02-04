@@ -22,7 +22,7 @@
 
     <a class="navbar-brand me-2" href="index.html">mitodrift</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.1.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -50,7 +50,8 @@
 </h1></div>
 <!-- badges: start -->
 
-<p>MitoDrift reconstructs single-cell lineage relationships from mitochondrial DNA (mtDNA) mutations by modeling heteroplasmy drift and measurement noise with a Wright–Fisher hidden Markov Tree (WF-HMT). It applies population genetics principles (genetic drift) to model mtDNA heteroplasmy in single cells in order to reconstruct high-precision lineage trees from single-cell genomics/multiome data. MitoDrift uses expectation-maximization (EM) to obtain maximum-likelihood estimates of drift, mutation, and error rates, then performs phylogenetic MCMC to quantify the uncertainty in tree topology. The primary output is a <em>confidence-calibrated phylogeny</em> with posterior clade support, and downstream summaries such as confidence-trimmed trees and clone partitions. Inputs can be mtDNA allele counts from any single-cell genomics assays that capture mtDNA variation (e.g., mtscATAC-seq, MAESTER, ReDeeM).~</p>
+<p>MitoDrift reconstructs single-cell lineage relationships from mitochondrial DNA (mtDNA) mutations by modeling heteroplasmy drift and measurement noise with a Wright–Fisher hidden Markov Tree (WF-HMT). It applies population genetics principles (genetic drift) to model mtDNA heteroplasmy in single cells in order to reconstruct high-precision lineage trees from single-cell genomics/multiome data. MitoDrift uses expectation-maximization (EM) to obtain maximum-likelihood estimates of drift, mutation, and error rates, then performs phylogenetic MCMC to quantify the uncertainty in tree topology. The primary output is a <em>confidence-calibrated</em> phylogeny with posterior clade support, and downstream summaries such as confidence-trimmed trees and clone partitions. Inputs can be mtDNA allele counts from any single-cell genomics assays that capture mtDNA variation (e.g., mtscATAC-seq, MAESTER, ReDeeM).</p>
+<p><img src="reference/figures/mitodrift_schematic.png" width="100%"></p>
 <hr>
 <div class="section level2">
 <h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a>
@@ -59,7 +60,7 @@
 <code class="sourceCode R"><span><span class="co"># from a local checkout</span></span>
 <span><span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/ns-load.html" class="external-link">requireNamespace</a></span><span class="op">(</span><span class="st">"devtools"</span>, quietly <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">)</span> <span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"devtools"</span><span class="op">)</span></span>
 <span><span class="fu">devtools</span><span class="fu">::</span><span class="fu"><a href="https://remotes.r-lib.org/reference/install_local.html" class="external-link">install_local</a></span><span class="op">(</span><span class="st">"."</span><span class="op">)</span></span></code></pre></div>
-<p>For faster MCMC trace IO, install <strong>qs2</strong> with TBB:</p>
+<p>For faster MCMC trace IO, install <code>qs2</code> with TBB:</p>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu">remotes</span><span class="fu">::</span><span class="fu"><a href="https://remotes.r-lib.org/reference/install_cran.html" class="external-link">install_cran</a></span><span class="op">(</span><span class="st">"qs2"</span>, type <span class="op">=</span> <span class="st">"source"</span>, configure.args <span class="op">=</span> <span class="st">"--with-TBB --with-simd=AVX2"</span><span class="op">)</span></span></code></pre></div>
 <hr>
@@ -136,7 +137,7 @@
 </tr>
 </tbody>
 </table>
-<p><strong>Important</strong>: Include rows where <code>a = 0</code> so that <strong>every</strong> cell × variant combination is represented (the observation model uses total depth).</p>
+<p>IMPORTANT: Include rows where <code>a = 0</code> so that every cell × variant combination is represented (the observation model uses total depth).</p>
 </div>
 <div class="section level3">
 <h3 id="matrix-pair-format-amat-dmat">Matrix pair format (<code>amat</code>, <code>dmat</code>)<a class="anchor" aria-label="anchor" href="#matrix-pair-format-amat-dmat"></a>
@@ -147,20 +148,80 @@
 <div class="section level2">
 <h2 id="inference-settings--diagnostics">Inference settings &amp; diagnostics<a class="anchor" aria-label="anchor" href="#inference-settings--diagnostics"></a>
 </h2>
-<p>Key MCMC settings (from <code>run_mitodrift_em.R</code>): - <code>tree_mcmc_burnin</code>: number of initial samples to discard. - <code>tree_mcmc_chains</code>: number of independent runs (recommended: 10-50 chains). - <code>tree_mcmc_batch_size</code>: how often to save MCMC trace and check convergence.</p>
-<p>Convergence diagnostics: - ASDSF (<code>conv_thres</code>) summarizes agreement across chains. - Diagnostics are written to <code>tree_mcmc_diag.rds</code>. - For interrupted runs, use <code>--resume TRUE</code> to continue from saved traces.</p>
+<div class="section level3">
+<h3 id="model-parameters-em-fitting">Model parameters (EM fitting)<a class="anchor" aria-label="anchor" href="#model-parameters-em-fitting"></a>
+</h3>
+<ul>
+<li>
+<code>--fit_params</code>: Enable automatic parameter fitting via EM (default: <code>TRUE</code>)</li>
+<li>
+<code>--fit_param_max_iter</code>: Maximum EM iterations (default: 100)</li>
+<li>
+<code>--fit_param_epsilon</code>: EM convergence threshold on parameter changes (default: 1e-3)</li>
+<li>
+<code>--k</code>: Number of VAF bins for discretizing heteroplasmy levels (default: 20)</li>
+<li>
+<code>--npop</code>: Population size for Wright-Fisher model (default: 600)</li>
+<li>
+<code>--eps</code>: Mutation rate per branch (default: 0.001; auto-fitted if <code>fit_params=TRUE</code>)</li>
+<li>
+<code>--err</code>: Variant detection error rate (default: 0; auto-fitted if <code>fit_params=TRUE</code>)</li>
+<li>
+<code>--ngen</code>: Number of WF generations (default: 100; auto-fitted if <code>fit_params=TRUE</code>)</li>
+</ul>
+</div>
+<div class="section level3">
+<h3 id="phylogenetic-mcmc-settings">Phylogenetic MCMC settings<a class="anchor" aria-label="anchor" href="#phylogenetic-mcmc-settings"></a>
+</h3>
+<ul>
+<li>
+<code>--tree_mcmc_chains</code>: Number of independent MCMC runs (default: 1; recommended 10-50 for robust inference. For large trees e.g., &gt;8000 cells, use less chains to avoid memory limits)</li>
+<li>
+<code>--tree_mcmc_iter</code>: Maximum iterations per chain (default: 100; can be overridden by automatic termination via ASDSF convergence check)</li>
+<li>
+<code>--conv_thres</code>: ASDSF threshold for MCMC termination (default: <code>NULL</code>; e.g., 0.05-0.1 for auto-convergence). ASDSF (Average Standard Deviation of Split Frequencies) summarizes topology agreement across chains. A lower value indicates good mixing. Values &lt; 0.05 indicate good convergence; &lt; 0.1 is acceptable for exploratory analyses or large trees.</li>
+<li>
+<code>--tree_mcmc_batch_size</code>: Iteration interval for saving traces and checking convergence (default: 1000)</li>
+<li>
+<code>--tree_mcmc_burnin</code>: Initial samples to discard from each chain (default: 0; recommended 10-20% of iterations)</li>
+</ul>
+</div>
+<div class="section level3">
+<h3 id="parallelization-options">Parallelization options<a class="anchor" aria-label="anchor" href="#parallelization-options"></a>
+</h3>
+<ul>
+<li>
+<code>--ncores</code>: Default number of cores for likelihood computation during tree optimization (default: 1)</li>
+<li>
+<code>--ncores_em</code>: Cores for parallel EM parameter fitting across variants (default: 1)</li>
+<li>
+<code>--ncores_nj</code>: Cores for initial NJ tree distance matrix computation via <code>parallelDist</code> (default: 1)
+<ul>
+<li>NOTE: Different <code>ncores_nj</code> values may yield slightly different NJ topologies due to floating-point rounding</li>
+</ul>
+</li>
+<li>
+<code>--ncores_qs</code>: Cores for parallel file I/O (<code>qs2</code> compression) during MCMC and annotation (default: 1)</li>
+<li>
+<code>--ncores_annot</code>: Cores for computing clade frequencies from MCMC traces (default: same as <code>--ncores</code>)</li>
+</ul>
+</div>
+<div class="section level3">
+<h3 id="resuming-interrupted-job">Resuming interrupted job<a class="anchor" aria-label="anchor" href="#resuming-interrupted-job"></a>
+</h3>
+<ul>
+<li>Use <code>--resume TRUE</code> to continue interrupted runs from saved traces</li>
+</ul>
 <hr>
+</div>
 </div>
 <div class="section level2">
 <h2 id="core-concepts-for-interpretation">Core concepts for interpretation<a class="anchor" aria-label="anchor" href="#core-concepts-for-interpretation"></a>
 </h2>
 <ul>
-<li>
-<strong>Initial tree topology</strong>: a point-estimate starting tree constructed using neighbor joining (NJ) on continuous VAF matrices. This provides a fully-resolved (binary) initialization that empirically captures strong lineage signal before posterior sampling.</li>
-<li>
-<strong>Posterior clade support</strong>: per-node support values in <code>tree$node.label</code> (0–1) estimated from MCMC topology sampling.</li>
-<li>
-<strong>Confidence trimming</strong>: collapse internal edges below a support cutoff <code>τ</code> to obtain a confidence-calibrated lineage tree.</li>
+<li>Initial tree topology: a point-estimate starting tree constructed using neighbor joining (NJ) on continuous VAF matrices. This provides a fully-resolved (binary) initialization that empirically captures strong lineage signal before posterior sampling.</li>
+<li>Posterior clade support: per-node support values in <code>tree$node.label</code> (0–1) estimated from MCMC topology sampling.</li>
+<li>Confidence trimming: collapse internal edges below a support cutoff <code>τ</code> to obtain a confidence-calibrated lineage tree.</li>
 </ul>
 <hr>
 </div>
@@ -168,39 +229,17 @@
 <h2 id="clone-assignment-workflow">Clone assignment workflow<a class="anchor" aria-label="anchor" href="#clone-assignment-workflow"></a>
 </h2>
 <ol style="list-style-type: decimal">
-<li>
-<strong>Trim</strong> low-confidence edges:</li>
+<li>Trim low-confidence edges:</li>
 </ol>
 <div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">tau</span> <span class="op">&lt;-</span> <span class="fl">0.5</span></span>
 <span><span class="va">phy_trim</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/trim_tree.html">trim_tree</a></span><span class="op">(</span><span class="va">phy</span>, conf <span class="op">=</span> <span class="va">tau</span><span class="op">)</span></span></code></pre></div>
 <ol start="2" style="list-style-type: decimal">
-<li><p><strong>Optional</strong>: subset or drop root singletons (if needed for a specific analysis).</p></li>
-<li><p><strong>Assign clones</strong> (top-level root-descending clades):</p></li>
+<li>Assign clones (top-level root-descending clades):</li>
 </ol>
 <div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">clade_df</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/assign_clones_polytomy.html">assign_clones_polytomy</a></span><span class="op">(</span><span class="va">phy_trim</span>, k <span class="op">=</span> <span class="cn">Inf</span>, return_df <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
 <hr>
-</div>
-<div class="section level2">
-<h2 id="references">References<a class="anchor" aria-label="anchor" href="#references"></a>
-</h2>
-<p>Manuscript link (preprint/published version) will be added here.</p>
-<hr>
-</div>
-<div class="section level2">
-<h2 id="documentation-site">Documentation site<a class="anchor" aria-label="anchor" href="#documentation-site"></a>
-</h2>
-<ul>
-<li>Online docs: <a href="https://teng-gao.github.io/mitodrift/" class="uri">https://teng-gao.github.io/mitodrift/</a>
-</li>
-<li>Local preview:
-<ul>
-<li><code>R -q -e 'pkgdown::build_site()'</code></li>
-<li><code>R -q -e 'pkgdown::preview_site()'</code></li>
-</ul>
-</li>
-</ul>
 </div>
 </div>
   </main><aside class="col-md-3"><div class="links">
