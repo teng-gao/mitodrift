@@ -401,7 +401,7 @@ Trim tree using MCMC results
 
 #### Returns
 
-Trimmed tree with clade frequencies
+Annotate tree with clade frequencies
 
 ------------------------------------------------------------------------
 
