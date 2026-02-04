@@ -20,6 +20,9 @@ suppressPackageStartupMessages({
     library(optparse)
 })
 
+message("=== mitodrift package version ===")
+message("mitodrift version: ", as.character(utils::packageVersion("mitodrift")), "")
+
 # repo_dir = "/lab-share/Hem-Sankaran-e2/Public/projects/tgao/tools/mitodrift"
 # devtools::load_all(repo_dir)
 
@@ -240,6 +243,8 @@ mcmc_diag_file <- file.path(opts$outdir, "tree_mcmc_diag.rds")
 annot_tree_file <- file.path(opts$outdir, "tree_annotated.newick")
 mitodrift_object_file <- file.path(opts$outdir, "mitodrift_object.rds")
 
+start_time <- Sys.time()
+
 # Step 1: Load mutation data / matrices
 message("\n=== Creating MitoDrift object ===")
 
@@ -388,3 +393,7 @@ write.tree(md$tree_annot, annot_tree_file)
 saveRDS(md, mitodrift_object_file)
 
 message("\n=== MitoDrift analysis completed successfully! ===")
+
+end_time <- Sys.time()
+elapsed <- difftime(end_time, start_time, units = "secs")
+message(glue("Total runtime: {format(elapsed)} (start: {start_time}, end: {end_time})"))
