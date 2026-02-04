@@ -1,10 +1,11 @@
 ---
 title: "MitoDrift tutorial"
 description: "Visualizing and interpreting MitoDrift outputs"
-documentclass: book
-output:
-  bookdown::gitbook:
-    split_by: rmd
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{MitoDrift tutorial}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
 ---
 
 ```{r, include=FALSE}

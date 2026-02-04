@@ -1,7 +1,9 @@
 #' @import dplyr
 #' @import tidygraph
 #' @import stringr
-#' @import fmcmc
+#' @import ggplot2
+#' @import ggtree
+#' @importFrom glue glue
 #' @importFrom igraph vcount ecount E V V<- E<- 
 #' @importFrom phangorn upgma 
 #' @importFrom ape root drop.tip nj
