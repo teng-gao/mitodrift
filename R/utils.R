@@ -98,7 +98,7 @@ trim_tree = function(tree, conf, collapse_trivial = TRUE) {
     collapse_list = which(node_confs < conf) + n_tip
 
 	# Test if trivial split (1 tip vs rest)
-    if (collapse_trivial) {
+    if (collapse_trivial && conf > 0) {
         root_children = find_root_split(tree)
         is_tip = root_children <= n_tip
 		if (any(is_tip)) {
