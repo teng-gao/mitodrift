@@ -118,7 +118,7 @@ plot_phylo_heatmap2 = function(phylo, df_var = NULL, branch_width = 0.25, root_e
     }
 
     if (node_conf) {
-        
+
         gtree = phylo_to_gtree(phylo) %>% mutate(conf = as.numeric(label))
 
         dat = gtree %>% activate(nodes) %>%
