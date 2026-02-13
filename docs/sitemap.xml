@@ -1,7 +1,6 @@
 <urlset xmlns = 'http://www.sitemaps.org/schemas/sitemap/0.9'>
 <url><loc>https://teng-gao.github.io/mitodrift/404.html</loc></url>
 <url><loc>https://teng-gao.github.io/mitodrift/DOCS_TODO.html</loc></url>
-<url><loc>https://teng-gao.github.io/mitodrift/LICENSE.html</loc></url>
 <url><loc>https://teng-gao.github.io/mitodrift/articles/index.html</loc></url>
 <url><loc>https://teng-gao.github.io/mitodrift/articles/tutorial.html</loc></url>
 <url><loc>https://teng-gao.github.io/mitodrift/authors.html</loc></url>
@@ -15,8 +14,12 @@
 <url><loc>https://teng-gao.github.io/mitodrift/reference/annotate_tree.html</loc></url>
 <url><loc>https://teng-gao.github.io/mitodrift/reference/assign_clones_polytomy.html</loc></url>
 <url><loc>https://teng-gao.github.io/mitodrift/reference/collect_chains.html</loc></url>
+<url><loc>https://teng-gao.github.io/mitodrift/reference/compute_pr_from_jaccard_mat.html</loc></url>
+<url><loc>https://teng-gao.github.io/mitodrift/reference/compute_retention_curve.html</loc></url>
 <url><loc>https://teng-gao.github.io/mitodrift/reference/compute_target_tree_asdsf.html</loc></url>
 <url><loc>https://teng-gao.github.io/mitodrift/reference/compute_target_tree_asdsf_sliding.html</loc></url>
+<url><loc>https://teng-gao.github.io/mitodrift/reference/compute_tree_pr_curve.html</loc></url>
+<url><loc>https://teng-gao.github.io/mitodrift/reference/compute_variant_pr_curve.html</loc></url>
 <url><loc>https://teng-gao.github.io/mitodrift/reference/convert_logliks_to_logP_list.html</loc></url>
 <url><loc>https://teng-gao.github.io/mitodrift/reference/cpp-internals.html</loc></url>
 <url><loc>https://teng-gao.github.io/mitodrift/reference/decode_tree.html</loc></url>
@@ -52,6 +55,8 @@
 <url><loc>https://teng-gao.github.io/mitodrift/reference/plot_phylo_circ.html</loc></url>
 <url><loc>https://teng-gao.github.io/mitodrift/reference/plot_phylo_heatmap.html</loc></url>
 <url><loc>https://teng-gao.github.io/mitodrift/reference/plot_phylo_heatmap2.html</loc></url>
+<url><loc>https://teng-gao.github.io/mitodrift/reference/plot_prec_recall_vs_conf.html</loc></url>
+<url><loc>https://teng-gao.github.io/mitodrift/reference/plot_retention_curve.html</loc></url>
 <url><loc>https://teng-gao.github.io/mitodrift/reference/prop.clades.par.html</loc></url>
 <url><loc>https://teng-gao.github.io/mitodrift/reference/reorder_phylo.html</loc></url>
 <url><loc>https://teng-gao.github.io/mitodrift/reference/row_smooth.html</loc></url>
@@ -66,5 +71,6 @@
 <url><loc>https://teng-gao.github.io/mitodrift/reference/tree_upgma.html</loc></url>
 <url><loc>https://teng-gao.github.io/mitodrift/reference/trim_tree.html</loc></url>
 <url><loc>https://teng-gao.github.io/mitodrift/reference/trim_tree_exp.html</loc></url>
+<url><loc>https://teng-gao.github.io/mitodrift/reference/variant_tree_jaccard_matrix.html</loc></url>
 </urlset>
 

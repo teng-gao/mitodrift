@@ -25,7 +25,7 @@ home:
 articles:
   - title: Tutorials
     contents:
-      - tutorial
+      - analysis-workflow
 
 reference:
   - title: internal
@@ -39,10 +39,14 @@ reference:
     contents:
       - add_clade_freq
       - collect_chains
-  - title: Trimming and clones
+  - title: Topology refinement and clone assignment
     contents:
       - trim_tree
       - assign_clones_polytomy
+  - title: Diagnostics
+    contents:
+      - compute_variant_pr_curve
+      - plot_prec_recall_vs_conf
   - title: Visualization
     contents:
       - plot_phylo_circ

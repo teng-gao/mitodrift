@@ -69,6 +69,8 @@ compute_target_tree_asdsf <- function(phy_target,
 
 #' Compute clade retention curve from tree
 #' Returns data frame with confidence values and cumulative count of clades remaining
+#' @keywords internal
+#' @noRd
 compute_retention_curve <- function(tree) {
     # Get confidence values from node labels
     conf_values <- as.numeric(tree$node.label)
@@ -96,6 +98,8 @@ compute_retention_curve <- function(tree) {
 #'   When a list, names are used as legend labels.
 #' @param sample_name Plot title.
 #' @param cutoff Optional vertical line at a confidence threshold.
+#' @keywords internal
+#' @noRd
 plot_retention_curve <- function(retention_data, sample_name = '', cutoff = NULL) {
 
     if (is.data.frame(retention_data)) {
@@ -152,16 +156,226 @@ plot_retention_curve <- function(retention_data, sample_name = '', cutoff = NULL
     return(p)
 }
 
-# Diagnostics utilities (precision/recall vs confidence)
-#
-# Dependencies (loaded by caller; do NOT library() here):
-# - ape (for phylo handling; e.g., keep.tip)
-# - ggplot2 (for plotting)
-# - R/tree_evaluation.R (expects `variant_tree_jaccard_matrix()`)
-# - mitodrift (expects `long_to_mat()`)
-#
-# These functions are extracted from `notebooks/Supplement/plot_all_prec_recall_vs_conf.R`
-# and refactored to work directly from `phy_annot` and `mut_dat`.
+
+#' Build a clade matrix from a phylo object
+#' @param tree A phylo object
+#' @param tip_order A character vector of tip labels
+#' @param include_root A logical indicating whether to include the root clade
+#' @param add_node_names If TRUE, add and use node labels for row names (default TRUE);
+#'   if FALSE, use numeric clade IDs.
+#' @return A sparse matrix of clade x tip incidence
+build_clade_matrix <- function(tree, tip_order, include_root = FALSE, add_node_names = TRUE) {
+	stopifnot(inherits(tree, "phylo"))
+	
+	N <- length(tree$tip.label)
+
+	# map original tip indices -> column positions in tip_order
+	pos <- rep.int(NA_integer_, N)
+	idx_keep <- match(tip_order, tree$tip.label)
+	pos[idx_keep] <- seq_along(idx_keep)
+
+	# internal nodes' tip sets (original indices)
+	int_nodes <- (N + 1):(N + tree$Nnode)
+	int_sets <- lapply(int_nodes, function(v) phangorn::Descendants(tree, v, type = "tips")[[1]])
+	int_sets2 <- lapply(int_sets, function(S) { x <- pos[S]; x[!is.na(x)] })
+
+	if (!include_root) {
+		root_mask <- lengths(int_sets2) == length(tip_order)
+        int_sets2 <- int_sets2[!root_mask]
+        int_nodes <- int_nodes[!root_mask]
+	}
+
+	# enforce minor clades: for each set, if size > half of all tips, take its complement
+	n_all <- length(tip_order)
+	all_idx <- seq_len(n_all)
+	sets_minor <- lapply(int_sets2, function(S) {
+		if (length(S) > n_all / 2) setdiff(all_idx, S) else S
+	})
+
+	# Use filtered internal nodes
+	sets <- sets_minor
+  if (add_node_names) {
+    tree <- add_node_names(tree, prefix = "Node")
+    row_names <- tree$node.label[int_nodes - N]
+  } else {
+    row_names <- as.character(int_nodes)
+  }
+
+	# build sparse node x tip incidence
+	i <- rep.int(seq_along(sets), lengths(sets))
+	j <- unlist(sets, use.names = FALSE)
+	M <- Matrix::sparseMatrix(
+		i = i, j = j, x = 1L,
+		dims = c(length(sets), length(tip_order)),
+		dimnames = list(row_names, tip_order)
+	)
+	
+	return(M)
+}
+
+
+
+#' Build a clade matrix from a cell x variant VAF matrix
+#'
+#' Treat each variant as defining a clade consisting of cells whose VAF is
+#' greater than or equal to a minimum cutoff.
+#'
+#' @param vaf_mat A numeric matrix (or data.frame coercible to matrix) of
+#'   cells x variants. Row names must be cell IDs and column names must be
+#'   variant IDs.
+#' @param tip_order Optional character vector of cell IDs to define column
+#'   order. If NULL, uses rownames(vaf_mat).
+#' @param min_vaf Minimum VAF cutoff to include a cell in a variant clade.
+#'   Defaults to 0.
+#' @param min_cells Minimum number of cells required to be included in a
+#'   variant clade (i.e., VAF > min_vaf) for the variant to be retained.
+#'   Defaults to 2.
+#'
+#' @return A sparse matrix of clade (variant) x tip (cell) incidence.
+build_variant_clade_matrix <- function(vaf_mat, tip_order = NULL, min_vaf = 0, min_cells = 2) {
+
+  if (is.data.frame(vaf_mat)) vaf_mat <- as.matrix(vaf_mat)
+  stopifnot(is.matrix(vaf_mat))
+  if (is.null(rownames(vaf_mat))) stop("vaf_mat must have rownames (cell IDs).")
+  if (is.null(colnames(vaf_mat))) stop("vaf_mat must have colnames (variant IDs).")
+  if (!is.numeric(min_vaf) || length(min_vaf) != 1L || is.na(min_vaf)) {
+    stop("min_vaf must be a single non-NA numeric value.")
+  }
+  if (!is.numeric(min_cells) || length(min_cells) != 1L || is.na(min_cells) || min_cells < 1) {
+    stop("min_cells must be a single numeric value >= 1.")
+  }
+ 
+  if (is.null(tip_order)) {
+    tip_order <- rownames(vaf_mat)
+  } else {
+    missing_tips <- setdiff(tip_order, rownames(vaf_mat))
+    if (length(missing_tips) > 0L) {
+      stop("tip_order contains cells not present in vaf_mat: ", paste(missing_tips, collapse = ", "))
+    }
+  }
+
+  X <- vaf_mat[tip_order, , drop = FALSE]
+  storage.mode(X) <- "numeric"
+  X[is.na(X)] <- -Inf
+
+  # pass: cells x variants logical
+  pass <- X > min_vaf
+
+  # Keep only variants with at least min_cells passing
+  keep_vars <- colSums(pass) >= min_cells
+  if (!any(keep_vars)) {
+    M <- Matrix::sparseMatrix(
+      i = integer(0), j = integer(0), x = integer(0),
+      dims = c(0, length(tip_order)),
+      dimnames = list(character(0), tip_order)
+    )
+    return(M)
+  }
+  pass <- pass[, keep_vars, drop = FALSE]
+  kept_variants <- colnames(X)[keep_vars]
+
+  idx <- which(pass, arr.ind = TRUE)
+
+  # Build sparse variant x cell incidence
+  M <- Matrix::sparseMatrix(
+    i = if (nrow(idx) == 0L) integer(0) else idx[, 2],
+    j = if (nrow(idx) == 0L) integer(0) else idx[, 1],
+    x = 1L,
+    dims = c(length(kept_variants), length(tip_order)),
+    dimnames = list(kept_variants, tip_order)
+  )
+
+  return(M)
+}
+
+
+#' Compute a Jaccard matrix between variant-defined clades and tree clades
+#'
+#' Builds a clade x tip incidence matrix from a variants x cells VAF matrix
+#' (one clade per variant, cells included if VAF > min_vaf), and compares it to
+#' the clades induced by a phylogenetic tree on the shared set of cells.
+#'
+#' @param vmat A numeric matrix (or data.frame coercible to matrix) of
+#'   variants x cells. Row names must be variant IDs and column names must be
+#'   cell IDs.
+#' @param phy A phylo object.
+#' @param min_vaf Minimum VAF cutoff used to include a cell in a variant clade.
+#'   Defaults to 0.
+#'
+#' @return A matrix of Jaccard scores with rows = variants and cols = tree clades.
+#' @keywords internal
+#' @noRd
+variant_tree_jaccard_matrix <- function(vmat, phy, min_vaf = 0, min_cells = 2) {
+  stopifnot(inherits(phy, "phylo"))
+  if (is.data.frame(vmat)) vmat <- as.matrix(vmat)
+  stopifnot(is.matrix(vmat))
+
+  # shared tips (stable order)
+  common <- sort(intersect(colnames(vmat), phy$tip.label))
+  if (length(common) == 0L) stop("vmat and tree share no cell IDs.")
+
+  phy <- phy %>% ape::keep.tip(common)
+
+  # Variant clades: variants x cells incidence based on VAF > min_vaf,
+  # with variants filtered to have >= 2 cells passing min_vaf.
+  clade_mat_var <- build_variant_clade_matrix(t(vmat), tip_order = common, min_vaf = min_vaf, min_cells = min_cells)
+
+  clade_mat_tree <- build_clade_matrix(phy, tip_order = common)
+
+  if (nrow(clade_mat_var) == 0L || nrow(clade_mat_tree) == 0L) {
+    out <- matrix(0, nrow = nrow(clade_mat_var), ncol = nrow(clade_mat_tree))
+    rownames(out) <- rownames(clade_mat_var)
+    colnames(out) <- rownames(clade_mat_tree)
+    return(out)
+  }
+
+  # clade sizes
+  var_sizes <- as.numeric(Matrix::rowSums(clade_mat_var))
+  tree_sizes <- as.numeric(Matrix::rowSums(clade_mat_tree))
+
+  # intersections: variant x tree-clade counts (sparse)
+  inter <- clade_mat_var %*% Matrix::t(clade_mat_tree)  # dgCMatrix
+  intersection_sizes <- as.matrix(inter)
+
+  # Union = size1 + size2 - intersection
+  union_sizes <- outer(var_sizes, tree_sizes, `+`) - intersection_sizes
+
+  # Jaccard = intersection / union
+  J <- intersection_sizes / union_sizes
+  J[union_sizes == 0] <- 0
+
+  rownames(J) <- rownames(clade_mat_var)
+  colnames(J) <- rownames(clade_mat_tree)
+  return(J)
+}
+
+
+#' Compute variant-to-tree precision/recall/F1 curve across confidence cutoffs
+#'
+#' Construct a variant VAF matrix from long-format mutation counts, compare
+#' variant partitions against tree clades using Jaccard similarity, and sweep
+#' node-confidence cutoffs to summarize precision, recall, and F1.
+#'
+#' @param phy_annot A rooted \code{phylo} object with clade confidence stored in
+#'   \code{node.label}.
+#' @param mut_dat Long-format mutation table containing at least columns
+#'   \code{cell}, \code{variant}, \code{a}, and \code{d}.
+#' @param min_vaf Minimum VAF used when defining variant-positive cells
+#'   (default \code{0.01}).
+#' @param min_cells Minimum number of variant-positive cells required for a
+#'   variant to be evaluated (default \code{2}).
+#' @param j_thres Jaccard threshold for declaring a match between a variant
+#'   split and a tree clade (default \code{0.66}).
+#' @param n_points Number of confidence cutoffs to evaluate (default
+#'   \code{50}).
+#' @param ncores Number of cores for sweeping confidence cutoffs. Uses
+#'   \code{parallel::mclapply} when \code{ncores > 1} on non-Windows systems.
+#'
+#' @return A data frame with columns \code{conf_cutoff}, \code{n_pred},
+#'   \code{n_tp}, \code{n_tru}, \code{n_recover}, \code{precision},
+#'   \code{recall}, \code{f1}, and \code{fraction_well_matched}.
+#'
+#' @export
 compute_variant_pr_curve <- function(
     phy_annot,
     mut_dat,
@@ -225,6 +439,8 @@ compute_variant_pr_curve <- function(
 #'
 #' @return Data frame with columns: conf_cutoff, n_pred, n_tp, n_tru,
 #'   n_recover, precision, recall, f1.
+#' @keywords internal
+#' @noRd
 compute_tree_pr_curve <- function(phy_tru, phy_est, j_thres = 0.5, n_points = 50, ncores = 1) {
     if (!inherits(phy_tru, "phylo")) stop("phy_tru must be a 'phylo' object")
     if (!inherits(phy_est, "phylo")) stop("phy_est must be a 'phylo' object")
@@ -261,6 +477,8 @@ compute_tree_pr_curve <- function(phy_tru, phy_est, j_thres = 0.5, n_points = 50
 #'
 #' @return Data frame with columns: conf_cutoff, n_pred, n_tp, n_tru,
 #'   n_recover, precision, recall, f1.
+#' @keywords internal
+#' @noRd
 compute_pr_from_jaccard_mat <- function(J, conf, j_thres = 0.5, n_points = 50, ncores = 1) {
 
     conf_cols <- conf[colnames(J)]
@@ -338,6 +556,8 @@ compute_pr_from_jaccard_mat <- function(J, conf, j_thres = 0.5, n_points = 50, n
 #' @param legend Logical; if \code{TRUE}, show metric legend on the right.
 #'
 #' @return A \code{ggplot2} object.
+#'
+#' @export
 plot_prec_recall_vs_conf <- function(
     pr_df,
     sample_name = NULL,

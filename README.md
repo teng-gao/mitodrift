@@ -86,6 +86,8 @@ Wide matrices with `variant` in the first column and cells in subsequent columns
 
 ## Inference settings & diagnostics
 
+Full lineage inference pipeline is run with `inst/bin/run_mitodrift_em.R`.
+
 ### Model parameters (EM fitting)
 
 - `--fit_params`: Enable automatic parameter fitting via EM (default: `TRUE`)
