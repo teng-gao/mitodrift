@@ -1,0 +1,123 @@
+---
+title: "Analysis workflow"
+description: "Post-inference analysis: diagnostic PR curve, confidence trimming, clone assignment, and visualization"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Analysis workflow}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE,
+                      fig.width = 8, fig.height = 5)
+```
+
+This article walks through the standard post-inference analysis workflow:
+**annotated tree → diagnostic PR curve → confidence trimming → clone assignment → visualization**.
+
+## Setup
+
+```{r setup}
+library(mitodrift)
+library(data.table)
+library(ggplot2)
+library(dplyr)
+library(patchwork)
+library(ggtreeExtra)
+```
+
+We use a small in vitro LARRY barcode sample (200 cells, 186 variants) bundled
+with the package.
+
+```{r data}
+data(pL1000_tree_annot)
+data(pL1000_mut_dat)
+```
+
+In a typical workflow you would load the annotated tree from MitoDrift output:
+
+```r
+# tree_annot <- ape::read.tree("tree_annotated.newick")
+```
+
+## Visualize the full binary tree
+
+`plot_phylo_heatmap2()` displays the tree alongside a variant heteroplasmy
+heatmap. Setting `node_conf = TRUE` colours internal nodes by their confidence
+score.
+
+```{r full-tree, fig.width=10, fig.height=6}
+plot_phylo_heatmap2(
+  pL1000_tree_annot,
+  pL1000_mut_dat,
+  node_conf = TRUE,
+  branch_length = FALSE,
+  title = "Full annotated tree"
+)
+```
+
+## Diagnostic: variant precision–recall curve
+
+`compute_variant_pr_curve()` compares variant-defined cell partitions against
+tree clades across a sweep of confidence cutoffs. This helps identify a
+threshold that balances precision (are the clades real?) and recall (are we
+keeping enough structure?).
+
+```{r pr-curve, fig.width=7, fig.height=4}
+pr_df <- compute_variant_pr_curve(pL1000_tree_annot, pL1000_mut_dat)
+plot_prec_recall_vs_conf(pr_df, cutoff = 0.2)
+```
+
+## Trim tree
+
+Collapse low-confidence nodes below the chosen threshold with `trim_tree()`.
+
+```{r trim}
+tree_trim <- trim_tree(pL1000_tree_annot, conf = 0.2)
+```
+
+Visualize the trimmed tree — polytomies replace poorly supported splits.
+
+```{r trimmed-tree, fig.width=10, fig.height=6}
+plot_phylo_heatmap2(
+  tree_trim,
+  pL1000_mut_dat,
+  node_conf = TRUE,
+  branch_length = FALSE,
+  title = "Trimmed tree (conf >= 0.2)"
+)
+```
+
+## Clone assignment
+
+`assign_clones_polytomy()` partitions tips into clones based on the polytomy
+structure of the trimmed tree.
+
+```{r clones}
+clone_df <- assign_clones_polytomy(tree_trim)
+head(clone_df)
+```
+
+## Visualize clones
+
+Colour cells by clone assignment on both a rectangular heatmap view and a
+circular layout.
+
+```{r clone-heatmap, fig.width=10, fig.height=6}
+plot_phylo_heatmap2(
+  tree_trim,
+  pL1000_mut_dat,
+  cell_annot = clone_df,
+  branch_length = FALSE,
+  title = "Clones on trimmed tree"
+)
+```
+
+```{r clone-circ, fig.width=7, fig.height=7}
+plot_phylo_circ(
+  tree_trim,
+  cell_annot = clone_df,
+  title = "Circular layout"
+)
+```
