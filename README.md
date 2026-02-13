@@ -5,7 +5,7 @@
 [![Docs](https://img.shields.io/badge/docs-pkgdown-blue.svg)](https://teng-gao.github.io/mitodrift/)
 <!-- badges: end -->
 
-MitoDrift reconstructs single-cell lineage relationships from mitochondrial DNA (mtDNA) mutations by modeling heteroplasmy drift and measurement noise with a Wright–Fisher hidden Markov Tree (WF-HMT). It applies population genetics principles (genetic drift) to model mtDNA heteroplasmy in single cells in order to reconstruct high-precision lineage trees from single-cell genomics/multiome data. MitoDrift uses expectation-maximization (EM) to obtain maximum-likelihood estimates of drift, mutation, and error rates, then performs phylogenetic MCMC to quantify the uncertainty in tree topology. The primary output is a *confidence-calibrated* phylogeny with posterior clade support, and downstream summaries such as confidence-trimmed trees and clone partitions. Inputs can be mtDNA allele counts from any single-cell genomics assays that capture mtDNA variation (e.g., mtscATAC-seq, MAESTER, ReDeeM).
+MitoDrift reconstructs single-cell lineage relationships from mitochondrial DNA (mtDNA) mutations by modeling heteroplasmy drift and measurement noise with a Wright–Fisher hidden Markov Tree (WF-HMT). It applies population genetics principles (genetic drift) to model mtDNA heteroplasmy in single cells in order to reconstruct high-precision lineage trees from single-cell genomics/multiome data. MitoDrift uses expectation-maximization (EM) to obtain maximum-likelihood estimates of drift, mutation, and error rates, then performs phylogenetic MCMC to quantify the uncertainty in tree topology. The primary output is a phylogeny with posterior clade support, and downstream summaries such as confidence-refined trees and clone partitions. Inputs can be mtDNA allele counts from any single-cell genomics assays that capture mtDNA variation (e.g., mtscATAC-seq, MAESTER, ReDeeM).
 
 <img src="man/figures/mitodrift_schematic.png" width="100%" />
 
@@ -122,7 +122,7 @@ Wide matrices with `variant` in the first column and cells in subsequent columns
 
 - Initial tree topology: a point-estimate starting tree constructed using neighbor joining (NJ) on continuous VAF matrices. This provides a fully-resolved (binary) initialization that empirically captures strong lineage signal before posterior sampling.
 - Posterior clade support: per-node support values in `tree$node.label` (0–1) estimated from MCMC topology sampling.
-- Confidence trimming: collapse internal edges below a support cutoff `τ` to obtain a confidence-calibrated lineage tree.
+- Confidence-based topology refinement: collapse internal edges below a support cutoff `τ` to obtain a refined lineage tree.
 
 ---
 
