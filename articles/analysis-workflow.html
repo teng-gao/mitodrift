@@ -94,13 +94,23 @@ lineage tree.</li>
 <span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://patchwork.data-imaginist.com" class="external-link">patchwork</a></span><span class="op">)</span></span></code></pre></div>
 <p>We use a small in vitro LARRY barcode sample (200 cells, 186
 variants) bundled with the package.</p>
-<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="va">pL1000_tree_annot</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="va">pL1000_mut_dat</span><span class="op">)</span></span></code></pre></div>
-<p>In a typical workflow you would load the annotated tree from
-MitoDrift output:</p>
+<p>Run the same inference command used in the README:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="ex">Rscript</span> inst/bin/run_mitodrift_em.R <span class="dt">\</span></span>
+<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a>  <span class="at">--mut_dat</span> inst/extdata/pL1000_mut_dat.csv <span class="dt">\</span></span>
+<span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a>  <span class="at">--outdir</span> mitodrift_demo <span class="dt">\</span></span>
+<span id="cb2-4"><a href="#cb2-4" tabindex="-1"></a>  <span class="at">--tree_mcmc_iter</span> 5000 <span class="dt">\</span></span>
+<span id="cb2-5"><a href="#cb2-5" tabindex="-1"></a>  <span class="at">--tree_mcmc_chains</span> 4 <span class="dt">\</span></span>
+<span id="cb2-6"><a href="#cb2-6" tabindex="-1"></a>  <span class="at">--tree_mcmc_burnin</span> 1000</span></code></pre></div>
+<p>This writes <code>mitodrift_demo/mitodrift_object.rds</code> and
+<code>mitodrift_demo/tree_annotated.newick</code>. The workflow below
+uses the same mutation table and an annotated tree generated with those
+settings.</p>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># tree_annot &lt;- ape::read.tree("tree_annotated.newick")</span></span></code></pre></div>
+<code class="sourceCode R"><span><span class="va">mut_dat</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/utils/read.table.html" class="external-link">read.csv</a></span><span class="op">(</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/system.file.html" class="external-link">system.file</a></span><span class="op">(</span><span class="st">"extdata"</span>, <span class="st">"pL1000_mut_dat.csv"</span>, package <span class="op">=</span> <span class="st">"mitodrift"</span><span class="op">)</span></span>
+<span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="va">pL1000_tree_annot</span><span class="op">)</span></span>
+<span><span class="va">tree_annot</span> <span class="op">&lt;-</span> <span class="va">pL1000_tree_annot</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="visualize-the-full-binary-tree">Visualize the full binary tree<a class="anchor" aria-label="anchor" href="#visualize-the-full-binary-tree"></a>
@@ -110,8 +120,8 @@ variant heteroplasmy heatmap. Setting <code>node_conf = TRUE</code>
 colours internal nodes by their confidence score.</p>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/plot_phylo_heatmap2.html">plot_phylo_heatmap2</a></span><span class="op">(</span></span>
-<span>  <span class="va">pL1000_tree_annot</span>,</span>
-<span>  <span class="va">pL1000_mut_dat</span>,</span>
+<span>  <span class="va">tree_annot</span>,</span>
+<span>  <span class="va">mut_dat</span>,</span>
 <span>  node_conf <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  dot_size <span class="op">=</span> <span class="fl">2</span>,</span>
 <span>  branch_length <span class="op">=</span> <span class="cn">FALSE</span>,</span>
@@ -127,7 +137,7 @@ partitions against tree clades across a sweep of confidence cutoffs.
 This helps identify a threshold that balances precision (are the clades
 real?) and recall (are we keeping enough structure?).</p>
 <div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">pr_df</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/compute_variant_pr_curve.html">compute_variant_pr_curve</a></span><span class="op">(</span><span class="va">pL1000_tree_annot</span>, <span class="va">pL1000_mut_dat</span><span class="op">)</span></span>
+<code class="sourceCode R"><span><span class="va">pr_df</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/compute_variant_pr_curve.html">compute_variant_pr_curve</a></span><span class="op">(</span><span class="va">tree_annot</span>, <span class="va">mut_dat</span><span class="op">)</span></span>
 <span><span class="fu"><a href="../reference/plot_prec_recall_vs_conf.html">plot_prec_recall_vs_conf</a></span><span class="op">(</span></span>
 <span>  <span class="va">pr_df</span>,</span>
 <span>  sample_name <span class="op">=</span> <span class="st">"Variant-based precision recall"</span>,</span>
@@ -141,13 +151,13 @@ real?) and recall (are we keeping enough structure?).</p>
 <p>Collapse low-confidence nodes below the chosen threshold with
 <code><a href="../reference/trim_tree.html">trim_tree()</a></code>.</p>
 <div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">tree_trim</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/trim_tree.html">trim_tree</a></span><span class="op">(</span><span class="va">pL1000_tree_annot</span>, conf <span class="op">=</span> <span class="fl">0.2</span><span class="op">)</span></span></code></pre></div>
+<code class="sourceCode R"><span><span class="va">tree_trim</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/trim_tree.html">trim_tree</a></span><span class="op">(</span><span class="va">tree_annot</span>, conf <span class="op">=</span> <span class="fl">0.2</span><span class="op">)</span></span></code></pre></div>
 <p>Visualize the trimmed tree — polytomies replace poorly supported
 splits.</p>
 <div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/plot_phylo_heatmap2.html">plot_phylo_heatmap2</a></span><span class="op">(</span></span>
 <span>  <span class="va">tree_trim</span>,</span>
-<span>  <span class="va">pL1000_mut_dat</span>,</span>
+<span>  <span class="va">mut_dat</span>,</span>
 <span>  node_conf <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  dot_size <span class="op">=</span> <span class="fl">2</span>,</span>
 <span>  branch_length <span class="op">=</span> <span class="cn">FALSE</span>,</span>
@@ -166,12 +176,12 @@ based on the polytomy structure of the trimmed tree.</p>
 <pre><code><span><span class="co">## <span style="color: #949494;"># A tibble: 6 × 6</span></span></span>
 <span><span class="co">##   cell               clade clade_node annot  size  frac</span></span>
 <span><span class="co">##   <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>              <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>      <span style="color: #949494; font-style: italic;">&lt;int&gt;</span> <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span> <span style="color: #949494; font-style: italic;">&lt;int&gt;</span> <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span></span></span>
-<span><span class="co">## <span style="color: #BCBCBC;">1</span> CAACTAATCATTGACA-1 1            220 1        15 0.075</span></span>
-<span><span class="co">## <span style="color: #BCBCBC;">2</span> GTTCATTTCGGTTTGG-1 1            220 1        15 0.075</span></span>
-<span><span class="co">## <span style="color: #BCBCBC;">3</span> GGGCAATAGGCCCAGT-1 1            220 1        15 0.075</span></span>
-<span><span class="co">## <span style="color: #BCBCBC;">4</span> ATGTAAGCAATTGCGC-1 1            220 1        15 0.075</span></span>
-<span><span class="co">## <span style="color: #BCBCBC;">5</span> AGCTGCTCATAATTGC-1 1            220 1        15 0.075</span></span>
-<span><span class="co">## <span style="color: #BCBCBC;">6</span> GTTTCAGCAACACTTG-1 1            220 1        15 0.075</span></span></code></pre>
+<span><span class="co">## <span style="color: #BCBCBC;">1</span> CAACTAATCATTGACA-1 1            202 1        15 0.075</span></span>
+<span><span class="co">## <span style="color: #BCBCBC;">2</span> GTTCATTTCGGTTTGG-1 1            202 1        15 0.075</span></span>
+<span><span class="co">## <span style="color: #BCBCBC;">3</span> ATGTAAGCAATTGCGC-1 1            202 1        15 0.075</span></span>
+<span><span class="co">## <span style="color: #BCBCBC;">4</span> GGGCAATAGGCCCAGT-1 1            202 1        15 0.075</span></span>
+<span><span class="co">## <span style="color: #BCBCBC;">5</span> CAGCCTAAGACAACAG-1 1            202 1        15 0.075</span></span>
+<span><span class="co">## <span style="color: #BCBCBC;">6</span> TAGGCTAGTCGAAGTC-1 1            202 1        15 0.075</span></span></code></pre>
 </div>
 <div class="section level2">
 <h2 id="visualize-clones">Visualize clones<a class="anchor" aria-label="anchor" href="#visualize-clones"></a>
@@ -185,7 +195,7 @@ and a circular layout.</p>
 <div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/plot_phylo_heatmap2.html">plot_phylo_heatmap2</a></span><span class="op">(</span></span>
 <span>  <span class="va">tree_trim</span>,</span>
-<span>  <span class="va">pL1000_mut_dat</span>,</span>
+<span>  <span class="va">mut_dat</span>,</span>
 <span>  cell_annot <span class="op">=</span> <span class="va">clone_df</span>,</span>
 <span>  annot_pal <span class="op">=</span> <span class="va">clone_pal</span>,</span>
 <span>  node_conf <span class="op">=</span> <span class="cn">TRUE</span>,</span>

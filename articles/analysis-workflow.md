@@ -28,16 +28,27 @@ library(patchwork)
 We use a small in vitro LARRY barcode sample (200 cells, 186 variants)
 bundled with the package.
 
-``` r
-data(pL1000_tree_annot)
-data(pL1000_mut_dat)
+Run the same inference command used in the README:
+
+``` bash
+Rscript inst/bin/run_mitodrift_em.R \
+  --mut_dat inst/extdata/pL1000_mut_dat.csv \
+  --outdir mitodrift_demo \
+  --tree_mcmc_iter 5000 \
+  --tree_mcmc_chains 4 \
+  --tree_mcmc_burnin 1000
 ```
 
-In a typical workflow you would load the annotated tree from MitoDrift
-output:
+This writes `mitodrift_demo/mitodrift_object.rds` and
+`mitodrift_demo/tree_annotated.newick`. The workflow below uses the same
+mutation table and an annotated tree generated with those settings.
 
 ``` r
-# tree_annot <- ape::read.tree("tree_annotated.newick")
+mut_dat <- read.csv(
+  system.file("extdata", "pL1000_mut_dat.csv", package = "mitodrift")
+)
+data(pL1000_tree_annot)
+tree_annot <- pL1000_tree_annot
 ```
 
 ## Visualize the full binary tree
@@ -48,8 +59,8 @@ displays the tree alongside a variant heteroplasmy heatmap. Setting
 
 ``` r
 plot_phylo_heatmap2(
-  pL1000_tree_annot,
-  pL1000_mut_dat,
+  tree_annot,
+  mut_dat,
   node_conf = TRUE,
   dot_size = 2,
   branch_length = FALSE,
@@ -68,7 +79,7 @@ balances precision (are the clades real?) and recall (are we keeping
 enough structure?).
 
 ``` r
-pr_df <- compute_variant_pr_curve(pL1000_tree_annot, pL1000_mut_dat)
+pr_df <- compute_variant_pr_curve(tree_annot, mut_dat)
 plot_prec_recall_vs_conf(
   pr_df,
   sample_name = "Variant-based precision recall",
@@ -84,7 +95,7 @@ Collapse low-confidence nodes below the chosen threshold with
 [`trim_tree()`](https://teng-gao.github.io/mitodrift/reference/trim_tree.md).
 
 ``` r
-tree_trim <- trim_tree(pL1000_tree_annot, conf = 0.2)
+tree_trim <- trim_tree(tree_annot, conf = 0.2)
 ```
 
 Visualize the trimmed tree — polytomies replace poorly supported splits.
@@ -92,7 +103,7 @@ Visualize the trimmed tree — polytomies replace poorly supported splits.
 ``` r
 plot_phylo_heatmap2(
   tree_trim,
-  pL1000_mut_dat,
+  mut_dat,
   node_conf = TRUE,
   dot_size = 2,
   branch_length = FALSE,
@@ -116,12 +127,12 @@ head(clone_df)
     ## # A tibble: 6 × 6
     ##   cell               clade clade_node annot  size  frac
     ##   <chr>              <chr>      <int> <chr> <int> <dbl>
-    ## 1 CAACTAATCATTGACA-1 1            220 1        15 0.075
-    ## 2 GTTCATTTCGGTTTGG-1 1            220 1        15 0.075
-    ## 3 GGGCAATAGGCCCAGT-1 1            220 1        15 0.075
-    ## 4 ATGTAAGCAATTGCGC-1 1            220 1        15 0.075
-    ## 5 AGCTGCTCATAATTGC-1 1            220 1        15 0.075
-    ## 6 GTTTCAGCAACACTTG-1 1            220 1        15 0.075
+    ## 1 CAACTAATCATTGACA-1 1            202 1        15 0.075
+    ## 2 GTTCATTTCGGTTTGG-1 1            202 1        15 0.075
+    ## 3 ATGTAAGCAATTGCGC-1 1            202 1        15 0.075
+    ## 4 GGGCAATAGGCCCAGT-1 1            202 1        15 0.075
+    ## 5 CAGCCTAAGACAACAG-1 1            202 1        15 0.075
+    ## 6 TAGGCTAGTCGAAGTC-1 1            202 1        15 0.075
 
 ## Visualize clones
 
@@ -137,7 +148,7 @@ clone_pal <- make_clade_pal(length(clade_order), labels = clade_order,
 ``` r
 plot_phylo_heatmap2(
   tree_trim,
-  pL1000_mut_dat,
+  mut_dat,
   cell_annot = clone_df,
   annot_pal = clone_pal,
   node_conf = TRUE,
