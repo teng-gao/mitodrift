@@ -14,6 +14,8 @@ clade confidence. Inputs can be mtDNA allele counts from any single-cell
 genomics assays that capture mtDNA variation (e.g., mtscATAC-seq,
 MAESTER, ReDeeM).
 
+Preprint: <https://www.biorxiv.org/content/10.64898/2026.02.12.705660v1>
+
 ![](reference/figures/mitodrift_schematic.png)
 
 ------------------------------------------------------------------------
