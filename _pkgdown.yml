@@ -26,6 +26,7 @@ articles:
   - title: Tutorials
     contents:
       - analysis-workflow
+      - tutorial
 
 reference:
   - title: internal
