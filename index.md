@@ -1,5 +1,7 @@
 # MitoDrift
 
+![MitoDrift logo](reference/figures/logo.svg)
+
 MitoDrift reconstructs single-cell lineage trees from mitochondrial DNA
 (mtDNA) mutations by modeling heteroplasmy drift and measurement noise
 with a Wright–Fisher hidden Markov Tree (WF-HMT). It applies population

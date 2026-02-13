@@ -14,6 +14,7 @@
 <script src="deps/headroom-0.11.0/headroom.min.js"></script><script src="deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="deps/search-1.0.0/fuse.min.js"></script><script src="deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="pkgdown.js"></script><meta property="og:title" content="MitoDrift">
 <meta name="description" content="Reconstruct single-cell lineage history from mtDNA heteroplasmy drift with confidence-calibrated phylogenies.">
 <meta property="og:description" content="Reconstruct single-cell lineage history from mtDNA heteroplasmy drift with confidence-calibrated phylogenies.">
+<meta property="og:image" content="https://teng-gao.github.io/mitodrift/logo.svg">
 </head>
 <body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
@@ -47,8 +48,12 @@
 </nav><div class="container template-home">
 <div class="row">
   <main id="main" class="col-md-9"><div class="section level1">
-<div class="page-header"><h1 id="mitodrift">MitoDrift<a class="anchor" aria-label="anchor" href="#mitodrift"></a>
-</h1></div>
+<div class="page-header">
+<img src="logo.svg" class="logo" alt=""><h1 id="mitodrift">MitoDrift<a class="anchor" aria-label="anchor" href="#mitodrift"></a>
+</h1>
+</div>
+<p align="center">
+<img src="reference/figures/logo.svg" alt="MitoDrift logo" width="240"></p>
 <!-- badges: start -->
 
 <p>MitoDrift reconstructs single-cell lineage trees from mitochondrial DNA (mtDNA) mutations by modeling heteroplasmy drift and measurement noise with a Wright–Fisher hidden Markov Tree (WF-HMT). It applies population genetics principles (genetic drift) to model mtDNA heteroplasmy in single cells in order to reconstruct high-precision lineage trees from single-cell genomics/multiome data. MitoDrift uses expectation-maximization (EM) to obtain maximum-likelihood estimates of drift, mutation, and error rates, then performs phylogenetic MCMC to quantify the uncertainty in tree topology. The primary output is a phylogeny with posterior clade supports and a refined tree topology with high confidence. Inputs can be mtDNA allele counts from any single-cell genomics assays that capture mtDNA variation (e.g., ReDeeM, mtscATAC-seq, MAESTER).</p>
