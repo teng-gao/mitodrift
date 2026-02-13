@@ -23,6 +23,7 @@ Imports:
     ggraph,
     ggrastr,
     ggtree,
+    ggtreeExtra,
     glue,
     igraph,
     parallel,

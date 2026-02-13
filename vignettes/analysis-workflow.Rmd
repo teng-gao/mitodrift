@@ -24,7 +24,6 @@ library(data.table)
 library(ggplot2)
 library(dplyr)
 library(patchwork)
-library(ggtreeExtra)
 ```
 
 We use a small in vitro LARRY barcode sample (200 cells, 186 variants) bundled
