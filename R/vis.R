@@ -778,3 +778,99 @@ row_smooth <- function(M, k, na_rm = FALSE, edge = c("partial", "full")) {
 	}
 	out
 }
+
+
+#' Build a named Brewer palette with optional cycling behavior
+#'
+#' Creates up to `n` visually distinct colors by sampling (and, when needed,
+#' interpolating) from an RColorBrewer palette, optionally reordering each
+#' block in a zig-zag pattern and progressively lightening subsequent cycles.
+#'
+#' @param n Integer number of colors to generate.
+#' @param labels Optional character vector of names to assign to the colors. If
+#'   `NULL`, sequential integers are used.
+#' @param pal RColorBrewer palette name provided to `RColorBrewer::brewer.pal`.
+#' @param alternating Logical; when `TRUE`, reorders each chunk via a
+#'   zig-zag pattern to maximize separation of adjacent hues.
+#' @param cycle_len Positive integer forcing palette generation in repeating
+#'   chunks of this size; `0` (default) disables chunking.
+#' @param cycle_shift Scalar in `[0, 1]` controlling how strongly later chunks
+#'   blend toward white to maintain distinguishability.
+#'
+#' @return Named character vector of hex colors.
+#' @export
+make_clade_pal <- function(
+	n,
+	labels = NULL,
+	pal = "Set3",
+	alternating = FALSE,
+	cycle_len = 0L,
+	cycle_shift = 0.15
+) {
+
+	max_n <- RColorBrewer::brewer.pal.info[pal, "maxcolors"]
+	base_cols <- RColorBrewer::brewer.pal(max_n, pal)
+
+	zigzag_idx <- function(len) {
+		if (len <= 2L) return(seq_len(len))
+		ord <- as.vector(rbind(seq_len(len), rev(seq_len(len))))
+		ord <- ord[ord <= len]
+		ord[!duplicated(ord)]
+	}
+
+	blend_with_white <- function(cols, frac) {
+		if (frac <= 0) return(cols)
+		frac <- pmin(frac, 0.9)
+		rgb_mat <- grDevices::col2rgb(cols) / 255
+		mix <- (1 - frac) * rgb_mat + frac
+		grDevices::rgb(mix[1, ], mix[2, ], mix[3, ])
+	}
+
+	if (cycle_len <= 0L) {
+		cols <- if (n <= max_n) {
+			base_cols[seq_len(n)]
+		} else {
+			grDevices::colorRampPalette(base_cols)(n)
+		}
+		if (alternating) {
+			cols <- cols[zigzag_idx(length(cols))]
+		}
+	} else {
+		chunk_size <- max(1L, min(cycle_len, max_n))
+		base_chunk <- if (chunk_size <= max_n) {
+			base_cols[seq_len(chunk_size)]
+		} else {
+			grDevices::colorRampPalette(base_cols)(chunk_size)
+		}
+
+		cols <- character(0)
+		remaining <- n
+		cycle_idx <- 1L
+		while (remaining > 0L) {
+			take <- min(chunk_size, remaining)
+			block <- base_chunk
+			if (take < length(block)) {
+				block <- block[seq_len(take)]
+			}
+			if (alternating && take > 1L) {
+				block <- block[zigzag_idx(take)]
+			}
+			if (cycle_idx > 1L) {
+				frac <- min(0.85, (cycle_idx - 1L) * cycle_shift)
+				block <- blend_with_white(block, frac)
+			}
+			cols <- c(cols, block)
+			remaining <- remaining - take
+			cycle_idx <- cycle_idx + 1L
+		}
+	}
+
+	if (is.null(labels)) {
+		labels <- as.character(seq_len(n))
+	} else {
+		labels <- as.character(labels)
+	}
+
+	names(cols) <- labels
+	cols
+}

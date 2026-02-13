@@ -3,7 +3,6 @@
 <url><loc>https://teng-gao.github.io/mitodrift/DOCS_TODO.html</loc></url>
 <url><loc>https://teng-gao.github.io/mitodrift/articles/analysis-workflow.html</loc></url>
 <url><loc>https://teng-gao.github.io/mitodrift/articles/index.html</loc></url>
-<url><loc>https://teng-gao.github.io/mitodrift/articles/tutorial.html</loc></url>
 <url><loc>https://teng-gao.github.io/mitodrift/authors.html</loc></url>
 <url><loc>https://teng-gao.github.io/mitodrift/index.html</loc></url>
 <url><loc>https://teng-gao.github.io/mitodrift/news/index.html</loc></url>
@@ -24,6 +23,7 @@
 <url><loc>https://teng-gao.github.io/mitodrift/reference/index.html</loc></url>
 <url><loc>https://teng-gao.github.io/mitodrift/reference/logSumExp.html</loc></url>
 <url><loc>https://teng-gao.github.io/mitodrift/reference/long_to_mat.html</loc></url>
+<url><loc>https://teng-gao.github.io/mitodrift/reference/make_clade_pal.html</loc></url>
 <url><loc>https://teng-gao.github.io/mitodrift/reference/make_rooted_nj.html</loc></url>
 <url><loc>https://teng-gao.github.io/mitodrift/reference/mat_to_long.html</loc></url>
 <url><loc>https://teng-gao.github.io/mitodrift/reference/optimize_tree_cpp.html</loc></url>
