@@ -33,6 +33,8 @@
   : Plot Circular Phylogenetic Tree with Annotations
 - [`plot_phylo_heatmap2()`](https://teng-gao.github.io/mitodrift/reference/plot_phylo_heatmap2.md)
   : Plot a phylogenetic tree with VAF heatmap and annotations
+- [`make_clade_pal()`](https://teng-gao.github.io/mitodrift/reference/make_clade_pal.md)
+  : Build a named Brewer palette with optional cycling behavior
 
 ## Data utilities
 

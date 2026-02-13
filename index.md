@@ -160,6 +160,8 @@ Full lineage inference pipeline is run with
 
 ------------------------------------------------------------------------
 
+# Analysis workflow
+
 For a complete walkthrough, see the [Analysis
 Workflow](https://teng-gao.github.io/mitodrift/articles/analysis-workflow.html)
 tutorial.

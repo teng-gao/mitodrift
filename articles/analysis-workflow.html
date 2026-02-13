@@ -113,6 +113,7 @@ colours internal nodes by their confidence score.</p>
 <span>  <span class="va">pL1000_tree_annot</span>,</span>
 <span>  <span class="va">pL1000_mut_dat</span>,</span>
 <span>  node_conf <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  dot_size <span class="op">=</span> <span class="fl">2</span>,</span>
 <span>  branch_length <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  title <span class="op">=</span> <span class="st">"Full annotated tree"</span></span>
 <span><span class="op">)</span></span></code></pre></div>
@@ -127,8 +128,12 @@ This helps identify a threshold that balances precision (are the clades
 real?) and recall (are we keeping enough structure?).</p>
 <div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">pr_df</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/compute_variant_pr_curve.html">compute_variant_pr_curve</a></span><span class="op">(</span><span class="va">pL1000_tree_annot</span>, <span class="va">pL1000_mut_dat</span><span class="op">)</span></span>
-<span><span class="fu"><a href="../reference/plot_prec_recall_vs_conf.html">plot_prec_recall_vs_conf</a></span><span class="op">(</span><span class="va">pr_df</span>, cutoff <span class="op">=</span> <span class="fl">0.2</span><span class="op">)</span></span></code></pre></div>
-<p><img src="analysis-workflow_files/figure-html/pr-curve-1.png" class="r-plt" alt="" width="672"></p>
+<span><span class="fu"><a href="../reference/plot_prec_recall_vs_conf.html">plot_prec_recall_vs_conf</a></span><span class="op">(</span></span>
+<span>  <span class="va">pr_df</span>,</span>
+<span>  sample_name <span class="op">=</span> <span class="st">"Variant-based precision recall"</span>,</span>
+<span>  cutoff <span class="op">=</span> <span class="fl">0.2</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+<p><img src="analysis-workflow_files/figure-html/pr-curve-1.png" class="r-plt" alt="" width="65%" style="display: block; margin: auto;"></p>
 </div>
 <div class="section level2">
 <h2 id="trim-tree">Trim tree<a class="anchor" aria-label="anchor" href="#trim-tree"></a>
@@ -144,6 +149,7 @@ splits.</p>
 <span>  <span class="va">tree_trim</span>,</span>
 <span>  <span class="va">pL1000_mut_dat</span>,</span>
 <span>  node_conf <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  dot_size <span class="op">=</span> <span class="fl">2</span>,</span>
 <span>  branch_length <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  title <span class="op">=</span> <span class="st">"Trimmed tree (conf &gt;= 0.2)"</span></span>
 <span><span class="op">)</span></span></code></pre></div>
@@ -173,18 +179,27 @@ based on the polytomy structure of the trimmed tree.</p>
 <p>Colour cells by clone assignment on both a rectangular heatmap view
 and a circular layout.</p>
 <div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">clade_order</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/unique.html" class="external-link">unique</a></span><span class="op">(</span><span class="va">clone_df</span><span class="op">$</span><span class="va">clade</span><span class="op">)</span></span>
+<span><span class="va">clone_pal</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/make_clade_pal.html">make_clade_pal</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">clade_order</span><span class="op">)</span>, labels <span class="op">=</span> <span class="va">clade_order</span>,</span>
+<span>                            pal <span class="op">=</span> <span class="st">"Dark2"</span>, cycle_len <span class="op">=</span> <span class="fl">8</span>, cycle_shift <span class="op">=</span> <span class="fl">0</span><span class="op">)</span></span></code></pre></div>
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/plot_phylo_heatmap2.html">plot_phylo_heatmap2</a></span><span class="op">(</span></span>
 <span>  <span class="va">tree_trim</span>,</span>
 <span>  <span class="va">pL1000_mut_dat</span>,</span>
 <span>  cell_annot <span class="op">=</span> <span class="va">clone_df</span>,</span>
+<span>  annot_pal <span class="op">=</span> <span class="va">clone_pal</span>,</span>
+<span>  node_conf <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  dot_size <span class="op">=</span> <span class="fl">2</span>,</span>
 <span>  branch_length <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  title <span class="op">=</span> <span class="st">"Clones on trimmed tree"</span></span>
 <span><span class="op">)</span></span></code></pre></div>
 <p><img src="analysis-workflow_files/figure-html/clone-heatmap-1.png" class="r-plt" alt="" width="960"></p>
-<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/plot_phylo_circ.html">plot_phylo_circ</a></span><span class="op">(</span></span>
 <span>  <span class="va">tree_trim</span>,</span>
 <span>  cell_annot <span class="op">=</span> <span class="va">clone_df</span>,</span>
+<span>  annot_pal <span class="op">=</span> <span class="va">clone_pal</span>,</span>
+<span>  annot_legend <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  title <span class="op">=</span> <span class="st">"Circular layout"</span></span>
 <span><span class="op">)</span></span></code></pre></div>
 <p><img src="analysis-workflow_files/figure-html/clone-circ-1.png" class="r-plt" alt="" width="672"></p>
