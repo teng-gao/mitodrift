@@ -2,7 +2,8 @@
 
 ### Tutorials
 
-- [MitoDrift
-  tutorial](https://teng-gao.github.io/mitodrift/articles/tutorial.md):
+- [Analysis
+  workflow](https://teng-gao.github.io/mitodrift/articles/analysis-workflow.md):
 
-  Visualizing and interpreting MitoDrift outputs
+  Post-inference analysis: diagnostic PR curve, confidence trimming,
+  clone assignment, and visualization

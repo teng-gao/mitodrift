@@ -1,16 +1,16 @@
 # MitoDrift
 
-MitoDrift reconstructs single-cell lineage relationships from
-mitochondrial DNA (mtDNA) mutations by modeling heteroplasmy drift and
-measurement noise with a Wright–Fisher hidden Markov Tree (WF-HMT). It
-applies population genetics principles (genetic drift) to model mtDNA
-heteroplasmy in single cells in order to reconstruct high-precision
-lineage trees from single-cell genomics/multiome data. MitoDrift uses
+MitoDrift reconstructs single-cell lineage trees from mitochondrial DNA
+(mtDNA) mutations by modeling heteroplasmy drift and measurement noise
+with a Wright–Fisher hidden Markov Tree (WF-HMT). It applies population
+genetics principles (genetic drift) to model mtDNA heteroplasmy in
+single cells in order to reconstruct high-precision lineage trees from
+single-cell genomics/multiome data. MitoDrift uses
 expectation-maximization (EM) to obtain maximum-likelihood estimates of
 drift, mutation, and error rates, then performs phylogenetic MCMC to
 quantify the uncertainty in tree topology. The primary output is a
-phylogeny with posterior clade confidence and summary trees refined by
-clade confidence. Inputs can be mtDNA allele counts from any single-cell
+phylogeny with posterior clade supports and a refined tree topology with
+high confidence. Inputs can be mtDNA allele counts from any single-cell
 genomics assays that capture mtDNA variation (e.g., ReDeeM,
 mtscATAC-seq, MAESTER).
 
@@ -101,6 +101,9 @@ depth).
 
 ## Inference settings & diagnostics
 
+Full lineage inference pipeline is run with
+`inst/bin/run_mitodrift_em.R`.
+
 ### Model parameters (EM fitting)
 
 - `--fit_params`: Enable automatic parameter fitting via EM (default:
@@ -157,32 +160,6 @@ depth).
 
 ------------------------------------------------------------------------
 
-## Core concepts for interpretation
-
-- Initial tree topology: a point-estimate starting tree constructed
-  using neighbor joining (NJ) on continuous VAF matrices. This provides
-  a fully-resolved (binary) initialization that empirically captures
-  strong lineage signal before posterior sampling.
-- Posterior clade support: per-node support values in `tree$node.label`
-  (0–1) estimated from MCMC topology sampling.
-- Confidence-based topology refinement: collapse internal edges below a
-  support cutoff `τ` to obtain a refined lineage tree.
-
-------------------------------------------------------------------------
-
-## Clone assignment workflow
-
-1.  Refine tree topology by collapsing (trimming) low-confidence edges:
-
-``` r
-tau <- 0.5
-phy_trim <- trim_tree(phy, conf = tau)
-```
-
-2.  Assign clones (top-level root-descending clades):
-
-``` r
-clade_df <- assign_clones_polytomy(phy_trim, k = Inf, return_df = TRUE)
-```
-
-------------------------------------------------------------------------
+For a complete walkthrough, see the [Analysis
+Workflow](https://teng-gao.github.io/mitodrift/articles/analysis-workflow.html)
+tutorial.

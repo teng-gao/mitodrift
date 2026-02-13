@@ -51,7 +51,7 @@
 </h1></div>
 <!-- badges: start -->
 
-<p>MitoDrift reconstructs single-cell lineage relationships from mitochondrial DNA (mtDNA) mutations by modeling heteroplasmy drift and measurement noise with a Wright–Fisher hidden Markov Tree (WF-HMT). It applies population genetics principles (genetic drift) to model mtDNA heteroplasmy in single cells in order to reconstruct high-precision lineage trees from single-cell genomics/multiome data. MitoDrift uses expectation-maximization (EM) to obtain maximum-likelihood estimates of drift, mutation, and error rates, then performs phylogenetic MCMC to quantify the uncertainty in tree topology. The primary output is a phylogeny with posterior clade confidence and summary trees refined by clade confidence. Inputs can be mtDNA allele counts from any single-cell genomics assays that capture mtDNA variation (e.g., ReDeeM, mtscATAC-seq, MAESTER).</p>
+<p>MitoDrift reconstructs single-cell lineage trees from mitochondrial DNA (mtDNA) mutations by modeling heteroplasmy drift and measurement noise with a Wright–Fisher hidden Markov Tree (WF-HMT). It applies population genetics principles (genetic drift) to model mtDNA heteroplasmy in single cells in order to reconstruct high-precision lineage trees from single-cell genomics/multiome data. MitoDrift uses expectation-maximization (EM) to obtain maximum-likelihood estimates of drift, mutation, and error rates, then performs phylogenetic MCMC to quantify the uncertainty in tree topology. The primary output is a phylogeny with posterior clade supports and a refined tree topology with high confidence. Inputs can be mtDNA allele counts from any single-cell genomics assays that capture mtDNA variation (e.g., ReDeeM, mtscATAC-seq, MAESTER).</p>
 <p>Preprint: <a href="https://www.biorxiv.org/content/10.64898/2026.02.12.705660v1" class="external-link uri">https://www.biorxiv.org/content/10.64898/2026.02.12.705660v1</a></p>
 <p><img src="reference/figures/mitodrift_schematic.png" width="100%"></p>
 <hr>
@@ -150,6 +150,7 @@
 <div class="section level2">
 <h2 id="inference-settings--diagnostics">Inference settings &amp; diagnostics<a class="anchor" aria-label="anchor" href="#inference-settings--diagnostics"></a>
 </h2>
+<p>Full lineage inference pipeline is run with <code>inst/bin/run_mitodrift_em.R</code>.</p>
 <div class="section level3">
 <h3 id="model-parameters-em-fitting">Model parameters (EM fitting)<a class="anchor" aria-label="anchor" href="#model-parameters-em-fitting"></a>
 </h3>
@@ -215,33 +216,8 @@
 <li>Use <code>--resume TRUE</code> to continue interrupted runs from saved traces</li>
 </ul>
 <hr>
+<p>For a complete walkthrough, see the <a href="https://teng-gao.github.io/mitodrift/articles/analysis-workflow.html">Analysis Workflow</a> tutorial.</p>
 </div>
-</div>
-<div class="section level2">
-<h2 id="core-concepts-for-interpretation">Core concepts for interpretation<a class="anchor" aria-label="anchor" href="#core-concepts-for-interpretation"></a>
-</h2>
-<ul>
-<li>Initial tree topology: a point-estimate starting tree constructed using neighbor joining (NJ) on continuous VAF matrices. This provides a fully-resolved (binary) initialization that empirically captures strong lineage signal before posterior sampling.</li>
-<li>Posterior clade support: per-node support values in <code>tree$node.label</code> (0–1) estimated from MCMC topology sampling.</li>
-<li>Confidence-based topology refinement: collapse internal edges below a support cutoff <code>τ</code> to obtain a refined lineage tree.</li>
-</ul>
-<hr>
-</div>
-<div class="section level2">
-<h2 id="clone-assignment-workflow">Clone assignment workflow<a class="anchor" aria-label="anchor" href="#clone-assignment-workflow"></a>
-</h2>
-<ol style="list-style-type: decimal">
-<li>Refine tree topology by collapsing (trimming) low-confidence edges:</li>
-</ol>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">tau</span> <span class="op">&lt;-</span> <span class="fl">0.5</span></span>
-<span><span class="va">phy_trim</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/trim_tree.html">trim_tree</a></span><span class="op">(</span><span class="va">phy</span>, conf <span class="op">=</span> <span class="va">tau</span><span class="op">)</span></span></code></pre></div>
-<ol start="2" style="list-style-type: decimal">
-<li>Assign clones (top-level root-descending clades):</li>
-</ol>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">clade_df</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/assign_clones_polytomy.html">assign_clones_polytomy</a></span><span class="op">(</span><span class="va">phy_trim</span>, k <span class="op">=</span> <span class="cn">Inf</span>, return_df <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
-<hr>
 </div>
 </div>
   </main><aside class="col-md-3"><div class="links">

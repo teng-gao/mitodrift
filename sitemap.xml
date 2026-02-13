@@ -1,7 +1,7 @@
 <urlset xmlns = 'http://www.sitemaps.org/schemas/sitemap/0.9'>
 <url><loc>https://teng-gao.github.io/mitodrift/404.html</loc></url>
+<url><loc>https://teng-gao.github.io/mitodrift/articles/analysis-workflow.html</loc></url>
 <url><loc>https://teng-gao.github.io/mitodrift/articles/index.html</loc></url>
-<url><loc>https://teng-gao.github.io/mitodrift/articles/tutorial.html</loc></url>
 <url><loc>https://teng-gao.github.io/mitodrift/authors.html</loc></url>
 <url><loc>https://teng-gao.github.io/mitodrift/index.html</loc></url>
 <url><loc>https://teng-gao.github.io/mitodrift/news/index.html</loc></url>
@@ -11,7 +11,9 @@
 <url><loc>https://teng-gao.github.io/mitodrift/reference/assign_clones_polytomy.html</loc></url>
 <url><loc>https://teng-gao.github.io/mitodrift/reference/collect_chains.html</loc></url>
 <url><loc>https://teng-gao.github.io/mitodrift/reference/compute_target_tree_asdsf.html</loc></url>
+<url><loc>https://teng-gao.github.io/mitodrift/reference/compute_variant_pr_curve.html</loc></url>
 <url><loc>https://teng-gao.github.io/mitodrift/reference/convert_logliks_to_logP_list.html</loc></url>
+<url><loc>https://teng-gao.github.io/mitodrift/reference/cpp-internals.html</loc></url>
 <url><loc>https://teng-gao.github.io/mitodrift/reference/decode_tree.html</loc></url>
 <url><loc>https://teng-gao.github.io/mitodrift/reference/fit_params_em_cpp.html</loc></url>
 <url><loc>https://teng-gao.github.io/mitodrift/reference/get_leaf_liks_mat_cpp.html</loc></url>
@@ -23,9 +25,12 @@
 <url><loc>https://teng-gao.github.io/mitodrift/reference/make_rooted_nj.html</loc></url>
 <url><loc>https://teng-gao.github.io/mitodrift/reference/mat_to_long.html</loc></url>
 <url><loc>https://teng-gao.github.io/mitodrift/reference/optimize_tree_cpp.html</loc></url>
+<url><loc>https://teng-gao.github.io/mitodrift/reference/pL1000_mut_dat.html</loc></url>
+<url><loc>https://teng-gao.github.io/mitodrift/reference/pL1000_tree_annot.html</loc></url>
 <url><loc>https://teng-gao.github.io/mitodrift/reference/phylo_to_gtree.html</loc></url>
 <url><loc>https://teng-gao.github.io/mitodrift/reference/plot_phylo_circ.html</loc></url>
 <url><loc>https://teng-gao.github.io/mitodrift/reference/plot_phylo_heatmap2.html</loc></url>
+<url><loc>https://teng-gao.github.io/mitodrift/reference/plot_prec_recall_vs_conf.html</loc></url>
 <url><loc>https://teng-gao.github.io/mitodrift/reference/reorder_phylo.html</loc></url>
 <url><loc>https://teng-gao.github.io/mitodrift/reference/row_smooth.html</loc></url>
 <url><loc>https://teng-gao.github.io/mitodrift/reference/run_tree_mcmc_batch.html</loc></url>

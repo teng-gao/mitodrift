@@ -12,12 +12,20 @@
 - [`collect_chains()`](https://teng-gao.github.io/mitodrift/reference/collect_chains.md)
   : Collect MCMC chains into a multiPhylo object
 
-## Trimming and clones
+## Topology refinement and clone assignment
 
 - [`trim_tree()`](https://teng-gao.github.io/mitodrift/reference/trim_tree.md)
   : Collapse weak clades below a confidence threshold.
 - [`assign_clones_polytomy()`](https://teng-gao.github.io/mitodrift/reference/assign_clones_polytomy.md)
   : Assign clone IDs to a tree allowing small polytomies.
+
+## Diagnostics
+
+- [`compute_variant_pr_curve()`](https://teng-gao.github.io/mitodrift/reference/compute_variant_pr_curve.md)
+  : Compute variant-to-tree precision/recall/F1 curve across confidence
+  cutoffs
+- [`plot_prec_recall_vs_conf()`](https://teng-gao.github.io/mitodrift/reference/plot_prec_recall_vs_conf.md)
+  : Plot precision/recall/F1 versus confidence cutoff
 
 ## Visualization
 
@@ -44,3 +52,10 @@
   :
 
   Add "Node" labels to the internal nodes of a phylo tree
+
+## Example data
+
+- [`pL1000_tree_annot`](https://teng-gao.github.io/mitodrift/reference/pL1000_tree_annot.md)
+  : Annotated phylogenetic tree for pL1000_200_1
+- [`pL1000_mut_dat`](https://teng-gao.github.io/mitodrift/reference/pL1000_mut_dat.md)
+  : Mutation count data for pL1000_200_1
