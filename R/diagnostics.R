@@ -162,26 +162,16 @@ plot_retention_curve <- function(retention_data, sample_name = '', cutoff = NULL
 #
 # These functions are extracted from `notebooks/Supplement/plot_all_prec_recall_vs_conf.R`
 # and refactored to work directly from `phy_annot` and `mut_dat`.
-
 compute_variant_pr_curve <- function(
     phy_annot,
     mut_dat,
     min_vaf = 0.01,
     min_cells = 2,
     j_thres = 0.66,
-    n_points = 50
+    n_points = 50,
+    ncores = 1
 ) {
     if (!inherits(phy_annot, "phylo")) stop("phy_annot must be a 'phylo' object")
-    if (!exists("variant_tree_jaccard_matrix", mode = "function")) {
-        stop("variant_tree_jaccard_matrix() not found. Source `R/tree_evaluation.R` before calling.")
-    }
-    if (!exists("long_to_mat", mode = "function")) {
-        stop("long_to_mat() not found. `library(mitodrift)` (or otherwise load it) before calling.")
-    }
-
-    if (!all(c("variant", "cell", "a", "d") %in% colnames(mut_dat))) {
-        stop("mut_dat must contain columns: variant, cell, a, d")
-    }
 
     mut_dat <- mut_dat
     mut_dat$vaf <- mut_dat$a / mut_dat$d
@@ -211,7 +201,13 @@ compute_variant_pr_curve <- function(
 
     conf_all <- stats::setNames(node_conf, paste0("Node", names(node_conf)))
 
-    df <- compute_pr_from_jaccard_mat(J_full, conf_all, j_thres = j_thres, n_points = n_points)
+    df <- compute_pr_from_jaccard_mat(
+        J_full,
+        conf_all,
+        j_thres = j_thres,
+        n_points = n_points,
+        ncores = ncores
+    )
 
     var_max_j <- apply(J_full, 1, max)
     df$fraction_well_matched <- mean(var_max_j >= j_thres)
@@ -224,10 +220,12 @@ compute_variant_pr_curve <- function(
 #' @param phy_est A rooted \code{phylo} object with clade confidence in \code{node.label}.
 #' @param j_thres Jaccard threshold for declaring a match (default 0.5).
 #' @param n_points Number of confidence cutoff points to evaluate (default 50).
+#' @param ncores Number of cores for sweeping confidence cutoffs. Uses
+#'   \code{parallel::mclapply} when \code{ncores > 1} on non-Windows systems.
 #'
 #' @return Data frame with columns: conf_cutoff, n_pred, n_tp, n_tru,
 #'   n_recover, precision, recall, f1.
-compute_tree_pr_curve <- function(phy_tru, phy_est, j_thres = 0.5, n_points = 50) {
+compute_tree_pr_curve <- function(phy_tru, phy_est, j_thres = 0.5, n_points = 50, ncores = 1) {
     if (!inherits(phy_tru, "phylo")) stop("phy_tru must be a 'phylo' object")
     if (!inherits(phy_est, "phylo")) stop("phy_est must be a 'phylo' object")
 
@@ -248,7 +246,7 @@ compute_tree_pr_curve <- function(phy_tru, phy_est, j_thres = 0.5, n_points = 50
     )
     conf_all[is.na(conf_all)] <- 0
 
-    compute_pr_from_jaccard_mat(J, conf_all, j_thres = j_thres, n_points = n_points)
+    compute_pr_from_jaccard_mat(J, conf_all, j_thres = j_thres, n_points = n_points, ncores = ncores)
 }
 
 #' Compute precision/recall/F1 curve from a Jaccard matrix and clade confidences
@@ -258,10 +256,12 @@ compute_tree_pr_curve <- function(phy_tru, phy_est, j_thres = 0.5, n_points = 50
 #'   Names must match column names of \code{J}.
 #' @param j_thres Jaccard threshold for declaring a match (default 0.66).
 #' @param n_points Number of confidence cutoff points to evaluate (default 50).
+#' @param ncores Number of cores for sweeping confidence cutoffs. Uses
+#'   \code{parallel::mclapply} when \code{ncores > 1} on non-Windows systems.
 #'
 #' @return Data frame with columns: conf_cutoff, n_pred, n_tp, n_tru,
 #'   n_recover, precision, recall, f1.
-compute_pr_from_jaccard_mat <- function(J, conf, j_thres = 0.66, n_points = 50) {
+compute_pr_from_jaccard_mat <- function(J, conf, j_thres = 0.5, n_points = 50, ncores = 1) {
 
     conf_cols <- conf[colnames(J)]
     conf_cols[is.na(conf_cols)] <- 0
@@ -284,7 +284,7 @@ compute_pr_from_jaccard_mat <- function(J, conf, j_thres = 0.66, n_points = 50) 
     conf_cutoffs <- pmin(pmax(conf_cutoffs, 0), 1)
 
     n_tru <- nrow(J)
-    score_mat <- sapply(conf_cutoffs, function(ct) {
+    score_for_cutoff <- function(ct) {
         keep <- conf_cols >= ct
         n_pred <- sum(keep)
         n_tp <- sum(col_supported & keep)
@@ -293,7 +293,13 @@ compute_pr_from_jaccard_mat <- function(J, conf, j_thres = 0.66, n_points = 50) 
         recall <- if (n_tru == 0L) NA_real_ else n_recover / n_tru
         c(n_pred = n_pred, n_tp = n_tp, n_tru = n_tru,
           n_recover = n_recover, precision = precision, recall = recall)
-    })
+    }
+
+    ncores <- as.integer(ncores)
+    if (is.na(ncores) || ncores < 1L) ncores <- 1L
+
+    score_list <- parallel::mclapply(conf_cutoffs, score_for_cutoff, mc.cores = ncores)
+    score_mat <- do.call(cbind, score_list)
 
     df <- data.frame(
         conf_cutoff = conf_cutoffs,
@@ -310,28 +316,47 @@ compute_pr_from_jaccard_mat <- function(J, conf, j_thres = 0.66, n_points = 50) 
     df
 }
 
+#' Plot precision/recall/F1 versus confidence cutoff
+#'
+#' Build a line plot of precision, recall, and F1 across confidence cutoffs
+#' from a PR-curve data frame (for example, output from
+#' \code{compute_variant_pr_curve()}, \code{compute_tree_pr_curve()}, or
+#' \code{compute_pr_from_jaccard_mat()}).
+#'
+#' @param pr_df Data frame containing at least columns
+#'   \code{conf_cutoff}, \code{precision}, \code{recall}, and \code{f1}. If
+#'   present, \code{fraction_well_matched} is used for optional annotation.
+#' @param sample_name Optional title string shown above the panel.
+#' @param cutoff Optional numeric cutoff to highlight with a vertical dashed
+#'   line and label near the top of the panel.
+#' @param x_axis_scale X-axis scale: \code{"log10"} (default) or
+#'   \code{"linear"}.
+#' @param log10_min Lower bound used for log10 plotting so zero cutoffs can be
+#'   displayed safely.
+#' @param j_thres Optional Jaccard threshold used only for display annotation
+#'   with \code{fraction_well_matched}.
+#' @param legend Logical; if \code{TRUE}, show metric legend on the right.
+#'
+#' @return A \code{ggplot2} object.
 plot_prec_recall_vs_conf <- function(
     pr_df,
     sample_name = NULL,
     cutoff = NULL,
     x_axis_scale = c("log10", "linear"),
     log10_min = 1e-6,
-    j_thres = NULL
+    j_thres = NULL,
+    legend = TRUE
 ) {
     x_axis_scale <- match.arg(x_axis_scale)
     if (!all(c("conf_cutoff", "precision", "recall", "f1") %in% colnames(pr_df))) {
         stop("pr_df must contain columns: conf_cutoff, precision, recall, f1")
     }
 
-    if (!requireNamespace("ggplot2", quietly = TRUE)) {
-        stop("ggplot2 is required for plot_prec_recall_vs_conf(); please install/load it.")
-    }
-
     fraction <- pr_df$fraction_well_matched
     fraction <- if (length(fraction) == 0L) NA_real_ else fraction[1]
     
     if (!is.null(j_thres)) {
-        ann <- if (is.na(fraction)) NA_character_ else sprintf("%.1f%% vars J >= %.2f", 100 * fraction, j_thres)
+        ann <- if (is.na(fraction)) NA_character_ else glue("{signif(100 * fraction, 2)}% vars J >= {j_thres}")
     } else {
         ann = ''
     }
@@ -356,7 +381,7 @@ plot_prec_recall_vs_conf <- function(
         ggplot2::geom_line(linewidth = 0.9, na.rm = TRUE) +
         ggplot2::scale_color_manual(
             values = c("Precision" = "#1F77B4", "Recall" = "#D62728", "F1" = "#2CA02C"),
-            title = 'Metric'
+            name = 'Metric'
         ) +
         ggplot2::labs(
             title = sample_name,
@@ -365,10 +390,10 @@ plot_prec_recall_vs_conf <- function(
         ) +
         ggplot2::theme_bw(base_size = 10) +
         ggplot2::theme(
-            plot.title = ggplot2::element_text(size = 10, hjust = 0.5),
+            plot.title = ggplot2::element_text(size = 10, hjust = 0, margin = margin(b = 10)),
             axis.title = ggplot2::element_text(size = 8),
             axis.text = ggplot2::element_text(size = 7),
-            legend.position = "bottom",
+            legend.position = if (legend) "right" else "none",
             panel.grid.minor = ggplot2::element_blank()
         )
 
@@ -376,8 +401,21 @@ plot_prec_recall_vs_conf <- function(
         p <- p + ggplot2::geom_vline(
             xintercept = vline_x,
             color = "grey40",
-            linetype = "dashed",
+            linetype = "11",
             linewidth = 0.6
+        )
+
+        cutoff_label_value <- if (!is.null(cutoff)) cutoff else vline_x
+        cutoff_label <- paste0(signif(cutoff_label_value, 3))
+        p <- p + ggplot2::annotate(
+            "text",
+            x = vline_x,
+            y = Inf,
+            label = cutoff_label,
+            vjust = -0.5,
+            hjust = 0.5,
+            size = 2.8,
+            color = "grey25"
         )
     }
 
@@ -398,6 +436,10 @@ plot_prec_recall_vs_conf <- function(
     if (x_axis_scale == "log10") {
         p <- p + ggplot2::scale_x_continuous(trans = "log10")
     }
+
+    p <- p +
+        ggplot2::coord_cartesian(clip = "off") +
+        ggplot2::theme(plot.margin = ggplot2::margin(t = 5, r = 5, b = 5, l = 5))
 
     p
 }
