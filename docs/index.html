@@ -5,6 +5,12 @@
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <title>MitoDrift • mitodrift</title>
+<!-- favicons --><link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+<link rel="apple-touch-icon" type="image/png" sizes="180x180" href="apple-touch-icon.png">
+<link rel="apple-touch-icon" type="image/png" sizes="120x120" href="apple-touch-icon-120x120.png">
+<link rel="apple-touch-icon" type="image/png" sizes="76x76" href="apple-touch-icon-76x76.png">
+<link rel="apple-touch-icon" type="image/png" sizes="60x60" href="apple-touch-icon-60x60.png">
 <script src="deps/jquery-3.6.0/jquery-3.6.0.min.js"></script><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <link href="deps/bootstrap-5.3.1/bootstrap.min.css" rel="stylesheet">
 <script src="deps/bootstrap-5.3.1/bootstrap.bundle.min.js"></script><link href="deps/Inter-0.4.9/font.css" rel="stylesheet">
@@ -13,6 +19,7 @@
 <script src="deps/headroom-0.11.0/headroom.min.js"></script><script src="deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="deps/search-1.0.0/fuse.min.js"></script><script src="deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="pkgdown.js"></script><meta property="og:title" content="MitoDrift">
 <meta name="description" content="Reconstruct single-cell lineage history from mtDNA heteroplasmy drift with confidence-calibrated phylogenies.">
 <meta property="og:description" content="Reconstruct single-cell lineage history from mtDNA heteroplasmy drift with confidence-calibrated phylogenies.">
+<meta property="og:image" content="https://teng-gao.github.io/mitodrift/logo.svg">
 </head>
 <body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
@@ -46,8 +53,12 @@
 </nav><div class="container template-home">
 <div class="row">
   <main id="main" class="col-md-9"><div class="section level1">
-<div class="page-header"><h1 id="mitodrift">MitoDrift<a class="anchor" aria-label="anchor" href="#mitodrift"></a>
-</h1></div>
+<div class="page-header">
+<img src="logo.svg" class="logo" alt=""><h1 id="mitodrift">MitoDrift<a class="anchor" aria-label="anchor" href="#mitodrift"></a>
+</h1>
+</div>
+<p align="center">
+<img src="reference/figures/logo.svg" alt="MitoDrift logo" width="240"></p>
 <!-- badges: start -->
 
 <p>MitoDrift reconstructs single-cell lineage trees from mitochondrial DNA (mtDNA) mutations by modeling heteroplasmy drift and measurement noise with a Wright–Fisher hidden Markov Tree (WF-HMT). It applies population genetics principles (genetic drift) to model mtDNA heteroplasmy in single cells in order to reconstruct high-precision lineage trees from single-cell genomics/multiome data. MitoDrift uses expectation-maximization (EM) to obtain maximum-likelihood estimates of drift, mutation, and error rates, then performs phylogenetic MCMC to quantify the uncertainty in tree topology. The primary output is a phylogeny with posterior clade supports and a refined tree topology with high confidence. Inputs can be mtDNA allele counts from any single-cell genomics assays that capture mtDNA variation (e.g., ReDeeM, mtscATAC-seq, MAESTER).</p>
@@ -69,20 +80,20 @@
 <div class="section level2">
 <h2 id="quick-start">Quick start<a class="anchor" aria-label="anchor" href="#quick-start"></a>
 </h2>
-<p>This uses a tiny example dataset packaged under <code>inst/extdata/</code>.</p>
-<p>You can run this from a terminal in the package root (these settings are intentionally small/fast for a demo):</p>
+<p>This uses a pL1000 subset dataset packaged under <code>inst/extdata/</code> (200 cells, 186 variants).</p>
+<p>You can run this from a terminal in the package root:</p>
 <div class="sourceCode" id="cb3"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a><span class="ex">Rscript</span> inst/bin/run_mitodrift_em.R <span class="dt">\</span></span>
-<span id="cb3-2"><a href="#cb3-2" tabindex="-1"></a>  <span class="at">--mut_dat</span> inst/extdata/small_test_mut_dat.csv <span class="dt">\</span></span>
+<span id="cb3-2"><a href="#cb3-2" tabindex="-1"></a>  <span class="at">--mut_dat</span> inst/extdata/pL1000_mut_dat.csv <span class="dt">\</span></span>
 <span id="cb3-3"><a href="#cb3-3" tabindex="-1"></a>  <span class="at">--outdir</span> mitodrift_demo <span class="dt">\</span></span>
-<span id="cb3-4"><a href="#cb3-4" tabindex="-1"></a>  <span class="at">--tree_mcmc_iter</span> 50 <span class="dt">\</span></span>
-<span id="cb3-5"><a href="#cb3-5" tabindex="-1"></a>  <span class="at">--tree_mcmc_chains</span> 2 <span class="dt">\</span></span>
-<span id="cb3-6"><a href="#cb3-6" tabindex="-1"></a>  <span class="at">--tree_mcmc_burnin</span> 10</span></code></pre></div>
+<span id="cb3-4"><a href="#cb3-4" tabindex="-1"></a>  <span class="at">--tree_mcmc_iter</span> 5000 <span class="dt">\</span></span>
+<span id="cb3-5"><a href="#cb3-5" tabindex="-1"></a>  <span class="at">--tree_mcmc_chains</span> 4 <span class="dt">\</span></span>
+<span id="cb3-6"><a href="#cb3-6" tabindex="-1"></a>  <span class="at">--tree_mcmc_burnin</span> 1000</span></code></pre></div>
 <p>Outputs in <code>mitodrift_demo/</code> include <code>mitodrift_object.rds</code> plus tree files and diagnostics.</p>
 <p>Once the run finishes:</p>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://teng-gao.github.io/mitodrift/">mitodrift</a></span><span class="op">)</span></span>
 <span><span class="va">mut_dat</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/utils/read.table.html" class="external-link">read.csv</a></span><span class="op">(</span></span>
-<span>  <span class="fu"><a href="https://rdrr.io/r/base/system.file.html" class="external-link">system.file</a></span><span class="op">(</span><span class="st">"extdata"</span>, <span class="st">"small_test_mut_dat.csv"</span>, package <span class="op">=</span> <span class="st">"mitodrift"</span><span class="op">)</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/system.file.html" class="external-link">system.file</a></span><span class="op">(</span><span class="st">"extdata"</span>, <span class="st">"pL1000_mut_dat.csv"</span>, package <span class="op">=</span> <span class="st">"mitodrift"</span><span class="op">)</span></span>
 <span><span class="op">)</span></span>
 <span><span class="va">md</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/readRDS.html" class="external-link">readRDS</a></span><span class="op">(</span><span class="st">"mitodrift_demo/mitodrift_object.rds"</span><span class="op">)</span></span>
 <span><span class="va">phy_trim</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/trim_tree.html">trim_tree</a></span><span class="op">(</span><span class="va">md</span><span class="op">$</span><span class="va">tree_annot</span>, conf <span class="op">=</span> <span class="fl">0.5</span><span class="op">)</span></span>
@@ -215,10 +226,15 @@
 <li>Use <code>--resume TRUE</code> to continue interrupted runs from saved traces</li>
 </ul>
 <hr>
+</div>
+</div>
+</div>
+<div class="section level1">
+<h1 id="analysis-workflow">Analysis workflow<a class="anchor" aria-label="anchor" href="#analysis-workflow"></a>
+</h1>
 <p>For a complete walkthrough, see the <a href="https://teng-gao.github.io/mitodrift/articles/analysis-workflow.html">Analysis Workflow</a> tutorial.</p>
 </div>
-</div>
-</div>
+
   </main><aside class="col-md-3"><div class="links">
 <h2 data-toc-skip>Links</h2>
 <ul class="list-unstyled">

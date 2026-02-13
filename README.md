@@ -1,5 +1,9 @@
 # MitoDrift
 
+<p align="center">
+  <img src="man/figures/logo.svg" alt="MitoDrift logo" width="240" />
+</p>
+
 <!-- badges: start -->
 [![pkgdown](https://github.com/teng-gao/mitodrift/actions/workflows/pkgdown.yaml/badge.svg)](https://github.com/teng-gao/mitodrift/actions/workflows/pkgdown.yaml)
 [![Docs](https://img.shields.io/badge/docs-pkgdown-blue.svg)](https://teng-gao.github.io/mitodrift/)
