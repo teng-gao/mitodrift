@@ -170,7 +170,7 @@ depth).
 
 ## Clone assignment workflow
 
-1.  Trim low-confidence edges:
+1.  Refine tree topology by collapsing (trimming) low-confidence edges:
 
 ``` r
 tau <- 0.5
