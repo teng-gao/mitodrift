@@ -9,11 +9,10 @@ lineage trees from single-cell genomics/multiome data. MitoDrift uses
 expectation-maximization (EM) to obtain maximum-likelihood estimates of
 drift, mutation, and error rates, then performs phylogenetic MCMC to
 quantify the uncertainty in tree topology. The primary output is a
-*confidence-calibrated* phylogeny with posterior clade support, and
-downstream summaries such as confidence-trimmed trees and clone
-partitions. Inputs can be mtDNA allele counts from any single-cell
-genomics assays that capture mtDNA variation (e.g., mtscATAC-seq,
-MAESTER, ReDeeM).
+phylogeny with posterior clade support, and downstream summaries such as
+confidence-refined trees and clone partitions. Inputs can be mtDNA
+allele counts from any single-cell genomics assays that capture mtDNA
+variation (e.g., mtscATAC-seq, MAESTER, ReDeeM).
 
 ![](reference/figures/mitodrift_schematic.png)
 
@@ -164,8 +163,8 @@ depth).
   strong lineage signal before posterior sampling.
 - Posterior clade support: per-node support values in `tree$node.label`
   (0–1) estimated from MCMC topology sampling.
-- Confidence trimming: collapse internal edges below a support cutoff
-  `τ` to obtain a confidence-calibrated lineage tree.
+- Confidence-based topology refinement: collapse internal edges below a
+  support cutoff `τ` to obtain a refined lineage tree.
 
 ------------------------------------------------------------------------
 
