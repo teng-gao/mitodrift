@@ -331,7 +331,7 @@ plot_prec_recall_vs_conf <- function(
     fraction <- if (length(fraction) == 0L) NA_real_ else fraction[1]
     
     if (!is.null(j_thres)) {
-        ann <- if (is.na(fraction)) NA_character_ else sprintf("%.1f%% vars maxJ >= %.2f", 100 * fraction, j_thres)
+        ann <- if (is.na(fraction)) NA_character_ else sprintf("%.1f%% vars J >= %.2f", 100 * fraction, j_thres)
     } else {
         ann = ''
     }
@@ -354,7 +354,10 @@ plot_prec_recall_vs_conf <- function(
 
     p <- ggplot2::ggplot(df_long, ggplot2::aes(x = .data[[x_var]], y = value, color = metric)) +
         ggplot2::geom_line(linewidth = 0.9, na.rm = TRUE) +
-        ggplot2::scale_color_manual(values = c("Precision" = "#1F77B4", "Recall" = "#D62728", "F1" = "#2CA02C")) +
+        ggplot2::scale_color_manual(
+            values = c("Precision" = "#1F77B4", "Recall" = "#D62728", "F1" = "#2CA02C"),
+            title = 'Metric'
+        ) +
         ggplot2::labs(
             title = sample_name,
             x = x_lab,
