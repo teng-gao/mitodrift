@@ -31,17 +31,17 @@ remotes::install_cran("qs2", type = "source", configure.args = "--with-TBB --wit
 
 ## Quick start
 
-This uses a tiny example dataset packaged under `inst/extdata/`.
+This uses a pL1000 subset dataset packaged under `inst/extdata/` (200 cells, 186 variants).
 
-You can run this from a terminal in the package root (these settings are intentionally small/fast for a demo):
+You can run this from a terminal in the package root:
 
 ```bash
 Rscript inst/bin/run_mitodrift_em.R \
-  --mut_dat inst/extdata/small_test_mut_dat.csv \
+  --mut_dat inst/extdata/pL1000_mut_dat.csv \
   --outdir mitodrift_demo \
-  --tree_mcmc_iter 50 \
-  --tree_mcmc_chains 2 \
-  --tree_mcmc_burnin 10
+  --tree_mcmc_iter 5000 \
+  --tree_mcmc_chains 4 \
+  --tree_mcmc_burnin 1000
 ```
 
 Outputs in `mitodrift_demo/` include `mitodrift_object.rds` plus tree files and diagnostics.
@@ -51,7 +51,7 @@ Once the run finishes:
 ```r
 library(mitodrift)
 mut_dat <- read.csv(
-  system.file("extdata", "small_test_mut_dat.csv", package = "mitodrift")
+  system.file("extdata", "pL1000_mut_dat.csv", package = "mitodrift")
 )
 md <- readRDS("mitodrift_demo/mitodrift_object.rds")
 phy_trim <- trim_tree(md$tree_annot, conf = 0.5)

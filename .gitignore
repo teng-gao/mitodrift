@@ -12,3 +12,6 @@ docs/
 # R build/check artifacts
 *.Rcheck/
 *.tar.gz
+
+# local demo outputs
+mitodrift_demo/
