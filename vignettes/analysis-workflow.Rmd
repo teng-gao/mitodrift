@@ -16,6 +16,12 @@ knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE,
 This article walks through the standard post-inference analysis workflow:
 **annotated tree → diagnostic PR curve → confidence trimming → clone assignment → visualization**.
 
+## Core concepts for interpretation
+
+- **Initial tree topology**: a point-estimate starting tree constructed using neighbor joining (NJ) on continuous VAF matrices. This provides a fully-resolved (binary) initialization that empirically captures strong lineage signal before posterior sampling.
+- **Posterior clade support**: per-node support values in `tree$node.label` (0–1) estimated from MCMC topology sampling.
+- **Confidence-based topology refinement**: collapse internal edges below a support cutoff `τ` to obtain a refined lineage tree.
+
 ## Setup
 
 ```{r setup}

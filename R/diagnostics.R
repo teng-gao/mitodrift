@@ -164,6 +164,8 @@ plot_retention_curve <- function(retention_data, sample_name = '', cutoff = NULL
 #' @param add_node_names If TRUE, add and use node labels for row names (default TRUE);
 #'   if FALSE, use numeric clade IDs.
 #' @return A sparse matrix of clade x tip incidence
+#' @keywords internal
+#' @noRd
 build_clade_matrix <- function(tree, tip_order, include_root = FALSE, add_node_names = TRUE) {
 	stopifnot(inherits(tree, "phylo"))
 	
@@ -232,6 +234,8 @@ build_clade_matrix <- function(tree, tip_order, include_root = FALSE, add_node_n
 #'   Defaults to 2.
 #'
 #' @return A sparse matrix of clade (variant) x tip (cell) incidence.
+#' @keywords internal
+#' @noRd
 build_variant_clade_matrix <- function(vaf_mat, tip_order = NULL, min_vaf = 0, min_cells = 2) {
 
   if (is.data.frame(vaf_mat)) vaf_mat <- as.matrix(vaf_mat)

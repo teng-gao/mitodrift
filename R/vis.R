@@ -526,6 +526,7 @@ order_muts <- function(cell_order, mut_dat) {
 #' @param feature_axis_angle Numeric. Rotation angle (degrees) for feature axis text.
 #'
 #' @return A `ggtree` plot object.
+#' @importFrom ggtreeExtra geom_fruit
 #' @export
 plot_phylo_circ = function(gtree, cell_annot = NULL, tip_annot = NULL, feature_mat = NULL, branch_scores = NULL,
     node_conf = FALSE, conf_label = FALSE, title = '', pwidth_annot = 0.25, pwidth_feature = 0.25,

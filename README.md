@@ -122,14 +122,6 @@ Full lineage inference pipeline is run with `inst/bin/run_mitodrift_em.R`.
 
 ---
 
-## Core concepts for interpretation
-
-- Initial tree topology: a point-estimate starting tree constructed using neighbor joining (NJ) on continuous VAF matrices. This provides a fully-resolved (binary) initialization that empirically captures strong lineage signal before posterior sampling.
-- Posterior clade support: per-node support values in `tree$node.label` (0–1) estimated from MCMC topology sampling.
-- Confidence-based topology refinement: collapse internal edges below a support cutoff `τ` to obtain a refined lineage tree.
-
----
-
 ## Clone assignment workflow
 
 1) Refine tree topology by collapsing (trimming) low-confidence edges:
@@ -144,5 +136,7 @@ phy_trim <- trim_tree(phy, conf = tau)
 ```r
 clade_df <- assign_clones_polytomy(phy_trim, k = Inf, return_df = TRUE)
 ```
+
+For a complete walkthrough including diagnostic PR curves and visualization, see the [Analysis workflow](https://teng-gao.github.io/mitodrift/articles/analysis-workflow.html) tutorial.
 
 ---

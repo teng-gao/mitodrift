@@ -26,7 +26,6 @@ articles:
   - title: Tutorials
     contents:
       - analysis-workflow
-      - tutorial
 
 reference:
   - title: internal
@@ -58,3 +57,7 @@ reference:
       - long_to_mat
       - phylo_to_gtree
       - add_node_names
+  - title: Example data
+    contents:
+      - pL1000_tree_annot
+      - pL1000_mut_dat
