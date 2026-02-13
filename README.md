@@ -5,7 +5,7 @@
 [![Docs](https://img.shields.io/badge/docs-pkgdown-blue.svg)](https://teng-gao.github.io/mitodrift/)
 <!-- badges: end -->
 
-MitoDrift reconstructs single-cell lineage relationships from mitochondrial DNA (mtDNA) mutations by modeling heteroplasmy drift and measurement noise with a Wright–Fisher hidden Markov Tree (WF-HMT). It applies population genetics principles (genetic drift) to model mtDNA heteroplasmy in single cells in order to reconstruct high-precision lineage trees from single-cell genomics/multiome data. MitoDrift uses expectation-maximization (EM) to obtain maximum-likelihood estimates of drift, mutation, and error rates, then performs phylogenetic MCMC to quantify the uncertainty in tree topology. The primary output is a phylogeny with posterior clade confidence and summary trees refined by clade confidence. Inputs can be mtDNA allele counts from any single-cell genomics assays that capture mtDNA variation (e.g., ReDeeM, mtscATAC-seq, MAESTER).
+MitoDrift reconstructs single-cell lineage trees from mitochondrial DNA (mtDNA) mutations by modeling heteroplasmy drift and measurement noise with a Wright–Fisher hidden Markov Tree (WF-HMT). It applies population genetics principles (genetic drift) to model mtDNA heteroplasmy in single cells in order to reconstruct high-precision lineage trees from single-cell genomics/multiome data. MitoDrift uses expectation-maximization (EM) to obtain maximum-likelihood estimates of drift, mutation, and error rates, then performs phylogenetic MCMC to quantify the uncertainty in tree topology. The primary output is a phylogeny with posterior clade supports and a refined tree topology with high confidence. Inputs can be mtDNA allele counts from any single-cell genomics assays that capture mtDNA variation (e.g., ReDeeM, mtscATAC-seq, MAESTER).
 
 Preprint: https://www.biorxiv.org/content/10.64898/2026.02.12.705660v1
 
@@ -122,21 +122,4 @@ Full lineage inference pipeline is run with `inst/bin/run_mitodrift_em.R`.
 
 ---
 
-## Clone assignment workflow
-
-1) Refine tree topology by collapsing (trimming) low-confidence edges:
-
-```r
-tau <- 0.5
-phy_trim <- trim_tree(phy, conf = tau)
-```
-
-2) Assign clones (top-level root-descending clades):
-
-```r
-clade_df <- assign_clones_polytomy(phy_trim, k = Inf, return_df = TRUE)
-```
-
-For a complete walkthrough including diagnostic PR curves and visualization, see the [Analysis workflow](https://teng-gao.github.io/mitodrift/articles/analysis-workflow.html) tutorial.
-
----
+For a complete walkthrough, see the [Analysis Workflow](https://teng-gao.github.io/mitodrift/articles/analysis-workflow.html) tutorial.
