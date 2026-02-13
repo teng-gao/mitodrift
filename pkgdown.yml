@@ -3,7 +3,7 @@ pkgdown: 2.2.0
 pkgdown_sha: ~
 articles:
   analysis-workflow: analysis-workflow.html
-last_built: 2026-02-13T21:59Z
+last_built: 2026-02-13T22:01Z
 urls:
   reference: https://teng-gao.github.io/mitodrift/reference
   article: https://teng-gao.github.io/mitodrift/articles
