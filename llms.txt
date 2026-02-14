@@ -16,7 +16,7 @@ high confidence. Inputs can be mtDNA allele counts from any single-cell
 genomics assays that capture mtDNA variation (e.g., ReDeeM,
 mtscATAC-seq, MAESTER).
 
-Preprint: [Teng Gao, Chen Weng, Isaac Johnson, Michael Poeschla, Jonas
+Preprint: [Teng Gao*, Chen Weng*, Isaac Johnson, Michael Poeschla, Jonas
 Gudera, Emily King, Christopher Rouya, Adriana Donovan, Lauren Bourke,
 Ying Shao, Eladio Marquez, Rahul Tyag, Leonard I Zon, Jonathan S
 Weissman, Vijay G Sankaran. Modeling mitochondrial inheritance enables
