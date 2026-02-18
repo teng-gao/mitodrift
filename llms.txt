@@ -18,7 +18,7 @@ mtscATAC-seq, MAESTER).
 
 Preprint: [Teng Gao*, Chen Weng*, Isaac Johnson, Michael Poeschla, Jonas
 Gudera, Emily King, Christopher Rouya, Adriana Donovan, Lauren Bourke,
-Ying Shao, Eladio Marquez, Rahul Tyag, Leonard I Zon, Jonathan S
+Ying Shao, Eladio Marquez, Rahul Tyagi, Leonard I Zon, Jonathan S
 Weissman, Vijay G Sankaran. Modeling mitochondrial inheritance enables
 high-precision single-cell lineage tracing in humans. bioRxiv
 (2026).](https://doi.org/10.64898/2026.02.12.705660)
