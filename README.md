@@ -21,8 +21,8 @@ Modeling mitochondrial inheritance enables high-precision single-cell lineage tr
 
 ```r
 # from a local checkout
-if (!requireNamespace("devtools", quietly = TRUE)) install.packages("devtools")
-devtools::install_local(".")
+if (!requireNamespace("remotes", quietly = TRUE)) install.packages("remotes")
+remotes::install_github("sankaranlab/mitodrift")
 ```
 
 For faster MCMC trace IO, install `qs2` with TBB:
