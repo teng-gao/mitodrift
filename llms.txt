@@ -11,10 +11,10 @@ single-cell genomics/multiome data. MitoDrift uses
 expectation-maximization (EM) to obtain maximum-likelihood estimates of
 drift, mutation, and error rates, then performs phylogenetic MCMC to
 quantify the uncertainty in tree topology. The primary output is a
-phylogeny with posterior clade supports and a refined tree topology with
-high confidence. Inputs can be mtDNA allele counts from any single-cell
-genomics assays that capture mtDNA variation (e.g., ReDeeM,
-mtscATAC-seq, MAESTER).
+phylogeny with posterior clade supports and refined tree topologies at
+different levels of confidence. Inputs can be mtDNA allele counts from
+any single-cell genomics assays that capture mtDNA variation (e.g.,
+ReDeeM, mtscATAC-seq, MAESTER).
 
 Preprint: [Teng Gao*, Chen Weng*, Isaac Johnson, Michael Poeschla, Jonas
 Gudera, Emily King, Christopher Rouya, Adriana Donovan, Lauren Bourke,
