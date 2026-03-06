@@ -3,7 +3,7 @@
 Builds a `tbl_graph` with tip nodes labeled by `phy$tip.label` and
 internal nodes labeled from `phy$node.label`. If internal labels are
 missing, they are created via
-[`add_node_names()`](https://teng-gao.github.io/mitodrift/reference/add_node_names.md).
+[`add_node_names()`](https://sankaranlab.github.io/mitodrift/reference/add_node_names.md).
 
 ## Usage
 

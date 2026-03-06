@@ -2,7 +2,7 @@
 
 Build a line plot of precision, recall, and F1 across confidence cutoffs
 from a PR-curve data frame (for example, output from
-[`compute_variant_pr_curve()`](https://teng-gao.github.io/mitodrift/reference/compute_variant_pr_curve.md),
+[`compute_variant_pr_curve()`](https://sankaranlab.github.io/mitodrift/reference/compute_variant_pr_curve.md),
 `compute_tree_pr_curve()`, or `compute_pr_from_jaccard_mat()`).
 
 ## Usage

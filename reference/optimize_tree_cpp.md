@@ -29,7 +29,7 @@ optimize_tree_cpp(
 - logP:
 
   A list of log-probability vectors (one per locus), as returned by
-  [`convert_logliks_to_logP_list()`](https://teng-gao.github.io/mitodrift/reference/convert_logliks_to_logP_list.md)
+  [`convert_logliks_to_logP_list()`](https://sankaranlab.github.io/mitodrift/reference/convert_logliks_to_logP_list.md)
   or `convert_logliks_to_logP_list_colmajor()`.
 
 - logA:

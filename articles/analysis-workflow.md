@@ -53,7 +53,7 @@ tree_annot <- pL1000_tree_annot
 
 ## Visualize the full binary tree
 
-[`plot_phylo_heatmap2()`](https://teng-gao.github.io/mitodrift/reference/plot_phylo_heatmap2.md)
+[`plot_phylo_heatmap2()`](https://sankaranlab.github.io/mitodrift/reference/plot_phylo_heatmap2.md)
 displays the tree alongside a variant heteroplasmy heatmap. Setting
 `node_conf = TRUE` colours internal nodes by their confidence score.
 
@@ -72,7 +72,7 @@ plot_phylo_heatmap2(
 
 ## Diagnostic: variant precision–recall curve
 
-[`compute_variant_pr_curve()`](https://teng-gao.github.io/mitodrift/reference/compute_variant_pr_curve.md)
+[`compute_variant_pr_curve()`](https://sankaranlab.github.io/mitodrift/reference/compute_variant_pr_curve.md)
 compares variant-defined cell partitions against tree clades across a
 sweep of confidence cutoffs. This helps identify a threshold that
 balances precision (are the clades real?) and recall (are we keeping
@@ -92,7 +92,7 @@ plot_prec_recall_vs_conf(
 ## Trim tree
 
 Collapse low-confidence nodes below the chosen threshold with
-[`trim_tree()`](https://teng-gao.github.io/mitodrift/reference/trim_tree.md).
+[`trim_tree()`](https://sankaranlab.github.io/mitodrift/reference/trim_tree.md).
 
 ``` r
 tree_trim <- trim_tree(tree_annot, conf = 0.2)
@@ -115,7 +115,7 @@ plot_phylo_heatmap2(
 
 ## Clone assignment
 
-[`assign_clones_polytomy()`](https://teng-gao.github.io/mitodrift/reference/assign_clones_polytomy.md)
+[`assign_clones_polytomy()`](https://sankaranlab.github.io/mitodrift/reference/assign_clones_polytomy.md)
 partitions tips into clones based on the polytomy structure of the
 trimmed tree.
 
