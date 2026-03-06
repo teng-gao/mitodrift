@@ -1,8 +1,8 @@
 # MitoDrift
 
 <!-- badges: start -->
-[![pkgdown](https://github.com/teng-gao/mitodrift/actions/workflows/pkgdown.yaml/badge.svg)](https://github.com/teng-gao/mitodrift/actions/workflows/pkgdown.yaml)
-[![Docs](https://img.shields.io/badge/docs-pkgdown-blue.svg)](https://teng-gao.github.io/mitodrift/)
+[![pkgdown](https://github.com/sankaranlab/mitodrift/actions/workflows/pkgdown.yaml/badge.svg)](https://github.com/sankaranlab/mitodrift/actions/workflows/pkgdown.yaml)
+[![Docs](https://img.shields.io/badge/docs-pkgdown-blue.svg)](https://sankaranlab.github.io/mitodrift/)
 <!-- badges: end -->
 
 <img src="man/figures/logo.svg" alt="MitoDrift logo" width="180" align="right" />
@@ -128,4 +128,4 @@ Full lineage inference pipeline is run with `inst/bin/run_mitodrift_em.R`.
 
 # Analysis workflow
 
-For a complete walkthrough, see the [Analysis Workflow](https://teng-gao.github.io/mitodrift/articles/analysis-workflow.html) tutorial.
+For a complete walkthrough, see the [Analysis Workflow](https://sankaranlab.github.io/mitodrift/articles/analysis-workflow.html) tutorial.

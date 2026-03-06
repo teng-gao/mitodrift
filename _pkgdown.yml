@@ -1,4 +1,4 @@
-url: https://teng-gao.github.io/mitodrift/
+url: https://sankaranlab.github.io/mitodrift/
 
 template:
   bootstrap: 5
@@ -16,7 +16,7 @@ navbar:
       href: index.html
     github:
       icon: fa-github
-      href: https://github.com/teng-gao/mitodrift
+      href: https://github.com/sankaranlab/mitodrift
 
 home:
   title: "MitoDrift"
