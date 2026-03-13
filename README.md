@@ -1,11 +1,17 @@
 # MitoDrift
 
 <!-- badges: start -->
-[![pkgdown](https://github.com/teng-gao/mitodrift/actions/workflows/pkgdown.yaml/badge.svg)](https://github.com/teng-gao/mitodrift/actions/workflows/pkgdown.yaml)
-[![Docs](https://img.shields.io/badge/docs-pkgdown-blue.svg)](https://teng-gao.github.io/mitodrift/)
+[![pkgdown](https://github.com/sankaranlab/mitodrift/actions/workflows/pkgdown.yaml/badge.svg)](https://github.com/sankaranlab/mitodrift/actions/workflows/pkgdown.yaml)
+[![Docs](https://img.shields.io/badge/docs-pkgdown-blue.svg)](https://sankaranlab.github.io/mitodrift/)
 <!-- badges: end -->
 
-MitoDrift reconstructs single-cell lineage relationships from mitochondrial DNA (mtDNA) mutations by modeling heteroplasmy drift and measurement noise with a Wright–Fisher hidden Markov Tree (WF-HMT). It applies population genetics principles (genetic drift) to model mtDNA heteroplasmy in single cells in order to reconstruct high-precision lineage trees from single-cell genomics/multiome data. MitoDrift uses expectation-maximization (EM) to obtain maximum-likelihood estimates of drift, mutation, and error rates, then performs phylogenetic MCMC to quantify the uncertainty in tree topology. The primary output is a *confidence-calibrated* phylogeny with posterior clade support, and downstream summaries such as confidence-trimmed trees and clone partitions. Inputs can be mtDNA allele counts from any single-cell genomics assays that capture mtDNA variation (e.g., mtscATAC-seq, MAESTER, ReDeeM).
+<img src="man/figures/logo.svg" alt="MitoDrift logo" width="180" align="right" />
+
+MitoDrift reconstructs single-cell lineage trees from mitochondrial DNA (mtDNA) mutations by modeling heteroplasmy drift and measurement noise with a Wright–Fisher hidden Markov Tree (WF-HMT). It applies population genetics principles (genetic drift) to model mtDNA heteroplasmy in single cells in order to reconstruct high-precision lineage trees from single-cell genomics/multiome data. MitoDrift uses expectation-maximization (EM) to obtain maximum-likelihood estimates of drift, mutation, and error rates, then performs phylogenetic MCMC to quantify the uncertainty in tree topology. The primary output is a phylogeny with posterior clade supports and refined tree topologies at different levels of confidence. Inputs can be mtDNA allele counts from any single-cell genomics assays that capture mtDNA variation (e.g., ReDeeM, mtscATAC-seq, MAESTER).
+
+Preprint: 
+[Teng Gao*, Chen Weng*, Isaac Johnson, Michael Poeschla, Jonas Gudera, Emily King, Christopher Rouya, Adriana Donovan, Lauren Bourke, Ying Shao, Eladio Marquez, Rahul Tyagi, Leonard I Zon, Jonathan S Weissman, Vijay G Sankaran.
+Modeling mitochondrial inheritance enables high-precision single-cell lineage tracing in humans. bioRxiv (2026).](https://doi.org/10.64898/2026.02.12.705660)
 
 <img src="man/figures/mitodrift_schematic.png" width="100%" />
 
@@ -15,8 +21,8 @@ MitoDrift reconstructs single-cell lineage relationships from mitochondrial DNA 
 
 ```r
 # from a local checkout
-if (!requireNamespace("devtools", quietly = TRUE)) install.packages("devtools")
-devtools::install_local(".")
+if (!requireNamespace("remotes", quietly = TRUE)) install.packages("remotes")
+remotes::install_github("sankaranlab/mitodrift")
 ```
 
 For faster MCMC trace IO, install `qs2` with TBB:
@@ -29,17 +35,17 @@ remotes::install_cran("qs2", type = "source", configure.args = "--with-TBB --wit
 
 ## Quick start
 
-This uses a tiny example dataset packaged under `inst/extdata/`.
+This uses a pL1000 subset dataset packaged under `inst/extdata/` (200 cells, 186 variants).
 
-You can run this from a terminal in the package root (these settings are intentionally small/fast for a demo):
+You can run this from a terminal in the package root:
 
 ```bash
 Rscript inst/bin/run_mitodrift_em.R \
-  --mut_dat inst/extdata/small_test_mut_dat.csv \
+  --mut_dat inst/extdata/pL1000_mut_dat.csv \
   --outdir mitodrift_demo \
-  --tree_mcmc_iter 50 \
-  --tree_mcmc_chains 2 \
-  --tree_mcmc_burnin 10
+  --tree_mcmc_iter 5000 \
+  --tree_mcmc_chains 4 \
+  --tree_mcmc_burnin 1000
 ```
 
 Outputs in `mitodrift_demo/` include `mitodrift_object.rds` plus tree files and diagnostics.
@@ -49,7 +55,7 @@ Once the run finishes:
 ```r
 library(mitodrift)
 mut_dat <- read.csv(
-  system.file("extdata", "small_test_mut_dat.csv", package = "mitodrift")
+  system.file("extdata", "pL1000_mut_dat.csv", package = "mitodrift")
 )
 md <- readRDS("mitodrift_demo/mitodrift_object.rds")
 phy_trim <- trim_tree(md$tree_annot, conf = 0.5)
@@ -84,6 +90,8 @@ Wide matrices with `variant` in the first column and cells in subsequent columns
 
 ## Inference settings & diagnostics
 
+Full lineage inference pipeline is run with `inst/bin/run_mitodrift_em.R`.
+
 ### Model parameters (EM fitting)
 
 - `--fit_params`: Enable automatic parameter fitting via EM (default: `TRUE`)
@@ -98,7 +106,7 @@ Wide matrices with `variant` in the first column and cells in subsequent columns
 ### Phylogenetic MCMC settings
 
 - `--tree_mcmc_chains`: Number of independent MCMC runs (default: 1; recommended 10-50 for robust inference. For large trees e.g., >8000 cells, use less chains to avoid memory limits)
-- `--tree_mcmc_iter`: Maximum iterations per chain (default: 100; can be overridden by automatic termination via ASDSF convergence check)
+- `--tree_mcmc_iter`: Maximum iterations per chain (default: 10000; can be overridden by automatic termination via ASDSF convergence check)
 - `--conv_thres`: ASDSF threshold for MCMC termination (default: `NULL`; e.g., 0.05-0.1 for auto-convergence). ASDSF (Average Standard Deviation of Split Frequencies) summarizes topology agreement across chains. A lower value indicates good mixing. Values < 0.05 indicate good convergence; < 0.1 is acceptable for exploratory analyses or large trees.
 - `--tree_mcmc_batch_size`: Iteration interval for saving traces and checking convergence (default: 1000)
 - `--tree_mcmc_burnin`: Initial samples to discard from each chain (default: 0; recommended 10-20% of iterations)
@@ -118,27 +126,6 @@ Wide matrices with `variant` in the first column and cells in subsequent columns
 
 ---
 
-## Core concepts for interpretation
+# Analysis workflow
 
-- Initial tree topology: a point-estimate starting tree constructed using neighbor joining (NJ) on continuous VAF matrices. This provides a fully-resolved (binary) initialization that empirically captures strong lineage signal before posterior sampling.
-- Posterior clade support: per-node support values in `tree$node.label` (0–1) estimated from MCMC topology sampling.
-- Confidence trimming: collapse internal edges below a support cutoff `τ` to obtain a confidence-calibrated lineage tree.
-
----
-
-## Clone assignment workflow
-
-1) Trim low-confidence edges:
-
-```r
-tau <- 0.5
-phy_trim <- trim_tree(phy, conf = tau)
-```
-
-2) Assign clones (top-level root-descending clades):
-
-```r
-clade_df <- assign_clones_polytomy(phy_trim, k = Inf, return_df = TRUE)
-```
-
----
+For a complete walkthrough, see the [Analysis Workflow](https://sankaranlab.github.io/mitodrift/articles/analysis-workflow.html) tutorial.

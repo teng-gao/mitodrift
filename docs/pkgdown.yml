@@ -2,8 +2,8 @@ pandoc: 3.8.3
 pkgdown: 2.1.1
 pkgdown_sha: ~
 articles:
-  tutorial: tutorial.html
-last_built: 2026-02-04T06:07Z
+  analysis-workflow: analysis-workflow.html
+last_built: 2026-03-06T03:57Z
 urls:
-  reference: https://teng-gao.github.io/mitodrift/reference
-  article: https://teng-gao.github.io/mitodrift/articles
+  reference: https://sankaranlab.github.io/mitodrift/reference
+  article: https://sankaranlab.github.io/mitodrift/articles

@@ -90,7 +90,7 @@ find_root_split = function(tree) {
 #' @return A renumbered `phylo` object with low-confidence nodes collapsed.
 #' @export
 trim_tree = function(tree, conf, collapse_trivial = TRUE) {
-    if (!is.binary(tree)) {stop("Tree must be binary")}
+    if (!ape::is.binary(tree)) {stop("Tree must be binary")}
     n_tip = length(tree$tip.label)
     node_confs = as.numeric(tree$node.label)
     # treat NA as no confidence

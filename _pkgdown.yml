@@ -1,4 +1,4 @@
-url: https://teng-gao.github.io/mitodrift/
+url: https://sankaranlab.github.io/mitodrift/
 
 template:
   bootstrap: 5
@@ -16,7 +16,7 @@ navbar:
       href: index.html
     github:
       icon: fa-github
-      href: https://github.com/teng-gao/mitodrift
+      href: https://github.com/sankaranlab/mitodrift
 
 home:
   title: "MitoDrift"
@@ -25,7 +25,7 @@ home:
 articles:
   - title: Tutorials
     contents:
-      - tutorial
+      - analysis-workflow
 
 reference:
   - title: internal
@@ -39,17 +39,26 @@ reference:
     contents:
       - add_clade_freq
       - collect_chains
-  - title: Trimming and clones
+  - title: Topology refinement and clone assignment
     contents:
       - trim_tree
       - assign_clones_polytomy
+  - title: Diagnostics
+    contents:
+      - compute_variant_pr_curve
+      - plot_prec_recall_vs_conf
   - title: Visualization
     contents:
       - plot_phylo_circ
       - plot_phylo_heatmap2
+      - make_clade_pal
   - title: Data utilities
     contents:
       - mat_to_long
       - long_to_mat
       - phylo_to_gtree
       - add_node_names
+  - title: Example data
+    contents:
+      - pL1000_tree_annot
+      - pL1000_mut_dat
