@@ -154,7 +154,7 @@ option_list <- list(
     make_option(
         c("-j", "--tree_mcmc_iter"),
         type = "integer",
-        default = 100,
+        default = 10000,
         help = "Maximum iterations for phylogenetic MCMC",
         metavar = "INTEGER"
     ),

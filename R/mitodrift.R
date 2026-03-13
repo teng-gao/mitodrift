@@ -515,7 +515,7 @@ safe_read_chain = function(path, ncores = 1) {
 #' @return A list of edge-list chains (one list of edge matrices per chain).
 #' @keywords internal
 run_tree_mcmc_batch = function(
-    phy_init, logP_list, logA_vec, outfile, diagfile = NULL, diag = TRUE, max_iter = 100, nchains = 1, ncores = 1, ncores_qs = 1,
+    phy_init, logP_list, logA_vec, outfile, diagfile = NULL, diag = TRUE, max_iter = 10000, nchains = 1, ncores = 1, ncores_qs = 1,
     batch_size = 1000, conv_thres = NULL, resume = FALSE
 ) {
 

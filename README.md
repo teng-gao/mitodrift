@@ -106,7 +106,7 @@ Full lineage inference pipeline is run with `inst/bin/run_mitodrift_em.R`.
 ### Phylogenetic MCMC settings
 
 - `--tree_mcmc_chains`: Number of independent MCMC runs (default: 1; recommended 10-50 for robust inference. For large trees e.g., >8000 cells, use less chains to avoid memory limits)
-- `--tree_mcmc_iter`: Maximum iterations per chain (default: 100; can be overridden by automatic termination via ASDSF convergence check)
+- `--tree_mcmc_iter`: Maximum iterations per chain (default: 10000; can be overridden by automatic termination via ASDSF convergence check)
 - `--conv_thres`: ASDSF threshold for MCMC termination (default: `NULL`; e.g., 0.05-0.1 for auto-convergence). ASDSF (Average Standard Deviation of Split Frequencies) summarizes topology agreement across chains. A lower value indicates good mixing. Values < 0.05 indicate good convergence; < 0.1 is acceptable for exploratory analyses or large trees.
 - `--tree_mcmc_batch_size`: Iteration interval for saving traces and checking convergence (default: 1000)
 - `--tree_mcmc_burnin`: Initial samples to discard from each chain (default: 0; recommended 10-20% of iterations)

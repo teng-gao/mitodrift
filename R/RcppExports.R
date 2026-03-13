@@ -23,9 +23,7 @@ get_leaf_liks_mat_cpp <- function(amat, dmat, vafs, eps = 0.0, ncores = 1L, log 
     .Call('_mitodrift_get_leaf_liks_mat_cpp', PACKAGE = 'mitodrift', amat, dmat, vafs, eps, ncores, log)
 }
 
-#' Internal C++ utilities
-#' @name cpp-internals
-#' @keywords internal
+#' definitions for logSumExp function
 NULL
 
 reorderRcpp <- function(E) {
