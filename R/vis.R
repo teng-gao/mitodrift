@@ -131,8 +131,8 @@ plot_phylo_heatmap2 = function(phylo, df_var = NULL, branch_width = 0.25, root_e
 
             p_tree = p_tree %<+% 
                 dat + 
-                geom_nodepoint(aes(fill = conf, subset = !isTip & !isRoot, x = branch), size = dot_size, pch = 22, stroke = 0) +
-                scale_fill_gradient(name = 'Conf', low = 'white', high = 'firebrick', limits = c(conf_min, conf_max), oob = scales::oob_squish)
+                geom_nodepoint(aes(color = conf, subset = !isTip & !isRoot, x = branch), size = dot_size, pch = 16, stroke = 0) +
+                scale_color_gradient(name = 'Conf', low = 'white', high = 'firebrick', limits = c(conf_min, conf_max), oob = scales::oob_squish)
 
             if (conf_label) {
                 p_tree = p_tree + 
