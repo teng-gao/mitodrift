@@ -184,7 +184,7 @@
 <li>
 <code>--tree_mcmc_chains</code>: Number of independent MCMC runs (default: 1; recommended 10-50 for robust inference. For large trees e.g., &gt;8000 cells, use less chains to avoid memory limits)</li>
 <li>
-<code>--tree_mcmc_iter</code>: Maximum iterations per chain (default: 100; can be overridden by automatic termination via ASDSF convergence check)</li>
+<code>--tree_mcmc_iter</code>: Maximum iterations per chain (default: 10000; can be overridden by automatic termination via ASDSF convergence check)</li>
 <li>
 <code>--conv_thres</code>: ASDSF threshold for MCMC termination (default: <code>NULL</code>; e.g., 0.05-0.1 for auto-convergence). ASDSF (Average Standard Deviation of Split Frequencies) summarizes topology agreement across chains. A lower value indicates good mixing. Values &lt; 0.05 indicate good convergence; &lt; 0.1 is acceptable for exploratory analyses or large trees.</li>
 <li>

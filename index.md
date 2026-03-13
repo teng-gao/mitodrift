@@ -133,8 +133,8 @@ Full lineage inference pipeline is run with
 - `--tree_mcmc_chains`: Number of independent MCMC runs (default: 1;
   recommended 10-50 for robust inference. For large trees e.g., \>8000
   cells, use less chains to avoid memory limits)
-- `--tree_mcmc_iter`: Maximum iterations per chain (default: 100; can be
-  overridden by automatic termination via ASDSF convergence check)
+- `--tree_mcmc_iter`: Maximum iterations per chain (default: 10000; can
+  be overridden by automatic termination via ASDSF convergence check)
 - `--conv_thres`: ASDSF threshold for MCMC termination (default: `NULL`;
   e.g., 0.05-0.1 for auto-convergence). ASDSF (Average Standard
   Deviation of Split Frequencies) summarizes topology agreement across

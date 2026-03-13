@@ -14,7 +14,7 @@ run_tree_mcmc_batch(
   outfile,
   diagfile = NULL,
   diag = TRUE,
-  max_iter = 100,
+  max_iter = 10000,
   nchains = 1,
   ncores = 1,
   ncores_qs = 1,
